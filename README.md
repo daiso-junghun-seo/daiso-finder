@@ -21,5 +21,5 @@ Product Bible이 정의한 **참조 제품(reference product)**의 구현체입�
 ## 스택
 
 - PWA (React + TypeScript), 서비스워커 오프라인 캐시
-- iOS + Android 쇼퍼 폰, 매장 QR 진입 전제
+- iOS + Android 쇼퍼 폰. 매장 컨텍스트는 **사용자 소유** — 마지막 선택 매장 기본, GPS는 근처 매장 추천만(자동 확정·검색 차단 없음), 매장명·지역명 검색으로 선택/변경 (Bible D082)
 - 재고·거래 **읽기 전용** — 변형하지 않음

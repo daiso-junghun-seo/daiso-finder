@@ -18,7 +18,7 @@
 
 **확인된 핵심**:
 - Increment 0·1은 **비준 대기 없이 지금 착수 가능**(Flow 1 체인 Review/complete + D059/D061/D068/D069, D078로 Inc 2·3 게이트도 해제).
-- **에스컬레이션 필요 갭 1건(A1)**: 앱은 "매장 QR 진입 전제"라 하나 Bible Canon은 geolocation 자동감지+수동 피커만 규정 → 모순. Inc 0 코어는 비블로킹(store-context 파라미터화). 확정은 Bible 세션에서.
+- **해소된 갭(A1) — Bible D082(2026-07-13)**: 매장 진입/Store Context 확정. Store Context는 **사용자 소유** — 마지막 선택 매장 기본, GPS는 근처 매장 추천만(자동 확정·검색 차단 없음), GPS 실패 시 마지막 매장 유지, QR 진입 제거, 항상 표시·변경. Inc 0/1은 이 정책 구현.
 - 데이터-오너 미해결 6건은 어댑터 심 뒤 격리(코어 비블로킹).
 
 ## 다음 작업 — Increment 0+1 상세 설계 (여기서 재개)
@@ -26,7 +26,7 @@
 brainstorming → spec → writing-plans 순서로. **규범 컨텍스트는 위 두 notes에 종합됨** — 먼저 그걸 읽고, 정본 필요 시 Bible 원문으로 확인.
 
 1. **앱-레벨 결정 확정**([open-questions.md](notes/open-questions.md) §B): 빌드툴/라우팅/상태/SW/어댑터 심 인터페이스/테스트. 제안 있음, owner 확인 필요.
-2. **Bible 에스컬레이션 항목 처리**(§A): A1(진입 메커니즘) 등은 Bible 세션에서 결정 후 따른다 — 앱에서 임의 결정 금지.
+2. **Bible 에스컬레이션 항목 처리**(§A): A1(진입 메커니즘)은 **D082로 해소됨**. 남은 A2–A8(staleness 임계값·저재고 컷오프·다국어·판매종료 범위 등)은 Bible 세션에서 결정 후 따른다 — 앱에서 임의 결정 금지.
 3. **설계 스펙 작성** → `docs/superpowers/specs/YYYY-MM-DD-increment-0-1-design.md`, 승인 후 writing-plans.
 
 - **Increment 0 — PWA 골격 + 데이터 계층**: 빌드 도구·라우팅·상태관리 선택, 서비스워커 캐시 전략(=Bible 신선도/노후 모델 매핑, D061), 관측 API `newIntSelStr` 래핑 + 어댑터 심 + mock, 스탬프=관측 시점 나이.

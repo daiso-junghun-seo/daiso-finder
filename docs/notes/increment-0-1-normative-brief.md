@@ -123,6 +123,8 @@
 | **Success** | 확정 답 | in stock(`이 매장에 있어요`+가격·위치+`방금 확인한 재고예요`+`위치 보기`) **또는** 4개 부정 답(일시품절→`대안 보기`+`재입고 알림` / 판매종료→`대안 보기` / 미취급→`근처 매장 보기` / 입고예정→`재입고 알림`) — **부정 답도 중립 강조, Error 색 금지** |
 | **Partial** | Success 위장 금지 부분 답 | 3 트리거: 가맹점(직원+`근처 매장 보기` 둘째 엔딩 D071/D072) / 위치 없음(직원 문의+`다시 확인`) / stale 캐시(가격·위치 확정·오늘 재고 미확정+`다시 확인`) |
 
+**매장 컨텍스트 (D082)**: Store Context는 **사용자 소유** — 마지막 선택 매장 기본, GPS는 근처 매장 추천만(자동 확정·검색 차단 없음), GPS 실패 시 마지막 매장 유지, 컨텍스트 없을 때(최초 실행)만 매장 검색(매장명·지역명), 항상 표시·`매장 변경`. **QR 진입 제거.** Interface에 매장 선택 화면(근처 목록+검색) 추가됨.
+
 **진입 3경로 → 동일 답 카드**: 타이핑(AI 해석) · 바코드/선반라벨 스캔(무타이핑, 한 손 1차) · 최근 검색 탭. 검색/스캔 바 하단 도킹(썸존). 복수 위치는 `다른 위치 1곳 더 ▾`로 접힘.
 
 **AI = 검색어 해석뿐** (certainty→display, 어미 load-bearing): High>90% 단일 best-match(`이에요/있어요`) / Medium 70–90% `이걸 찾으시나요?` 후보 최대 3(`인 것 같아요`) / Low<70% 리터럴+스캔(`수도 있어요`) / Unknown 직원 문의. **1s 타임아웃, 실패 시 리터럴 검색 무음 강등.** **비-AI 폴백(리터럴 검색+바코드 스캔)을 먼저 구축·검증(fallback-first)**, `직접 검색 결과 보기` 오버라이드는 항상 노출·즉시·영구.
@@ -144,7 +146,7 @@
 ## 7. 성능 예산 · 접근성 (Flow 1 Engineering 상속)
 
 - **예산(회귀=버그)**: FCP<1.8s · LCP<2.5s · INP<200ms · CLS<0.1 · tap feedback<100ms · skeleton<100ms · submit→first result **≤2s(가설·필드검증)** · 상태 전환 150–300ms(ease-out 진입/ease-in 이탈) · reduce-motion 시 즉시 컷 · **캐시-서브 답=네트워크 왕복 0**.
-- **의존성 타임아웃/폴백**: store/stock API 2s→캐시/Partial/Error · store detection(geolocation) 3s→수동 피커(검색 절대 미게이트) · barcode(camera) 무타임아웃→권한거부 시 텍스트검색 · AI 1s→리터럴 무음강등.
+- **의존성 타임아웃/폴백**: store/stock API 2s→캐시/Partial/Error · store recommendation(geolocation) 3s→GPS 추천만·자동확정 없음, 실패 시 마지막 매장 유지(검색 절대 미게이트)(D082) · barcode(camera) 무타임아웃→권한거부 시 텍스트검색 · AI 1s→리터럴 무음강등.
 - **WCAG 2.2 AA**: 터치타깃≥44×44pt(권장 48)·간격≥8pt · 본문≥16px/lh1.5 · 대비 본문≥4.5:1·큰텍스트≥3:1(라이트·다크) · 200% 스케일 생존 · 최대 2 typeface weight/상태.
 - **모니터링**: 예산 준수 · Error 진입율 · 캐시 히트율 · staleness 분포 · Success→Partial 강등 빈도. **민감정보(정밀 위치·개인식별자) 로그 금지.**
 
@@ -156,7 +158,8 @@
 - PWA 셸 + 서비스워커(모바일 웹/PWA-first, D059) — Native는 배제 아니라 유예.
 - SW 오프라인 캐시를 **§4 신선도 모델에 매핑**. 오프라인/약전파 1차 설계 대상.
 - `newIntSelStr` 래핑 데이터 레이어 + **어댑터 심(§3) + mock**.
-- 캐시 서브셋(SKU당): `identifier, name, price tier, last-known stock flag, floor+zone`. 매장 감지 성공 후 **백그라운드**로 채움(첫 답 크리티컬 패스 금지). `매장 변경` 시 교체. 캐시 읽기 전용.
+- 캐시 서브셋(SKU당): `identifier, name, price tier, last-known stock flag, floor+zone`. Store Context 확정 후 **백그라운드**로 채움(첫 답 크리티컬 패스 금지). `매장 변경` 시 교체. 캐시 읽기 전용.
+- **Store Context(D082)**: 사용자 소유 — 마지막 선택 매장 기본, GPS 추천만, GPS 실패 시 마지막 매장 유지, 컨텍스트 없을 때만 매장 검색. 감지 메커니즘을 포트로 격리(geolocation provider / manual 검색), QR 하드코딩 금지.
 - 신선도 스탬프 프리미티브(§4). 임계값은 심 뒤 설정값.
 - §7 성능 예산 골격 + WCAG 골격 확립.
 - **앱-레벨 결정**(빌드툴/라우팅/상태/모듈/라이브러리)은 이 저장소 자체 기록 — Bible D-번호 미소비. → [open-questions.md](open-questions.md) §B.
@@ -181,5 +184,6 @@
 | **D076** | RATIFIED via D078(07-13, Draft 유지) | Flow 3(Inc 3) — Inc 0 심이 매트릭스/좌표앵커 수용 |
 | **D077** | RATIFIED via D078(07-13, Draft 유지) | Flow 2(Inc 2) — Inc 0 신선도·리프레시 골격 수용 |
 | **D078** | RATIFIED(07-13) | D076/D077 비준, Inc 2·3 구현 허가 |
+| **D082** | RATIFIED(07-13) | Store Context 사용자 소유 · GPS 추천만 · QR 진입 제거(§5 매장 컨텍스트). Inc 1 Default/매장 선택 구현. A1 해소 |
 
 **결론: Increment 0·1은 비준 대기 없이 지금 착수 가능.** Inc 2는 D077, Inc 3은 D076 게이트였으나 **D078로 둘 다 해제** — 순서(0→1→2→3)만 유지.

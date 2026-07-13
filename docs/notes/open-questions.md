@@ -14,7 +14,7 @@
 
 | # | 항목 | 왜 갭인가 | 영향 Increment | 코어 블로킹? | 액션 |
 |---|---|---|---|---|---|
-| A1 | **매장 진입 = QR? 자동감지? 피커?** | 앱 README·CLAUDE.md는 "매장 QR 진입 전제"라 하나, Bible Flow 1 Canon(Experience/Interface)은 **geolocation 자동감지(3s) + 수동 `매장 변경` 피커**만 규정. QR 진입 경로는 현 Canon에 **부재** → 모순. | Inc 1 Default 진입 | **아니오**(매장 컨텍스트 파라미터화 가능) | Bible에 진입 메커니즘 확정 요청. 확정 전 Inc 0은 store-context를 주입 가능하게 설계. |
+| A1 | **매장 진입/Store Context — ✅ RESOLVED (Bible D082, 2026-07-13)** | 앱 README가 "매장 QR 진입 전제"였으나 Bible Canon은 메커니즘을 열어둔 채 행동 계약만 규정. **D082로 확정**: Store Context는 **사용자 소유** — 마지막 선택 매장 기본, GPS는 근처 매장 추천만(자동 확정·검색 차단 없음), GPS 실패 시 마지막 매장 유지(컨텍스트 없을 때=최초 실행만 매장 검색), QR 진입 제거, 항상 표시·`매장 변경`. | Inc 1 Default/매장 선택 | — | **완료** — Inc 0/1은 D082 정책 구현. QR 하드코딩 금지. |
 | A2 | **staleness 임계값(cache age)** | 값 미설정. Error↔Partial 강등 경계를 실측하려면 필요. data-owner 협의 대상. | Inc 1 Error/Partial | 아니오(심 뒤 설정값+mock) | data-owner 확인 → Bible에 값 기록. 코어는 설정 가능 값으로 진행. |
 | A3 | **저재고 컷오프(qty)** | `재고 N개 이하`가 결정-관련이 되는 qty 미설정. | Inc 1 Success(저재고) | 아니오(심) | data-owner 확인 → Bible 기록. |
 | A4 | **다국어 언어/타이밍/디자인 + 입력측 검색 별칭** | D068이 다국어를 shipping 요구로 비준했으나 **언어/타이밍/디자인 OPEN**. data-owner의 **입력측 검색 별칭** 미공급 → 비-Korean 쿼리가 Korean 카탈로그 도달 못 함(리터럴 폴백 실패, AI-only는 05_AI가 금지). | Inc 1 검색 범위 | 부분(Korean 경로는 비블로킹) | Bible에 다국어 범위/타이밍 결정 요청 + data-owner 별칭 협의. |
