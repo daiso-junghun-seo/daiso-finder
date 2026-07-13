@@ -4,7 +4,7 @@
 >
 > **철칙**(CLAUDE.md §2·§3): Canon에 답 있으면 따른다. 없거나 모순이면 **중단·질문**. 스펙 갭은 앱에서 임의 결정 금지 → **Bible에 결정/RFC로 에스컬레이션**(Bible 세션에서, 이 세션과 분리) 후 따른다. 앱-레벨 결정만 이 저장소가 자체 기록(Bible D-번호 미소비).
 >
-> 최종 갱신: 2026-07-13 (규범 종합 직후).
+> 최종 갱신: 2026-07-13 (Increment 0+1 설계 스펙 승인 — §B 앱-레벨 결정 확정).
 
 ---
 
@@ -27,19 +27,21 @@
 
 ## B. 앱-레벨 결정 (이 저장소가 결정 — Bible D-번호 미소비)
 
-> 아래는 **제안(미승인)**. Increment 0+1 상세 설계에서 owner 확인 후 확정하고 이 표를 갱신한다. 확정 시 각 항목에 근거를 남긴다(추적성).
+> **2026-07-13 확정** — Increment 0+1 설계 스펙([`docs/superpowers/specs/2026-07-13-increment-0-1-design.md`](../superpowers/specs/2026-07-13-increment-0-1-design.md) §2)에서 owner 승인. 근거는 스펙에 상세. 아래는 확정 요약.
 
-| # | 결정 | 제안(미승인) | 대안/트레이드오프 | 상태 |
+| # | 결정 | 확정 | 근거 | 상태 |
 |---|---|---|---|---|
-| B1 | 빌드툴/번들러 | **Vite** (`.gitignore`에 이미 Vite/PWA 흔적) | Next.js(SSR 불필요·오프라인 SW 우선이라 과함) | 미승인 |
-| B2 | 프레임워크/언어 | **React + TypeScript** (킥오프 확정) | — (확정) | 확정 |
-| B3 | 서비스워커/PWA | **vite-plugin-pwa (Workbox)** | 수동 SW(제어↑, 보일러플레이트↑) | 미승인 |
-| B4 | 라우팅 | **단일 표면이라 라우터 최소화** or React Router | 플로우 전환은 상태 기반(§단일 표면) | 미승인 |
-| B5 | 상태관리 | **경량(Zustand/Context)** — 서버 상태는 별도 | Redux(과함) / TanStack Query(캐시 정책이 신선도 모델과 충돌 소지 — 검토) | 미승인 |
-| B6 | 데이터 레이어/어댑터 심 인터페이스 | 관측 계약을 도메인 타입으로 정규화하는 **포트/어댑터** + `newIntSelStr` 어댑터 + mock 어댑터 + 미해결 항목(§3 심) 격리 | — | 미승인 |
-| B7 | 테스트/검증 | **Vitest + Testing Library + Playwright** (`.gitignore`에 흔적). TDD(§skill) | — | 미승인 |
-| B8 | 커밋 전 검증(lint/test) | ESLint/Biome + tsc + Vitest 게이트 | — | 미승인 |
-| B9 | iOS Safari PWA 제약 필드검증 | SW/설치/카메라·바코드/불안정 매장망을 Inc 0에서 실측 | — | 미승인(필드검증 필요) |
+| B1 | 빌드툴/번들러 | **Vite** | SSR 불필요·오프라인 SW 우선; Cloudflare Pages 정적 배포 정합 | ✅ 확정 |
+| B2 | 프레임워크/언어 | **React + TypeScript** | 킥오프 확정 | ✅ 확정 |
+| B3 | 서비스워커/PWA | **vite-plugin-pwa (Workbox)** | 앱셸 precache 자동화; 단 카탈로그 서브셋 캐시 수명은 Workbox 기본 TTL 미사용 — 신선도 정책(D061)이 지배 | ✅ 확정 |
+| B4 | 라우팅 | **라우터 없음·상태구동** | 단일 표면(Interface §2); 매장 선택은 시트/오버레이; Inc 2·3 뷰 전환 시 라우터 도입 | ✅ 확정 |
+| B5 | 상태/데이터 레이어 | **신선도-네이티브 커스텀 + UI 스토어 Zustand** | D061 직구현(자동 리페치·TTL 대부분 금지 → 쿼리 라이브러리 부적합). UI 스토어는 domain reducer 얇은 호스트 | ✅ 확정 |
+| B6 | 어댑터 심 인터페이스 | **단일 포트 `StoreStockRepository` + 주입 정책** | 6심을 설정값/전략/서브포트로 혼합 격리; §3 매트릭스 재작성 없이 스위치 | ✅ 확정 |
+| B7 | 테스트/검증 | **Vitest + Testing Library + Playwright + TDD** | domain 유닛·컴포넌트·6상태 E2E | ✅ 확정 |
+| B8 | 커밋 전 게이트 | **ESLint/Biome + tsc + Vitest** | 예산·상태 커버리지 회귀=버그 | ✅ 확정 |
+| B9 | iOS Safari PWA 제약 | **Inc 0에서 실측**(필드검증) | SW·설치·카메라/바코드·불안정 매장망이 fallback-first·오프라인 설계에 영향 | 🔬 Inc 0 검증 |
+| **B10** | **호스팅** | **Cloudflare Pages(정적 PWA) + Workers(엣지 프록시)** | 무료 티어; DAISO 코어 API 브라우저 CORS 차단 가능성 → pass-through 프록시 필요; Cloudflare 툴링 정합 | ✅ 확정 |
+| **B11** | **CORS/프록시 필요성** | **가설 — Inc 0 검증** | 프로덕션 API 브라우저 CORS 차단 여부 미검증; 기본값=프록시(직접호출 베팅 시 전면 재작업 리스크) | 🔬 Inc 0 검증 |
 
 ---
 
