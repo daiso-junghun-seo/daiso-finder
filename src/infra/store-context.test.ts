@@ -1,0 +1,17 @@
+import { createBrowserGeolocation } from '../adapters/geolocation/browserGeolocation';
+// src/infra/store-context.test.ts
+import { loadStoreContext, saveStoreContext } from './store-context';
+
+beforeEach(() => localStorage.clear());
+
+test('no store selected yet → null (first run leads to store search, never a search block)', () => {
+  expect(loadStoreContext()).toBeNull();
+});
+test('the last-selected store persists and is the default', () => {
+  saveStoreContext({ strCd: '1', strNm: '명동역점' });
+  expect(loadStoreContext()).toEqual({ strCd: '1', strNm: '명동역점' });
+});
+test('geolocation absence yields an empty recommendation list, not a thrown error (D082)', async () => {
+  const geo = createBrowserGeolocation({}); // no navigator.geolocation
+  await expect(geo.getNearbyStores()).resolves.toEqual([]);
+});
