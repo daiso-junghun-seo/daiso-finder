@@ -21,3 +21,10 @@ body {
   font-size: var(--font-size-body);
   line-height: var(--line-height-body);
 }
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  } /* immediate cuts (Interface §3) */
+}

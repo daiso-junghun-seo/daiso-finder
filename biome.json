@@ -41,6 +41,16 @@
           }
         }
       }
+    },
+    {
+      "include": ["src/ui/a11y/LiveRegion.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off"
+          }
+        }
+      }
     }
   ]
 }
