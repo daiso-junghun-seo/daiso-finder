@@ -1,0 +1,18 @@
+/* src/styles/glass.css — solid is the base layer; glass is a progressive enhancement gated by budgets. */
+.glass-surface {
+  background: var(--surface-solid);
+  color: var(--text-primary);
+  position: relative;
+}
+@supports (backdrop-filter: blur(1px)) {
+  .glass-surface {
+    background: var(--surface-glass-tint);
+    backdrop-filter: blur(var(--glass-blur));
+  } /* contrast-guarantee tint */
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass-surface {
+    background: var(--surface-solid) !important;
+    backdrop-filter: none !important;
+  }
+}
