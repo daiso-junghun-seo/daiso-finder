@@ -1,0 +1,44 @@
+import { hasLocation } from './guards';
+// src/domain/state-machine.ts
+import type { StoreEvent, UiState } from './types';
+
+export const initialState: UiState = { state: 'default' };
+
+export function reduce(state: UiState, event: StoreEvent): UiState {
+  switch (event.type) {
+    case 'SUBMIT':
+    case 'SELECT_CANDIDATE':
+      return { state: 'loading', query: event.query, slow: false };
+    case 'CHANGE_STORE':
+      return { state: 'default' };
+    case 'SLOW':
+      return state.state === 'loading' ? { ...state, slow: true } : state;
+    case 'NO_MATCH':
+      return { state: 'empty', query: event.query, suggestions: event.suggestions.slice(0, 3) };
+    case 'RESULT': {
+      const { answer, freshness } = event;
+      if (answer.kind === 'inStock' && !hasLocation(answer))
+        return { state: 'partial', trigger: 'locationMissing', answer, freshness };
+      if (answer.kind === 'franchiseUndeterminable')
+        return { state: 'partial', trigger: 'franchise', answer, freshness };
+      return { state: 'success', answer, freshness };
+    }
+    case 'FAILURE': {
+      const c = event.cache;
+      if (c.kind === 'withinThreshold')
+        return { state: 'error', variant: 'cached', answer: c.answer, freshness: c.freshness };
+      if (c.kind === 'beyondThreshold')
+        return {
+          state: 'partial',
+          trigger: 'staleCache',
+          answer: c.answer,
+          freshness: c.freshness,
+        };
+      return { state: 'error', variant: 'noCache' };
+    }
+    case 'DISMISS_AI':
+      return state;
+    default:
+      return state;
+  }
+}
