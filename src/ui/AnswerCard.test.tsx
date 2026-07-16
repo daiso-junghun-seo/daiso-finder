@@ -98,6 +98,30 @@ test('error/cached renders the banner, cached facts, cache-age caption, and retr
   expect(screen.getByRole('button', { name: RETRY_BUTTON })).toBeInTheDocument();
 });
 
+test('error/cached still shows the known price when the cached inStock answer has no location', () => {
+  render(
+    <AnswerCard
+      ui={{
+        state: 'error',
+        variant: 'cached',
+        answer: mockAnswers.noLocation,
+        freshness: { class: 'cachedWithinThreshold', observedAt: YESTERDAY_6PM },
+      }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+    />,
+  );
+  expect(screen.getByText(SUCCESS_IN_STOCK_STATUS)).toBeInTheDocument();
+  expect(screen.getByText('2,000원')).toBeInTheDocument();
+});
+
+test('error/noCache body carries the same Error color role as error/cached (Interface §5/§9 decision 6)', () => {
+  render(
+    <AnswerCard ui={{ state: 'error', variant: 'noCache' }} policy={defaultPolicy} nowMs={NOW} />,
+  );
+  expect(screen.getByText(ERROR_NO_CACHE_BODY)).toHaveClass('error-banner');
+});
+
 test('success inStock (ample qty) shows live freshness, price/location, and the CTA', () => {
   render(
     <AnswerCard

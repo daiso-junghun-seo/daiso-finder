@@ -65,6 +65,10 @@ function renderBody(ui: NonDefaultUiState, policy: DataOwnerPolicy, nowMs: numbe
 function renderErrorCached(answer: AvailabilityAnswer, observedAt: number, nowMs: number) {
   const facts = factsFor(answer);
   const line = priceLocationLine(answer);
+  // priceLocationLine requires both price and location together; an inStock answer can be cached with a
+  // known price but no location (state-machine.ts only gates Success/Partial on hasLocation, not the
+  // FAILURE/cache path), so fall back to price-only rather than silently dropping it.
+  const priceOnly = !line && answer.kind === 'inStock' ? formatPrice(answer.price) : undefined;
   return (
     <div>
       <p className="text-body error-banner">
@@ -74,6 +78,7 @@ function renderErrorCached(answer: AvailabilityAnswer, observedAt: number, nowMs
       <p className="text-heading">{answer.productName}</p>
       <p className="text-display">{facts.status}</p>
       {line && <p className="text-heading">{line}</p>}
+      {priceOnly && <p className="text-heading">{priceOnly}</p>}
       <p className="text-caption">
         {cachedFreshnessCaption(formatRelativeTimeKo(observedAt, nowMs))}
       </p>
@@ -87,7 +92,7 @@ function renderErrorCached(answer: AvailabilityAnswer, observedAt: number, nowMs
 function renderErrorNoCache() {
   return (
     <div>
-      <p className="text-body">
+      <p className="text-body error-banner">
         <span aria-hidden="true">⚠ </span>
         {ERROR_NO_CACHE_BODY}
       </p>
