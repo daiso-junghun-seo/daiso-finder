@@ -7,8 +7,10 @@ import type { StoreEvent } from '../domain/types';
 import { createIndexedDbCache } from '../infra/cache-storage';
 import { createQueryRunner } from '../infra/query-cache';
 import { loadStoreContext } from '../infra/store-context';
+import { AnswerCard } from './AnswerCard';
 import { LiveRegion } from './a11y/LiveRegion';
-import { GlassSurface } from './components/GlassSurface';
+import { StoreContextLine } from './components/StoreContextLine';
+import { DEFAULT_HEADLINE, SCAN_BUTTON_LABEL, SEARCH_PLACEHOLDER, announcementFor } from './copy';
 import { useAvailabilityStore } from './store';
 
 // Placeholder store for the Inc-0 sweep only — Increment 1 wires the real store-selection sheet (D082).
@@ -59,6 +61,7 @@ async function runScenario(scenario: string, dispatch: (event: StoreEvent) => vo
 export function AvailabilitySurface() {
   const ui = useAvailabilityStore((s) => s.ui);
   const dispatch = useAvailabilityStore((s) => s.dispatch);
+  const store = loadStoreContext() ?? PLACEHOLDER_STORE;
 
   useEffect(() => {
     const scenario = new URLSearchParams(window.location.search).get('scenario');
@@ -66,20 +69,37 @@ export function AvailabilitySurface() {
     void runScenario(scenario, dispatch);
   }, [dispatch]);
 
+  const searchBar = (
+    <div
+      className={ui.state === 'default' ? 'search-bar' : 'search-bar search-bar--demoted'}
+      id="search-bar"
+    >
+      <input aria-label="상품 검색" placeholder={SEARCH_PLACEHOLDER} readOnly />
+      <button type="button" aria-label={SCAN_BUTTON_LABEL} className="text-label">
+        {SCAN_BUTTON_LABEL}
+      </button>
+    </div>
+  );
+
   if (ui.state === 'default') {
     return (
       <main>
-        <h1>이 매장에 있는지 바로 확인해 보세요</h1>
+        <StoreContextLine store={store} />
+        <h1>{DEFAULT_HEADLINE}</h1>
+        {searchBar}
       </main>
     );
   }
 
+  const nowMs = Date.now();
+  const announcement = announcementFor(ui, defaultPolicy, nowMs).join('. ');
+
   return (
     <main>
-      <GlassSurface>
-        <LiveRegion message={ui.state} />
-        <p>{ui.state}</p>
-      </GlassSurface>
+      <StoreContextLine store={store} />
+      <LiveRegion message={announcement} />
+      <AnswerCard ui={ui} policy={defaultPolicy} nowMs={nowMs} />
+      {searchBar}
     </main>
   );
 }
