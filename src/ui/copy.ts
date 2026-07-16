@@ -1,0 +1,154 @@
+// src/ui/copy.ts — Bible-verbatim copy (Interface/availability-check.md §4). Transcribe exactly; do not paraphrase.
+import type { DataOwnerPolicy } from '../domain/policy';
+import type { AvailabilityAnswer, UiState } from '../domain/types';
+import { formatLocation, formatPrice, formatRelativeTimeKo } from './format';
+
+export const DEFAULT_HEADLINE = '이 매장에 있는지 바로 확인해 보세요';
+export const SEARCH_PLACEHOLDER = '상품명 또는 바코드 스캔';
+export const SCAN_BUTTON_LABEL = '바코드 스캔';
+export const STORE_CHANGE_BUTTON = '매장 변경';
+
+export const LOADING_CARD_COPY = '이 매장 재고를 확인하고 있어요…';
+export const LOADING_DELAY_LINE = '연결이 느려서 확인이 조금 걸리고 있어요.';
+
+export const ERROR_CACHED_BANNER =
+  '지금 연결이 원활하지 않아요. 마지막으로 확인된 정보를 보여드릴게요.';
+export const ERROR_NO_CACHE_BODY =
+  '지금 연결이 원활하지 않아요. 다시 시도하거나 매장 직원에게 문의해 주세요.';
+export const RETRY_BUTTON = '다시 확인';
+
+export const SUCCESS_IN_STOCK_STATUS = '이 매장에 있어요';
+export const SUCCESS_IN_STOCK_CTA = '위치 보기';
+export const LIVE_FRESHNESS_CAPTION = '방금 확인한 재고예요';
+
+export const SUCCESS_OUT_BODY = '지금은 품절이에요. 근처 매장 재고와 비슷한 상품을 보여드릴게요.';
+export const SUCCESS_OUT_CTA = '대안 보기';
+export const SUCCESS_OUT_SECONDARY_CTA = '재입고 알림';
+
+export const SUCCESS_ENDED_BODY = '판매가 끝난 상품이에요. 비슷한 상품을 보여드릴게요.';
+export const SUCCESS_ENDED_CTA = '대안 보기';
+
+export const SUCCESS_NOT_CARRIED_BODY =
+  '이 매장에서는 팔지 않는 상품이에요. 근처 매장을 보여드릴게요.';
+export const SUCCESS_NOT_CARRIED_CTA = '근처 매장 보기';
+
+export const SUCCESS_RESTOCKING_CTA = '재입고 알림';
+
+export const PARTIAL_FRANCHISE_BODY =
+  '상품은 취급하지만, 가맹점이라 재고를 확인할 수 없어요. 직원에게 문의해 주세요.';
+export const PARTIAL_FRANCHISE_CTA = '근처 매장 보기';
+export const PARTIAL_NO_LOCATION_CTA = '다시 확인';
+export const PARTIAL_STALE_CACHE_CTA = '다시 확인';
+
+export function storeLine(storeName: string): string {
+  return `다이소 ${storeName}`;
+}
+
+export function emptyBody(query: string): string {
+  return `'${query}'(으)로 등록된 상품을 찾지 못했어요. 바코드를 스캔하거나 다른 이름으로 검색해 보세요.`;
+}
+
+// The bound is presentation-gated on policy.lowQtyCutoff (types.ts comment) — never presented as an exact count.
+export function lowQtyCaption(qtyUpperBound: number): string {
+  return `재고 ${qtyUpperBound}개 이하 · 방금 확인`;
+}
+
+export function cachedFreshnessCaption(relativeTime: string): string {
+  return `${relativeTime}에 확인한 정보예요`;
+}
+
+// Bible's literal example is "다른 위치 1곳 더 ▾"; count is the mechanical parameter (open-questions.md B13).
+export function extraPositionsLabel(count: number): string {
+  return `다른 위치 ${count}곳 더 ▾`;
+}
+
+export function restockBody(lchDay: string): string {
+  return `${lchDay} 전후에 들어올 예정이에요.`;
+}
+
+export function partialLocationMissingBody(price: number): string {
+  return `이 매장에 있어요 · ${formatPrice(price)} / 위치 정보가 없어요. 직원에게 위치를 문의해 주세요.`;
+}
+
+export function partialStaleCacheBody(relativeTime: string): string {
+  return `이 매장에서 판매하는 상품이에요. 오늘 재고는 확인하지 못했어요 — ${relativeTime}에는 있었어요.`;
+}
+
+export interface AnswerFacts {
+  status: string;
+  cta: string;
+  secondaryCta?: string;
+}
+
+// Shared between Success and Error(cached): both show the same declarative facts about the answer,
+// differing only in the surrounding frame (celebratory vs "here is what we still know").
+export function factsFor(answer: AvailabilityAnswer): AnswerFacts {
+  switch (answer.kind) {
+    case 'inStock':
+      return { status: SUCCESS_IN_STOCK_STATUS, cta: SUCCESS_IN_STOCK_CTA };
+    case 'temporarilyOut':
+      return {
+        status: SUCCESS_OUT_BODY,
+        cta: SUCCESS_OUT_CTA,
+        secondaryCta: answer.restockOfferable ? SUCCESS_OUT_SECONDARY_CTA : undefined,
+      };
+    case 'discontinued':
+      return { status: SUCCESS_ENDED_BODY, cta: SUCCESS_ENDED_CTA };
+    case 'notCarried':
+      return { status: SUCCESS_NOT_CARRIED_BODY, cta: SUCCESS_NOT_CARRIED_CTA };
+    case 'restockArriving':
+      return { status: restockBody(answer.lchDay), cta: SUCCESS_RESTOCKING_CTA };
+    case 'franchiseUndeterminable':
+      // Unreachable via Success/Error-cached: the state machine routes this kind to Partial/franchise only.
+      return { status: PARTIAL_FRANCHISE_BODY, cta: PARTIAL_FRANCHISE_CTA };
+  }
+}
+
+export function priceLocationLine(answer: AvailabilityAnswer): string | undefined {
+  if (answer.kind !== 'inStock') return undefined;
+  const primary = answer.locations[0];
+  if (!primary) return undefined;
+  return `${formatPrice(answer.price)} · ${formatLocation(primary)}`;
+}
+
+type NonDefaultUiState = Exclude<UiState, { state: 'default' }>;
+
+// Ordered per Interface §6: status line first, then price·location, then the freshness stamp, then the CTA.
+export function announcementFor(
+  ui: NonDefaultUiState,
+  policy: DataOwnerPolicy,
+  nowMs: number,
+): string[] {
+  switch (ui.state) {
+    case 'loading':
+      return ui.slow ? [LOADING_CARD_COPY, LOADING_DELAY_LINE] : [LOADING_CARD_COPY];
+    case 'empty':
+      return [emptyBody(ui.query)];
+    case 'error': {
+      if (ui.variant === 'noCache') return [ERROR_NO_CACHE_BODY, RETRY_BUTTON];
+      const facts = factsFor(ui.answer);
+      const line = priceLocationLine(ui.answer);
+      const relative = cachedFreshnessCaption(formatRelativeTimeKo(ui.freshness.observedAt, nowMs));
+      return [ERROR_CACHED_BANNER, facts.status, ...(line ? [line] : []), relative, RETRY_BUTTON];
+    }
+    case 'success': {
+      const { answer } = ui;
+      const facts = factsFor(answer);
+      const line = priceLocationLine(answer);
+      const freshnessCap =
+        answer.kind === 'inStock' && answer.qtyUpperBound <= policy.lowQtyCutoff
+          ? lowQtyCaption(answer.qtyUpperBound)
+          : LIVE_FRESHNESS_CAPTION;
+      return [facts.status, ...(line ? [line] : []), freshnessCap, facts.cta];
+    }
+    case 'partial': {
+      if (ui.trigger === 'franchise') return [PARTIAL_FRANCHISE_BODY, PARTIAL_FRANCHISE_CTA];
+      if (ui.trigger === 'locationMissing') {
+        if (ui.answer.kind !== 'inStock') return []; // unreachable: state machine only routes inStock here
+        return [partialLocationMissingBody(ui.answer.price), PARTIAL_NO_LOCATION_CTA];
+      }
+      const relative = ui.freshness ? formatRelativeTimeKo(ui.freshness.observedAt, nowMs) : '';
+      return [partialStaleCacheBody(relative), PARTIAL_STALE_CACHE_CTA];
+    }
+  }
+}
