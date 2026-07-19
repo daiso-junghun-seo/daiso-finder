@@ -1,14 +1,27 @@
 // src/ui/components/GlassSurface.tsx
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, Ref } from 'react';
 import '../../styles/glass.css';
 
 export function GlassSurface({
+  as: Tag = 'div',
   children,
   className = '',
-}: PropsWithChildren<{ className?: string }>) {
+  tabIndex,
+  surfaceRef,
+}: PropsWithChildren<{
+  as?: 'div' | 'section';
+  className?: string;
+  tabIndex?: number;
+  surfaceRef?: Ref<HTMLDivElement>;
+}>) {
   return (
-    <div className={`glass-surface ${className}`.trim()} data-solid-base="true">
+    <Tag
+      ref={surfaceRef}
+      tabIndex={tabIndex}
+      className={`glass-surface ${className}`.trim()}
+      data-solid-base="true"
+    >
       {children}
-    </div>
+    </Tag>
   );
 }

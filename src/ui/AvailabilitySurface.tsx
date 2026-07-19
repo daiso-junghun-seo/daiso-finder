@@ -11,6 +11,7 @@ import { createQueryRunner } from '../infra/query-cache';
 import { loadStoreContext } from '../infra/store-context';
 import { AnswerCard } from './AnswerCard';
 import { LiveRegion } from './a11y/LiveRegion';
+import { GlassSurface } from './components/GlassSurface';
 import { StoreContextLine } from './components/StoreContextLine';
 import { StoreSelectionSheet } from './components/StoreSelectionSheet';
 import { DEFAULT_HEADLINE, SCAN_BUTTON_LABEL, SEARCH_PLACEHOLDER, announcementFor } from './copy';
@@ -159,27 +160,30 @@ export function AvailabilitySurface() {
     return <main>{sheet}</main>;
   }
 
+  // D083: the bottom search/scan bar is a glass surface; the form inside is unchanged.
   const searchBar = (
-    <form
-      className={ui.state === 'default' ? 'search-bar' : 'search-bar search-bar--demoted'}
-      id="search-bar"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const keyword = input.trim();
-        if (!keyword) return;
-        void runQuery(store, keyword, dispatch);
-      }}
-    >
-      <input
-        aria-label="상품 검색"
-        placeholder={SEARCH_PLACEHOLDER}
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-      />
-      <button type="button" aria-label={SCAN_BUTTON_LABEL} className="text-label">
-        {SCAN_BUTTON_LABEL}
-      </button>
-    </form>
+    <GlassSurface className="search-bar-surface">
+      <form
+        className={ui.state === 'default' ? 'search-bar' : 'search-bar search-bar--demoted'}
+        id="search-bar"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const keyword = input.trim();
+          if (!keyword) return;
+          void runQuery(store, keyword, dispatch);
+        }}
+      >
+        <input
+          aria-label="상품 검색"
+          placeholder={SEARCH_PLACEHOLDER}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+        />
+        <button type="button" aria-label={SCAN_BUTTON_LABEL} className="text-label">
+          {SCAN_BUTTON_LABEL}
+        </button>
+      </form>
+    </GlassSurface>
   );
 
   // While the modal sheet is open the background is inert (aria-modal made real): unreachable by
@@ -190,15 +194,22 @@ export function AvailabilitySurface() {
     return (
       <main>
         <div className="surface-content" inert={backgroundInert}>
-          <StoreContextLine
-            store={store}
-            onChangeStore={openSheet}
-            changeButtonRef={changeStoreRef}
-          />
+          <GlassSurface className="store-context-surface">
+            <StoreContextLine
+              store={store}
+              onChangeStore={openSheet}
+              changeButtonRef={changeStoreRef}
+            />
+          </GlassSurface>
           <h1>{DEFAULT_HEADLINE}</h1>
           {searchBar}
         </div>
-        {sheetOpen && sheet}
+        {sheetOpen && (
+          <>
+            <div className="sheet-scrim" aria-hidden="true" />
+            {sheet}
+          </>
+        )}
       </main>
     );
   }
@@ -209,11 +220,13 @@ export function AvailabilitySurface() {
   return (
     <main>
       <div className="surface-content" inert={backgroundInert}>
-        <StoreContextLine
-          store={store}
-          onChangeStore={openSheet}
-          changeButtonRef={changeStoreRef}
-        />
+        <GlassSurface className="store-context-surface">
+          <StoreContextLine
+            store={store}
+            onChangeStore={openSheet}
+            changeButtonRef={changeStoreRef}
+          />
+        </GlassSurface>
         <LiveRegion message={announcement} />
         <AnswerCard
           ui={ui}
@@ -223,7 +236,12 @@ export function AvailabilitySurface() {
         />
         {searchBar}
       </div>
-      {sheetOpen && sheet}
+      {sheetOpen && (
+        <>
+          <div className="sheet-scrim" aria-hidden="true" />
+          {sheet}
+        </>
+      )}
     </main>
   );
 }

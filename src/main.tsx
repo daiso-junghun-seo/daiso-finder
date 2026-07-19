@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AvailabilitySurface } from './ui/AvailabilitySurface';
 import './styles/tokens.css';
+import './styles/layout.css';
 
 registerSW({ immediate: true });
 

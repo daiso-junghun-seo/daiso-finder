@@ -3,16 +3,40 @@
   background: var(--surface-solid);
   color: var(--text-primary);
   position: relative;
+  border: var(--glass-border);
 }
+
 @supports (backdrop-filter: blur(1px)) {
   .glass-surface {
-    background: var(--surface-glass-tint);
-    backdrop-filter: blur(var(--glass-blur));
-  } /* contrast-guarantee tint */
+    background: var(--surface-glass-tint); /* contrast-guarantee tint */
+    backdrop-filter: blur(var(--glass-blur)); /* single blur layer per surface (D083) */
+    text-shadow: var(--glass-text-shadow);
+    transform: translateZ(0); /* GPU hint */
+  }
+  /* Adaptive transparency: opacity moves toward legibility; chrome transition ≤500ms ease-out.
+     The global reduced-motion rule in tokens.css replaces the transition with an immediate cut. */
+  .glass-surface:hover,
+  .glass-surface:focus-within {
+    background: var(--surface-glass-tint-raised);
+    transition: background 400ms ease-out;
+  }
 }
+
 @media (prefers-reduced-transparency: reduce) {
   .glass-surface {
     background: var(--surface-solid) !important;
     backdrop-filter: none !important;
+    text-shadow: none !important;
   }
+}
+
+/* Lists render on the solid layer — D083 forbids blur on large scrolling lists. */
+.glass-surface ul {
+  background: var(--surface-solid);
+}
+
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--surface-scrim);
 }
