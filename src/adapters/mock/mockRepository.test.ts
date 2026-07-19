@@ -1,6 +1,7 @@
+import { NoCatalogMatchError } from '../../domain/errors';
 import { mockAnswers } from './fixtures';
 // src/adapters/mock/mockRepository.test.ts
-import { createMockRepository } from './mockRepository';
+import { createKeywordMockRepository, createMockRepository } from './mockRepository';
 
 const store = { strCd: '1', strNm: '명동역점' };
 
@@ -35,4 +36,32 @@ test('mock repository can simulate a no-catalog-match (→ NO_MATCH → Empty)',
   await expect(repo.query(store, { keyword: '없는상품' })).rejects.toBeInstanceOf(
     NoCatalogMatchError,
   );
+});
+
+describe('createKeywordMockRepository', () => {
+  const store = { strCd: '001', strNm: '명동역점' };
+
+  test('an exact scenario key resolves to that fixture', async () => {
+    const repo = createKeywordMockRepository();
+    await expect(repo.query(store, { keyword: 'franchise' })).resolves.toBe(mockAnswers.franchise);
+    await expect(repo.query(store, { keyword: 'temporarilyOut' })).resolves.toBe(
+      mockAnswers.temporarilyOut,
+    );
+  });
+
+  test('a keyword contained in the mock product name resolves to inStock', async () => {
+    const repo = createKeywordMockRepository();
+    await expect(repo.query(store, { keyword: '밀폐용기' })).resolves.toBe(mockAnswers.inStock);
+    await expect(repo.query(store, { keyword: '리빙 밀폐용기 1.2L' })).resolves.toBe(
+      mockAnswers.inStock,
+    );
+  });
+
+  test('anything else throws NoCatalogMatchError (→ Empty)', async () => {
+    const repo = createKeywordMockRepository();
+    await expect(repo.query(store, { keyword: '락앤락같은통' })).rejects.toBeInstanceOf(
+      NoCatalogMatchError,
+    );
+    await expect(repo.query(store, { keyword: '' })).rejects.toBeInstanceOf(NoCatalogMatchError);
+  });
 });

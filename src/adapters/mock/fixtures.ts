@@ -12,7 +12,8 @@ export type Scenario =
   | 'restockArriving'
   | 'franchise';
 
-const NAME = '리빙 밀폐용기 1.2L';
+export const mockProductName = '리빙 밀폐용기 1.2L';
+const NAME = mockProductName;
 export const mockAnswers: Record<Scenario, AvailabilityAnswer> = {
   inStock: {
     kind: 'inStock',

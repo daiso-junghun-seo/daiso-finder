@@ -17,3 +17,9 @@ export interface RestockSubscriptionPort {
 export interface SearchAliasResolverPort {
   resolve(query: string): string | null;
 }
+
+// Store search by name/region for the D082 store-selection sheet. The live daisomall directory
+// adapter is deferred behind this seam (open-questions.md B16/A9) — only the mock exists today.
+export interface StoreDirectoryPort {
+  searchStores(query: string): Promise<StoreContext[]>;
+}
