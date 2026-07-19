@@ -15,3 +15,8 @@ test('geolocation absence yields an empty recommendation list, not a thrown erro
   const geo = createBrowserGeolocation({}); // no navigator.geolocation
   await expect(geo.getNearbyStores()).resolves.toEqual([]);
 });
+
+test('loadStoreContext degrades corrupt storage to null instead of throwing (G3 hardening)', () => {
+  localStorage.setItem('daiso.storeContext', '{not json');
+  expect(loadStoreContext()).toBeNull();
+});
