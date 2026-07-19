@@ -97,6 +97,28 @@ test('CHANGE_STORE → default', () =>
   expect(
     reduce(loading, { type: 'CHANGE_STORE', store: { strCd: '1', strNm: '명동역점' } }),
   ).toEqual({ state: 'default' }));
+test('NO_MATCH with 4 suggestions keeps only the first 3', () =>
+  expect(
+    reduce(loading, {
+      type: 'NO_MATCH',
+      query: '락앤락같은통',
+      suggestions: ['밀폐용기', '수납 바구니', '정리함', '리빙 박스'],
+    }),
+  ).toMatchObject({ state: 'empty', suggestions: ['밀폐용기', '수납 바구니', '정리함'] }));
+test('SELECT_CANDIDATE from an answer state → loading with the candidate query', () => {
+  const success = answer({
+    kind: 'inStock',
+    productName: 'X',
+    price: 2000,
+    locations: [{ floor: '11', zone: '56' }],
+    qtyUpperBound: 50,
+  });
+  expect(reduce(success, { type: 'SELECT_CANDIDATE', query: '밀폐용기' })).toEqual({
+    state: 'loading',
+    query: '밀폐용기',
+    slow: false,
+  });
+});
 
 describe('query retention (B15)', () => {
   const loading = reduce(initialState, { type: 'SUBMIT', query: '밀폐용기' });
