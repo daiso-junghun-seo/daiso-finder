@@ -34,6 +34,12 @@ export function StoreSelectionSheet({
   const [results, setResults] = useState<StoreContext[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // Modal dialogs must receive focus on open (Interface §6). The search field takes it in BOTH
+  // paths — it is always rendered, and the Bible's no-location behavior is a subset of this.
+  useEffect(() => {
+    searchRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     geolocation
@@ -60,9 +66,15 @@ export function StoreSelectionSheet({
       setResults([]);
       return;
     }
-    directory.searchStores(q).then((stores) => {
-      if (!cancelled) setResults(stores);
-    });
+    directory
+      .searchStores(q)
+      .then((stores) => {
+        if (!cancelled) setResults(stores);
+      })
+      .catch(() => {
+        // Directory failure degrades like the geolocation path: clear the list, keep typing usable.
+        if (!cancelled) setResults([]);
+      });
     return () => {
       cancelled = true;
     };
@@ -72,7 +84,16 @@ export function StoreSelectionSheet({
 
   return (
     <GlassSurface className="store-selection-sheet">
-      <section role="dialog" aria-modal="true" aria-labelledby="store-select-title">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="store-select-title"
+        onKeyDown={(e) => {
+          // Escape dismisses like 닫기 — but never on first run (onClose undefined): a Store
+          // Context must exist before the sheet may close.
+          if (e.key === 'Escape') onClose?.();
+        }}
+      >
         <div className="store-selection-sheet__header">
           <h2 id="store-select-title" className="text-heading">
             {STORE_SELECT_TITLE}

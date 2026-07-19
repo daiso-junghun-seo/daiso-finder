@@ -2,7 +2,8 @@ import 'fake-indexeddb/auto';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { mockAnswers } from '../adapters/mock/fixtures';
-import { AvailabilitySurface } from './AvailabilitySurface';
+import type { StoreEvent } from '../domain/types';
+import { AvailabilitySurface, isCurrentRun, runQuery } from './AvailabilitySurface';
 import { emptyBody } from './copy';
 import { useAvailabilityStore } from './store';
 
@@ -88,6 +89,108 @@ describe('live search', () => {
     render(<AvailabilitySurface />);
     await userEvent.type(screen.getByLabelText('상품 검색'), '   {Enter}');
     expect(useAvailabilityStore.getState().ui).toEqual({ state: 'default' });
+  });
+});
+
+describe('modal behavior (F4)', () => {
+  test('background content is inert while the sheet is open and focus returns to 매장 변경 on close', async () => {
+    const { container } = render(<AvailabilitySurface />);
+    expect(container.querySelector('.surface-content')).not.toHaveAttribute('inert');
+    await userEvent.click(screen.getByRole('button', { name: '매장 변경' }));
+    expect(container.querySelector('.surface-content')).toHaveAttribute('inert');
+    await userEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(container.querySelector('.surface-content')).not.toHaveAttribute('inert');
+    expect(screen.getByRole('button', { name: '매장 변경' })).toHaveFocus();
+  });
+
+  test('focus returns to 매장 변경 after selecting a store from the sheet', async () => {
+    render(<AvailabilitySurface />);
+    await userEvent.click(screen.getByRole('button', { name: '매장 변경' }));
+    await userEvent.type(screen.getByPlaceholderText('매장명 또는 지역명으로 검색'), '을지로');
+    await userEvent.click(await screen.findByRole('button', { name: '을지로점' }));
+    expect(screen.getByText('다이소 을지로점')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '매장 변경' })).toHaveFocus();
+  });
+});
+
+describe('staleness guard (F2)', () => {
+  const storeA = { strCd: '001', strNm: '명동역점' };
+
+  test('isCurrentRun accepts only the loading state matching the started run', () => {
+    const started = { keyword: '밀폐용기', strCd: '001' };
+    const loading = { state: 'loading', query: '밀폐용기', slow: false } as const;
+    expect(isCurrentRun({ ui: loading, store: storeA }, started)).toBe(true);
+    expect(isCurrentRun({ ui: { state: 'default' }, store: storeA }, started)).toBe(false);
+    expect(
+      isCurrentRun(
+        { ui: { state: 'loading', query: '다른검색어', slow: false }, store: storeA },
+        started,
+      ),
+    ).toBe(false);
+    expect(isCurrentRun({ ui: loading, store: { strCd: '003', strNm: '을지로점' } }, started)).toBe(
+      false,
+    );
+    expect(isCurrentRun({ ui: loading, store: null }, started)).toBe(false);
+  });
+
+  test('a stale outcome is dropped after selectStore (old store answer never lands)', async () => {
+    let resolveSlow: (event: StoreEvent) => void = () => {};
+    const slowRunner = () =>
+      new Promise<StoreEvent>((resolve) => {
+        resolveSlow = resolve;
+      });
+    const dispatch = useAvailabilityStore.getState().dispatch;
+    const run = runQuery(storeA, '밀폐용기', dispatch, slowRunner);
+    expect(useAvailabilityStore.getState().ui).toMatchObject({
+      state: 'loading',
+      query: '밀폐용기',
+    });
+    useAvailabilityStore.getState().selectStore({ strCd: '003', strNm: '을지로점' });
+    resolveSlow({
+      type: 'RESULT',
+      answer: mockAnswers.inStock,
+      freshness: { class: 'live', observedAt: Date.now() },
+    });
+    await run;
+    expect(useAvailabilityStore.getState().ui).toEqual({ state: 'default' });
+    expect(useAvailabilityStore.getState().store).toEqual({ strCd: '003', strNm: '을지로점' });
+  });
+
+  test('the second submit wins: the first (slower) outcome is dropped, query stays retained', async () => {
+    let resolveA: (event: StoreEvent) => void = () => {};
+    const runnerA = () =>
+      new Promise<StoreEvent>((resolve) => {
+        resolveA = resolve;
+      });
+    const runnerB = async (): Promise<StoreEvent> => ({
+      type: 'RESULT',
+      answer: mockAnswers.inStock,
+      freshness: { class: 'live', observedAt: Date.now() },
+    });
+    const dispatch = useAvailabilityStore.getState().dispatch;
+    const runA = runQuery(storeA, 'temporarilyOut', dispatch, runnerA);
+    const runB = runQuery(storeA, '밀폐용기', dispatch, runnerB);
+    await runB;
+    resolveA({ type: 'FAILURE', cache: { kind: 'noCache' } });
+    await runA;
+    expect(useAvailabilityStore.getState().ui).toMatchObject({
+      state: 'success',
+      query: '밀폐용기',
+    });
+  });
+});
+
+describe('runner failure (F6)', () => {
+  test('a thrown runner error dispatches FAILURE noCache instead of hanging on Loading', async () => {
+    const dispatch = useAvailabilityStore.getState().dispatch;
+    await runQuery({ strCd: '001', strNm: '명동역점' }, '밀폐용기', dispatch, () =>
+      Promise.reject(new Error('IndexedDB unavailable')),
+    );
+    expect(useAvailabilityStore.getState().ui).toEqual({
+      state: 'error',
+      variant: 'noCache',
+      query: '밀폐용기',
+    });
   });
 });
 

@@ -1,11 +1,11 @@
 // src/ui/AvailabilitySurface.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createBrowserGeolocation } from '../adapters/geolocation/browserGeolocation';
 import { type Scenario, mockAnswers } from '../adapters/mock/fixtures';
 import { createKeywordMockRepository, createMockRepository } from '../adapters/mock/mockRepository';
 import { createMockStoreDirectory } from '../adapters/mock/storeDirectory';
 import { defaultPolicy } from '../domain/policy';
-import type { StoreContext, StoreEvent } from '../domain/types';
+import type { StoreContext, StoreEvent, UiState } from '../domain/types';
 import { createIndexedDbCache } from '../infra/cache-storage';
 import { createQueryRunner } from '../infra/query-cache';
 import { loadStoreContext } from '../infra/store-context';
@@ -66,22 +66,53 @@ async function runScenario(scenario: string, dispatch: (event: StoreEvent) => vo
   dispatch(event);
 }
 
-// Live typed-search pipeline: the keyword mock repository (B16) behind the same runner/cache as the
-// harness. Every 다시 확인 re-runs this verbatim with the retained query (B15).
-async function runQuery(
-  store: StoreContext,
-  keyword: string,
-  dispatch: (event: StoreEvent) => void,
-) {
+// Testability seam for runQuery: production always uses the live keyword pipeline; tests inject a
+// controllable-latency runner to exercise the staleness guard below.
+export type QueryOutcomeRunner = (store: StoreContext, keyword: string) => Promise<StoreEvent>;
+
+const liveQueryRunner: QueryOutcomeRunner = (store, keyword) => {
   const cache = createIndexedDbCache();
   const now = () => Date.now();
-  dispatch({ type: 'SUBMIT', query: keyword });
-  const event = await createQueryRunner({
+  return createQueryRunner({
     repo: createKeywordMockRepository(),
     cache,
     policy: defaultPolicy,
     now,
   }).run(store, { keyword });
+};
+
+// A late outcome may land only while the surface is still waiting for THIS run: same loading query
+// and same store as when the run started. A newer SUBMIT or selectStore invalidates it — the
+// reducer stays pure (B15), so the guard lives at the dispatch site.
+export function isCurrentRun(
+  current: { ui: UiState; store: StoreContext | null },
+  started: { keyword: string; strCd: string },
+): boolean {
+  return (
+    current.ui.state === 'loading' &&
+    current.ui.query === started.keyword &&
+    current.store?.strCd === started.strCd
+  );
+}
+
+// Live typed-search pipeline: the keyword mock repository (B16) behind the same runner/cache as the
+// harness. Every 다시 확인 re-runs this verbatim with the retained query (B15).
+export async function runQuery(
+  store: StoreContext,
+  keyword: string,
+  dispatch: (event: StoreEvent) => void,
+  runner: QueryOutcomeRunner = liveQueryRunner,
+) {
+  dispatch({ type: 'SUBMIT', query: keyword });
+  let event: StoreEvent;
+  try {
+    event = await runner(store, keyword);
+  } catch {
+    // Never a silent hang (Interface §3): a runner that THROWS (e.g. IndexedDB unavailable inside
+    // the runner's own failure path) still resolves the surface to error/noCache.
+    event = { type: 'FAILURE', cache: { kind: 'noCache' } };
+  }
+  if (!isCurrentRun(useAvailabilityStore.getState(), { keyword, strCd: store.strCd })) return;
   dispatch(event);
 }
 
@@ -94,12 +125,21 @@ export function AvailabilitySurface() {
   const closeSheet = useAvailabilityStore((s) => s.closeSheet);
   const selectStore = useAvailabilityStore((s) => s.selectStore);
   const [input, setInput] = useState('');
+  const changeStoreRef = useRef<HTMLButtonElement>(null);
+  const wasSheetOpen = useRef(sheetOpen);
 
   useEffect(() => {
     const scenario = new URLSearchParams(window.location.search).get('scenario');
     if (!scenario) return;
     void runScenario(scenario, dispatch);
   }, [dispatch]);
+
+  // Modal close (닫기 / Escape / store select) returns focus to the 매장 변경 opener — never body
+  // (Interface §6 focus order). After a first-run select the button mounts on the same commit.
+  useEffect(() => {
+    if (wasSheetOpen.current && !sheetOpen) changeStoreRef.current?.focus();
+    wasSheetOpen.current = sheetOpen;
+  }, [sheetOpen]);
 
   const sheet = (
     <StoreSelectionSheet
@@ -140,12 +180,22 @@ export function AvailabilitySurface() {
     </form>
   );
 
+  // While the modal sheet is open the background is inert (aria-modal made real): unreachable by
+  // keyboard and hidden from AT. First run renders the sheet alone, so no container exists to mark.
+  const backgroundInert = sheetOpen ? '' : undefined;
+
   if (ui.state === 'default') {
     return (
       <main>
-        <StoreContextLine store={store} onChangeStore={openSheet} />
-        <h1>{DEFAULT_HEADLINE}</h1>
-        {searchBar}
+        <div className="surface-content" inert={backgroundInert}>
+          <StoreContextLine
+            store={store}
+            onChangeStore={openSheet}
+            changeButtonRef={changeStoreRef}
+          />
+          <h1>{DEFAULT_HEADLINE}</h1>
+          {searchBar}
+        </div>
         {sheetOpen && sheet}
       </main>
     );
@@ -156,15 +206,21 @@ export function AvailabilitySurface() {
 
   return (
     <main>
-      <StoreContextLine store={store} onChangeStore={openSheet} />
-      <LiveRegion message={announcement} />
-      <AnswerCard
-        ui={ui}
-        policy={defaultPolicy}
-        nowMs={nowMs}
-        onRetry={() => void runQuery(store, ui.query, dispatch)}
-      />
-      {searchBar}
+      <div className="surface-content" inert={backgroundInert}>
+        <StoreContextLine
+          store={store}
+          onChangeStore={openSheet}
+          changeButtonRef={changeStoreRef}
+        />
+        <LiveRegion message={announcement} />
+        <AnswerCard
+          ui={ui}
+          policy={defaultPolicy}
+          nowMs={nowMs}
+          onRetry={() => void runQuery(store, ui.query, dispatch)}
+        />
+        {searchBar}
+      </div>
       {sheetOpen && sheet}
     </main>
   );
