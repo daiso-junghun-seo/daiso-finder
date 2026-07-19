@@ -45,7 +45,7 @@ export function createNewIntSelStrAdapter(deps: {
       const entry = entries[0]; // design spec §5; multi-store reconciliation deferred to live wiring
       // Narrowing (not a logic change): entries.length > 0 here, so entry is always defined.
       // Required because this repo's tsconfig sets noUncheckedIndexedAccess.
-      if (!entry) throw new NoCatalogMatchError([]);
+      if (!entry) throw new UnmappableAnswerError('unexpected empty store row');
       const identity = await deps.identity.resolve(entry.pdNo ?? term.pdNo ?? '', store);
       if (!identity) throw new UnmappableAnswerError('product identity unavailable'); // safe fallback, no fabrication
       return mapResponse(entry, identity);

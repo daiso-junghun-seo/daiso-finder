@@ -5,6 +5,13 @@ import type { AvailabilityAnswer } from '../domain/types';
 import type { CacheStorage } from './cache-storage';
 import { createQueryRunner } from './query-cache';
 
+// No @types/node in this project — a minimal local ambient type for the one Node global this
+// spec needs (process.on/off for the unhandledRejection spy below).
+declare const process: {
+  on(event: 'unhandledRejection', listener: (reason: unknown) => void): void;
+  off(event: 'unhandledRejection', listener: (reason: unknown) => void): void;
+};
+
 const store = { strCd: '1', strNm: '명동역점' };
 const memCache = (): CacheStorage => {
   const m = new Map<string, { answer: AvailabilityAnswer; observedAt: number }>();
@@ -84,6 +91,25 @@ test('a timeout beyond timeoutMs is treated as a failure', async () => {
     timeoutMs: 10,
   });
   expect(await run.run(store, { keyword: '밀폐용기' })).toMatchObject({ type: 'FAILURE' });
+});
+test('a late repo rejection after the timeout already won registers no unhandled rejection', async () => {
+  const onUnhandled = vi.fn();
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const run = createQueryRunner({
+      repo: createMockRepository('inStock', { latencyMs: 50, fail: true }),
+      cache: memCache(),
+      policy: defaultPolicy,
+      now: () => 8000,
+      timeoutMs: 10,
+    });
+    expect(await run.run(store, { keyword: '밀폐용기' })).toMatchObject({ type: 'FAILURE' });
+    // Flush past the mock repo's 50ms latency so its late rejection has a chance to surface.
+    await new Promise((r) => setTimeout(r, 100));
+    expect(onUnhandled).not.toHaveBeenCalled();
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
 });
 test('no catalog match → NO_MATCH (never serves stale cache)', async () => {
   const cache = memCache();

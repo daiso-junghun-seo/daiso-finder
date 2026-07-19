@@ -16,7 +16,8 @@ import { StoreSelectionSheet } from './components/StoreSelectionSheet';
 import { DEFAULT_HEADLINE, SCAN_BUTTON_LABEL, SEARCH_PLACEHOLDER, announcementFor } from './copy';
 import { useAvailabilityStore } from './store';
 
-// Placeholder store for the Inc-0 sweep only — Increment 1 wires the real store-selection sheet (D082).
+// Placeholder store for the Inc-0 sweep only — the sheet exists (D082); this is now only the E2E
+// sweep's default store when no store context has been saved yet.
 const PLACEHOLDER_STORE = { strCd: '0', strNm: '명동역점' };
 
 // Injected seams for the D082 sheet: mock store directory (B16 — the live daisomall directory adapter
@@ -25,7 +26,7 @@ const storeDirectory = createMockStoreDirectory();
 const browserGeolocation = createBrowserGeolocation();
 
 // Dev-only scenario switch driving the mock pipeline for the Playwright sweep. NOT production routing —
-// final Flow-1 entry/search/store-selection lands in Increment 1.
+// Flow-1 entry/search/store-selection landed in Phase 5; this harness remains the E2E state sweep.
 async function runScenario(scenario: string, dispatch: (event: StoreEvent) => void) {
   const store = loadStoreContext() ?? PLACEHOLDER_STORE;
   const cache = createIndexedDbCache();
@@ -59,6 +60,7 @@ async function runScenario(scenario: string, dispatch: (event: StoreEvent) => vo
     dispatch(event);
     return;
   }
+  if (!Object.hasOwn(mockAnswers, scenario)) return; // unknown ?scenario= → stay Default (dev harness)
   const repo = createMockRepository(scenario as Scenario);
   const event = await createQueryRunner({ repo, cache, policy: defaultPolicy, now }).run(store, {
     keyword: scenario,

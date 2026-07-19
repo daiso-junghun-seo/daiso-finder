@@ -28,8 +28,13 @@ export function createQueryRunner(deps: {
           reject(new Error('query timeout'));
         }, timeoutMs);
       });
+      const repoPromise = deps.repo.query(store, term, ctrl.signal);
+      // A losing repoPromise may reject AFTER the timeout already won the race; without a handler that
+      // late rejection is an unhandledRejection crash in some hosts. The side .catch marks it handled —
+      // the race still sees the original promise.
+      repoPromise.catch(() => {});
       try {
-        const answer = await Promise.race([deps.repo.query(store, term, ctrl.signal), timeout]);
+        const answer = await Promise.race([repoPromise, timeout]);
         clearTimeout(timer);
         const observedAt = deps.now();
         await deps.cache.writeAnswer(key, answer, observedAt);

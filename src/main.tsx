@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { AvailabilitySurface } from './ui/AvailabilitySurface';
 import './styles/tokens.css';
 
-registerSW();
+registerSW({ immediate: true });
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

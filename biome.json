@@ -43,17 +43,7 @@
       }
     },
     {
-      "include": ["src/ui/a11y/LiveRegion.tsx"],
-      "linter": {
-        "rules": {
-          "a11y": {
-            "useSemanticElements": "off"
-          }
-        }
-      }
-    },
-    {
-      "include": ["src/ui/components/StoreSelectionSheet.tsx"],
+      "include": ["src/ui/a11y/LiveRegion.tsx", "src/ui/components/StoreSelectionSheet.tsx"],
       "linter": {
         "rules": {
           "a11y": {

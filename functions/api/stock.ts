@@ -15,20 +15,28 @@ export function stripMallOnlyFields(json: UpstreamPayload): UpstreamPayload {
   return json;
 }
 
+const CORS_HEADERS = {
+  'content-type': 'application/json',
+  'access-control-allow-origin': '*',
+  'cache-control': 'no-store',
+} as const;
+
 export async function onRequestPost(context: { request: Request }): Promise<Response> {
   const body = await context.request.text();
-  const upstream = await fetch(UPSTREAM, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body,
-  });
-  const json = stripMallOnlyFields(await upstream.json());
-  return new Response(JSON.stringify(json), {
-    status: upstream.status,
-    headers: {
-      'content-type': 'application/json',
-      'access-control-allow-origin': '*',
-      'cache-control': 'no-store',
-    },
-  });
+  try {
+    const upstream = await fetch(UPSTREAM, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+    });
+    const json = stripMallOnlyFields((await upstream.json()) as UpstreamPayload);
+    return new Response(JSON.stringify(json), { status: upstream.status, headers: CORS_HEADERS });
+  } catch {
+    // Upstream unreachable or non-JSON: still a relay-shaped answer — CORS + no-store so the client's
+    // FAILURE path (not an opaque CORS error) handles it. No caching, no business logic here.
+    return new Response(JSON.stringify({ error: 'upstream_unavailable' }), {
+      status: 502,
+      headers: CORS_HEADERS,
+    });
+  }
 }

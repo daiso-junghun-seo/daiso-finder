@@ -1,5 +1,5 @@
-import { hasLocation } from './guards';
 // src/domain/state-machine.ts
+import { hasLocation } from './guards';
 import type { StoreEvent, UiState } from './types';
 
 export const initialState: UiState = { state: 'default' };

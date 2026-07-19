@@ -6,8 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       manifest: {
+        lang: 'ko',
         name: 'DAISO Finder',
         short_name: 'DAISO Finder',
         start_url: '/',
