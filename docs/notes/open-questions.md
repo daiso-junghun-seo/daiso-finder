@@ -4,7 +4,7 @@
 >
 > **철칙**(CLAUDE.md §2·§3): Canon에 답 있으면 따른다. 없거나 모순이면 **중단·질문**. 스펙 갭은 앱에서 임의 결정 금지 → **Bible에 결정/RFC로 에스컬레이션**(Bible 세션에서, 이 세션과 분리) 후 따른다. 앱-레벨 결정만 이 저장소가 자체 기록(Bible D-번호 미소비).
 >
-> 최종 갱신: 2026-07-16 (Phase 4 착수 — §B12/B13/B14 앱-레벨 결정 추가).
+> 최종 갱신: 2026-07-19 (Phase 5 착수 — §A9 에스컬레이션, §B15/B16 앱-레벨 결정 추가).
 
 ---
 
@@ -22,6 +22,7 @@
 | A6 | **D062 범위 이중성(마이너)** | Engineering 로그는 'qty 상한만', Interface/data-contract 로그는 '4개 부정 답+Partial 재트리거'로 글로스 — 한 D-번호가 두 교정을 묶은 듯. | Inc 1 구현 해석 | 아니오 | Bible에 정확 범위 확인 요청(경미). 구현은 양쪽 다 만족하게. |
 | A7 | **판매종료 범위(매장 vs 체인)** | Flow 3(Inc 3) Group B 발행 게이트. 미결 동안 discontinued 진입은 nearby withhold. | Inc 3(선행: Inc 0 심 설계) | 아니오 | Inc 0 심을 **매트릭스 재작성 없이 스위치** 가능하게 설계. data-owner 확인. |
 | A8 | **데이터 계약 = 단일-샘플 Evidence Level 2** | `sleStsCd` 값 열거 미완, `curLitd`/`strLitd` 철자(경도?) 미확인, 결손 행 처리 미정의, hldyDt 시맨틱 미정의 — 전부 구현 전 확인 필요. | Inc 0/1 데이터 레이어 | 아니오(관측값 mock) | data-owner와 라이브 페이로드 대조 → Bible data-contract 갱신. |
+| A9 | **매장 검색/근처 매장 데이터 소스 미관측** | Engineering §5(D082)는 매장명·지역 검색과 거리순 근처 매장 목록을 요구하지만 data-contract에 매장 검색/목록 API가 관측되어 있지 않음(문서화된 것은 상품 스코프 `newIntSelStr`뿐). 관측 증거 후보는 존재(`.claude/skills/k-skill` 번들 `daiso-product-search`가 daisomall `selStr`·`selStrSrchKeyword`·`selStrInfo` 표면 문서화) — Bible 세션에서 data-contract 반영 후에만 앱이 소비. | Inc 1 매장 선택 시트 | 아니오(§B16 심 뒤 mock) | Bible 세션에서 data-contract 갱신(k-skill 관측 + 라이브 검증) → 실 어댑터 배선. |
 
 ---
 
@@ -45,6 +46,8 @@
 | B12 | 신선도 캡션 상대시간 포맷 알고리즘 | **앱 자체 알고리즘** | Bible은 예시 카피만 제공("어제 오후 6시"), 알고리즘은 미정의. 확정: 캘린더-일 차이 0→오늘/1→어제/≥2→"M월 D일"; 시각은 24h→12h+오전/오후 변환, 분은 절삭(Bible 예시가 분을 보이지 않음) | ✅ 확정(Phase 4) |
 | B13 | "다른 위치 N곳 더 ▾" 카운트 파라미터화 | **앱 자체** | Bible 예시는 "다른 위치 1곳 더 ▾" 단일 값뿐; `locations.length - 1`을 대입하는 것은 순수 기계적 파라미터화(카피 자체는 불변) | ✅ 확정(Phase 4) |
 | B14 | D083 glass 토큰(`--surface-solid` 등) 최소 정의 시점 | **Phase 4에서 최소 세트 선정의**, 전체 대비/성능 튜닝은 Phase 6 | `glass.css`가 참조하는 4개 커스텀 프로퍼티가 `tokens.css`에 미정의라 카드가 투명 렌더됨(Phase 2 Minor 발견); D083의 ≥4.5:1 대비 보장은 비협상이라 Phase 4는 라이트/다크 최소 토큰만 공급 | 🔬 Phase 6에서 전체 검증 |
+| B15 | UiState 쿼리 보존 형태 | **모든 non-default variant가 `query: string` 보유** | Bible은 "모든 답 상태에서 재검색→Loading"(Interface §3)을 요구하나 `error`/`success`/`partial`이 원 쿼리를 잃어 재시도 배선 불가(Phase 4 발견). reduce가 loading의 query를 RESULT/FAILURE로 스레딩; 재시도=보존 쿼리로 SUBMIT 재디스패치. 순수 앱 내부 타입 결정 | ✅ 확정(Phase 5) |
+| B16 | 매장 검색/근처 매장 라이브 데이터 소스 | **UI+포트 심+mock까지 구현, 실 API 배선은 추후 과제** (owner 지시 2026-07-19) | 층/구역 표시·API 호출 구조는 유지(P3/P4 기구축), 매장 검색 실 데이터 소스는 owner가 자료 공유 후 확정(§A9). Phase 5는 `StoreDirectoryPort` 심 뒤 mock 디렉토리로 D082 시트를 완성 — 실 어댑터 교체 시 UI 재작성 없음 | ✅ 확정(Phase 5) |
 
 ---
 
