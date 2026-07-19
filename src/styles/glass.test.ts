@@ -1,6 +1,7 @@
 import css from './glass.css?raw';
 
-const SUPPORTS_MARKER = '@supports (backdrop-filter: blur(1px))';
+const SUPPORTS_MARKER =
+  '@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))';
 const REDUCED_MARKER = '@media (prefers-reduced-transparency: reduce)';
 
 // Returns the full at-rule block (marker + braces) starting at the marker, brace-matched.
@@ -21,18 +22,24 @@ function atRuleBlock(marker: string): string {
 const supportsBlock = atRuleBlock(SUPPORTS_MARKER);
 const reducedBlock = atRuleBlock(REDUCED_MARKER);
 
-test('exactly one backdrop-filter blur declaration outside the reduced-transparency block (single layer per surface, D083)', () => {
+test('exactly one standard + one -webkit backdrop-filter blur declaration outside the reduced-transparency block (one composited layer per surface, D083)', () => {
   const outsideReduced = css.replace(reducedBlock, '');
   // Declarations end with ';' — the @supports feature query itself is not a declaration.
   // The value may nest one level of parens, e.g. blur(var(--glass-blur)).
-  const blurDecls =
-    outsideReduced.match(/backdrop-filter:\s*blur\((?:[^()]|\([^()]*\))*\)\s*;/g) ?? [];
-  expect(blurDecls).toHaveLength(1);
+  // The prefixed pair is ONE composited blur layer, not two; the lookbehind keeps the
+  // standard-property count from also matching inside -webkit-backdrop-filter.
+  const standardBlurDecls =
+    outsideReduced.match(/(?<!-)backdrop-filter:\s*blur\((?:[^()]|\([^()]*\))*\)\s*;/g) ?? [];
+  const webkitBlurDecls =
+    outsideReduced.match(/-webkit-backdrop-filter:\s*blur\((?:[^()]|\([^()]*\))*\)\s*;/g) ?? [];
+  expect(standardBlurDecls).toHaveLength(1);
+  expect(webkitBlurDecls).toHaveLength(1);
   expect(reducedBlock.match(/backdrop-filter:\s*blur\(/g)).toBeNull();
 });
 
 test('reduced-transparency fallback forces the blur off (solid is the base layer)', () => {
   expect(reducedBlock).toContain('backdrop-filter: none !important');
+  expect(reducedBlock).toContain('-webkit-backdrop-filter: none !important');
   expect(reducedBlock).toContain('background: var(--surface-solid) !important');
 });
 

@@ -40,19 +40,46 @@ main {
   inset-inline: 0;
   bottom: 0;
   max-height: 85dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Height-constraint chain so the list overflow actually engages: every flex ancestor between the
+   capped sheet and the scrolling lists must allow shrinking (min-height: 0). Header/input/title
+   stay put; only the solid-layer lists scroll (D083). */
+.store-selection-sheet > section {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.store-selection-sheet__nearby-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .store-selection-sheet__results,
 .store-selection-sheet__nearby {
   overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Touch targets ≥ 44×44pt with ≥ 8px spacing between list rows (Interface §6). */
 button,
 input {
   min-height: 44px;
+  min-width: 44px;
 }
 
 .store-selection-sheet li + li {
   margin-top: 8px;
+}
+
+/* ≥ 8px between adjacent answer-card actions (franchise CTA + 다시 확인 in Error(cached)). */
+.answer-card button + button {
+  margin-inline-start: 8px;
 }

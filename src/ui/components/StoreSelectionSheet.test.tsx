@@ -170,6 +170,27 @@ test('Escape does nothing when onClose is not provided (first run)', async () =>
   expect(screen.getByRole('dialog', { name: STORE_SELECT_TITLE })).toBeInTheDocument();
 });
 
+test('Escape during IME composition does not close the sheet (F8)', async () => {
+  const onClose = vi.fn();
+  render(
+    <StoreSelectionSheet
+      current={{ strCd: '001', strNm: '명동역점' }}
+      directory={directory}
+      geolocation={geoWithStores}
+      onSelect={() => {}}
+      onClose={onClose}
+    />,
+  );
+  await screen.findByRole('button', { name: '명동역점 · 120m' });
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true }),
+  );
+  expect(onClose).not.toHaveBeenCalled();
+  // Sanity: the same event without composition still closes (guard is composition-scoped).
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
 test('a store-search failure clears results instead of crashing (F5)', async () => {
   const flaky: StoreDirectoryPort = {
     searchStores: async (q) => {

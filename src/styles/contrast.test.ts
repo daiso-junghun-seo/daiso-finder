@@ -186,6 +186,24 @@ for (const { name, tokens } of THEMES) {
       worstCaseGlassRatio(tokens, '--text-primary', '--surface-glass-tint-raised'),
     ).toBeGreaterThanOrEqual(THRESHOLD);
   });
+
+  test(`[${name}] --text-secondary on raised glass worst-case (--surface-glass-tint-raised) holds ≥4.5:1`, () => {
+    expect(
+      worstCaseGlassRatio(tokens, '--text-secondary', '--surface-glass-tint-raised'),
+    ).toBeGreaterThanOrEqual(THRESHOLD);
+  });
+
+  test(`[${name}] --color-success on raised glass worst-case (--surface-glass-tint-raised) holds ≥4.5:1`, () => {
+    expect(
+      worstCaseGlassRatio(tokens, '--color-success', '--surface-glass-tint-raised'),
+    ).toBeGreaterThanOrEqual(THRESHOLD);
+  });
+
+  test(`[${name}] --color-error on raised glass worst-case (--surface-glass-tint-raised) holds ≥4.5:1`, () => {
+    expect(
+      worstCaseGlassRatio(tokens, '--color-error', '--surface-glass-tint-raised'),
+    ).toBeGreaterThanOrEqual(THRESHOLD);
+  });
 }
 
 test('parser found both themes (guards against silent regex drift)', () => {

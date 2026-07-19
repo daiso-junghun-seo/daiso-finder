@@ -45,6 +45,7 @@ export function StoreSelectionSheet({
   // has drifted outside the dialog (P6-4); this replaces the old section-scoped onKeyDown.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.isComposing) return; // IME composition Escape cancels the composition, not the sheet
       if (e.key === 'Escape') onClose?.();
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -124,7 +125,7 @@ export function StoreSelectionSheet({
             ))}
           </ul>
         ) : nearby === null ? null : nearby.length > 0 ? (
-          <div>
+          <div className="store-selection-sheet__nearby-group">
             <p className="text-caption">{STORE_SELECT_NEARBY_HEADER}</p>
             <ul className="store-selection-sheet__nearby">
               {nearby.map((store) => (
