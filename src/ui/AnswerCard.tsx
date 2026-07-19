@@ -32,15 +32,26 @@ export function AnswerCard({
   ui,
   policy,
   nowMs,
+  onRetry,
 }: {
   ui: NonDefaultUiState;
   policy: DataOwnerPolicy;
   nowMs: number;
+  // Wired ONLY to the four 다시 확인 renders (error/cached, error/noCache, partial/locationMissing,
+  // partial/staleCache): re-runs the retained query (B15). All other CTAs stay inert stubs.
+  onRetry?: () => void;
 }) {
-  return <GlassSurface className="answer-card">{renderBody(ui, policy, nowMs)}</GlassSurface>;
+  return (
+    <GlassSurface className="answer-card">{renderBody(ui, policy, nowMs, onRetry)}</GlassSurface>
+  );
 }
 
-function renderBody(ui: NonDefaultUiState, policy: DataOwnerPolicy, nowMs: number) {
+function renderBody(
+  ui: NonDefaultUiState,
+  policy: DataOwnerPolicy,
+  nowMs: number,
+  onRetry?: () => void,
+) {
   switch (ui.state) {
     case 'loading':
       return (
@@ -53,16 +64,21 @@ function renderBody(ui: NonDefaultUiState, policy: DataOwnerPolicy, nowMs: numbe
       return <p className="text-body">{emptyBody(ui.query)}</p>;
     case 'error':
       return ui.variant === 'cached'
-        ? renderErrorCached(ui.answer, ui.freshness.observedAt, nowMs)
-        : renderErrorNoCache();
+        ? renderErrorCached(ui.answer, ui.freshness.observedAt, nowMs, onRetry)
+        : renderErrorNoCache(onRetry);
     case 'success':
       return renderSuccess(ui.answer, policy);
     case 'partial':
-      return renderPartial(ui, nowMs);
+      return renderPartial(ui, nowMs, onRetry);
   }
 }
 
-function renderErrorCached(answer: AvailabilityAnswer, observedAt: number, nowMs: number) {
+function renderErrorCached(
+  answer: AvailabilityAnswer,
+  observedAt: number,
+  nowMs: number,
+  onRetry?: () => void,
+) {
   const facts = factsFor(answer);
   const line = priceLocationLine(answer);
   // priceLocationLine requires both price and location together; an inStock answer can be cached with a
@@ -82,21 +98,21 @@ function renderErrorCached(answer: AvailabilityAnswer, observedAt: number, nowMs
       <p className="text-caption">
         {cachedFreshnessCaption(formatRelativeTimeKo(observedAt, nowMs))}
       </p>
-      <button type="button" className="text-label">
+      <button type="button" className="text-label" onClick={onRetry}>
         {RETRY_BUTTON}
       </button>
     </div>
   );
 }
 
-function renderErrorNoCache() {
+function renderErrorNoCache(onRetry?: () => void) {
   return (
     <div>
       <p className="text-body error-banner">
         <span aria-hidden="true">⚠ </span>
         {ERROR_NO_CACHE_BODY}
       </p>
-      <button type="button" className="text-label">
+      <button type="button" className="text-label" onClick={onRetry}>
         {RETRY_BUTTON}
       </button>
     </div>
@@ -150,7 +166,11 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy) {
   );
 }
 
-function renderPartial(ui: Extract<NonDefaultUiState, { state: 'partial' }>, nowMs: number) {
+function renderPartial(
+  ui: Extract<NonDefaultUiState, { state: 'partial' }>,
+  nowMs: number,
+  onRetry?: () => void,
+) {
   const { answer, freshness, trigger } = ui;
   if (trigger === 'franchise') {
     return (
@@ -169,7 +189,7 @@ function renderPartial(ui: Extract<NonDefaultUiState, { state: 'partial' }>, now
       <div>
         <p className="text-heading">{answer.productName}</p>
         <p className="text-body">{partialLocationMissingBody(answer.price)}</p>
-        <button type="button" className="text-label">
+        <button type="button" className="text-label" onClick={onRetry}>
           {PARTIAL_NO_LOCATION_CTA}
         </button>
       </div>
@@ -180,7 +200,7 @@ function renderPartial(ui: Extract<NonDefaultUiState, { state: 'partial' }>, now
     <div>
       <p className="text-heading">{answer.productName}</p>
       <p className="text-body">{partialStaleCacheBody(relativeTime)}</p>
-      <button type="button" className="text-label">
+      <button type="button" className="text-label" onClick={onRetry}>
         {PARTIAL_STALE_CACHE_CTA}
       </button>
     </div>
