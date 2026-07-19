@@ -1,6 +1,12 @@
 // test/e2e/states.spec.ts
 import { expect, test } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('daiso.storeContext', JSON.stringify({ strCd: '001', strNm: '명동역점' }));
+  });
+});
+
 const scenarios = [
   'inStock',
   'noLocation',
