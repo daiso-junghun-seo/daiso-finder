@@ -71,7 +71,11 @@ test('empty renders the Bible body with the query quoted', () => {
 
 test('error/noCache renders the no-cache body and the retry button', () => {
   render(
-    <AnswerCard ui={{ state: 'error', variant: 'noCache' }} policy={defaultPolicy} nowMs={NOW} />,
+    <AnswerCard
+      ui={{ state: 'error', variant: 'noCache', query: '밀폐용기' }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+    />,
   );
   expect(screen.getByText(ERROR_NO_CACHE_BODY)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: RETRY_BUTTON })).toBeInTheDocument();
@@ -83,6 +87,7 @@ test('error/cached renders the banner, cached facts, cache-age caption, and retr
       ui={{
         state: 'error',
         variant: 'cached',
+        query: '밀폐용기',
         answer: mockAnswers.inStock,
         freshness: { class: 'cachedWithinThreshold', observedAt: YESTERDAY_6PM },
       }}
@@ -104,6 +109,7 @@ test('error/cached still shows the known price when the cached inStock answer ha
       ui={{
         state: 'error',
         variant: 'cached',
+        query: '밀폐용기',
         answer: mockAnswers.noLocation,
         freshness: { class: 'cachedWithinThreshold', observedAt: YESTERDAY_6PM },
       }}
@@ -117,7 +123,11 @@ test('error/cached still shows the known price when the cached inStock answer ha
 
 test('error/noCache body carries the same Error color role as error/cached (Interface §5/§9 decision 6)', () => {
   render(
-    <AnswerCard ui={{ state: 'error', variant: 'noCache' }} policy={defaultPolicy} nowMs={NOW} />,
+    <AnswerCard
+      ui={{ state: 'error', variant: 'noCache', query: '밀폐용기' }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+    />,
   );
   expect(screen.getByText(ERROR_NO_CACHE_BODY)).toHaveClass('error-banner');
 });
@@ -127,6 +137,7 @@ test('success inStock (ample qty) shows live freshness, price/location, and the 
     <AnswerCard
       ui={{
         state: 'success',
+        query: '밀폐용기',
         answer: mockAnswers.inStock,
         freshness: { class: 'live', observedAt: NOW },
       }}
@@ -145,6 +156,7 @@ test('success inStock (low qty) swaps in the upper-bound caption', () => {
     <AnswerCard
       ui={{
         state: 'success',
+        query: '밀폐용기',
         answer: mockAnswers.inStockLowQty,
         freshness: { class: 'live', observedAt: NOW },
       }}
@@ -161,6 +173,7 @@ test('success inStock (multi-location) shows the extra-positions disclosure butt
     <AnswerCard
       ui={{
         state: 'success',
+        query: '밀폐용기',
         answer: mockAnswers.inStockMultiLocation,
         freshness: { class: 'live', observedAt: NOW },
       }}
@@ -176,6 +189,7 @@ test('success temporarilyOut shows the body plus both the primary and secondary 
     <AnswerCard
       ui={{
         state: 'success',
+        query: '밀폐용기',
         answer: mockAnswers.temporarilyOut,
         freshness: { class: 'live', observedAt: NOW },
       }}
@@ -204,6 +218,7 @@ for (const { scenario, body, cta } of negativeSuccessCases) {
       <AnswerCard
         ui={{
           state: 'success',
+          query: '밀폐용기',
           answer: mockAnswers[scenario],
           freshness: { class: 'live', observedAt: NOW },
         }}
@@ -222,6 +237,7 @@ test('partial/franchise shows the franchise body and CTA', () => {
       ui={{
         state: 'partial',
         trigger: 'franchise',
+        query: '밀폐용기',
         answer: mockAnswers.franchise,
         freshness: null,
       }}
@@ -239,6 +255,7 @@ test('partial/locationMissing shows the confirmed-price body and the retry CTA',
       ui={{
         state: 'partial',
         trigger: 'locationMissing',
+        query: '밀폐용기',
         answer: mockAnswers.noLocation,
         freshness: null,
       }}
@@ -256,6 +273,7 @@ test('partial/staleCache shows the last-seen body and the retry CTA', () => {
       ui={{
         state: 'partial',
         trigger: 'staleCache',
+        query: '밀폐용기',
         answer: mockAnswers.inStock,
         freshness: { class: 'cachedBeyondThreshold', observedAt: YESTERDAY_6PM },
       }}

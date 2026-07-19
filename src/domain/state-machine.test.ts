@@ -1,4 +1,5 @@
 // src/domain/state-machine.test.ts
+import { mockAnswers } from '../adapters/mock/fixtures';
 import { initialState, reduce } from './state-machine';
 import type { AvailabilityAnswer, Freshness } from './types';
 
@@ -80,6 +81,7 @@ test('failure no cache → error(noCache)', () =>
   expect(reduce(loading, { type: 'FAILURE', cache: { kind: 'noCache' } })).toEqual({
     state: 'error',
     variant: 'noCache',
+    query: '밀폐용기',
   }));
 test('any answer + SUBMIT → loading (re-search)', () => {
   const s = answer({
@@ -95,3 +97,48 @@ test('CHANGE_STORE → default', () =>
   expect(
     reduce(loading, { type: 'CHANGE_STORE', store: { strCd: '1', strNm: '명동역점' } }),
   ).toEqual({ state: 'default' }));
+
+describe('query retention (B15)', () => {
+  const loading = reduce(initialState, { type: 'SUBMIT', query: '밀폐용기' });
+
+  test('RESULT retains the submitted query on success', () => {
+    const next = reduce(loading, {
+      type: 'RESULT',
+      answer: mockAnswers.inStock,
+      freshness: { class: 'live', observedAt: 0 },
+    });
+    expect(next).toMatchObject({ state: 'success', query: '밀폐용기' });
+  });
+
+  test('RESULT retains the query on partial (franchise)', () => {
+    const next = reduce(loading, {
+      type: 'RESULT',
+      answer: mockAnswers.franchise,
+      freshness: { class: 'live', observedAt: 0 },
+    });
+    expect(next).toMatchObject({ state: 'partial', trigger: 'franchise', query: '밀폐용기' });
+  });
+
+  test('FAILURE retains the query on error/noCache', () => {
+    const next = reduce(loading, { type: 'FAILURE', cache: { kind: 'noCache' } });
+    expect(next).toEqual({ state: 'error', variant: 'noCache', query: '밀폐용기' });
+  });
+
+  test('FAILURE retains the query on error/cached and partial/staleCache', () => {
+    const freshness = { class: 'cachedWithinThreshold' as const, observedAt: 0 };
+    const cached = reduce(loading, {
+      type: 'FAILURE',
+      cache: { kind: 'withinThreshold', answer: mockAnswers.inStock, freshness },
+    });
+    expect(cached).toMatchObject({ state: 'error', variant: 'cached', query: '밀폐용기' });
+    const stale = reduce(loading, {
+      type: 'FAILURE',
+      cache: {
+        kind: 'beyondThreshold',
+        answer: mockAnswers.inStock,
+        freshness: { class: 'cachedBeyondThreshold', observedAt: 0 },
+      },
+    });
+    expect(stale).toMatchObject({ state: 'partial', trigger: 'staleCache', query: '밀폐용기' });
+  });
+});

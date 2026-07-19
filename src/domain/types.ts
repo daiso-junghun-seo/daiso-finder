@@ -49,16 +49,24 @@ export type StoreEvent =
   | { type: 'DISMISS_AI' }
   | { type: 'CHANGE_STORE'; store: StoreContext };
 
+// Every non-default state retains the submitted query (B15): retry/re-search re-dispatches SUBMIT with it.
 export type UiState =
   | { state: 'default' }
   | { state: 'loading'; query: string; slow: boolean }
   | { state: 'empty'; query: string; suggestions: string[] }
-  | { state: 'error'; variant: 'cached'; answer: AvailabilityAnswer; freshness: Freshness }
-  | { state: 'error'; variant: 'noCache' }
-  | { state: 'success'; answer: AvailabilityAnswer; freshness: Freshness }
+  | {
+      state: 'error';
+      variant: 'cached';
+      query: string;
+      answer: AvailabilityAnswer;
+      freshness: Freshness;
+    }
+  | { state: 'error'; variant: 'noCache'; query: string }
+  | { state: 'success'; query: string; answer: AvailabilityAnswer; freshness: Freshness }
   | {
       state: 'partial';
       trigger: 'franchise' | 'locationMissing' | 'staleCache';
+      query: string;
       answer: AvailabilityAnswer;
       freshness: Freshness | null;
     };

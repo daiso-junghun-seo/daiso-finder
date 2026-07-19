@@ -145,6 +145,7 @@ test('priceLocationLine renders only for inStock answers that carry a location',
 test('announcementFor orders a success announcement as status -> price/location -> freshness -> CTA (Interface §6)', () => {
   const ui = {
     state: 'success' as const,
+    query: '밀폐용기',
     answer: mockAnswers.inStock,
     freshness: { class: 'live' as const, observedAt: 0 },
   };
@@ -159,6 +160,7 @@ test('announcementFor orders a success announcement as status -> price/location 
 test('announcementFor swaps in the low-quantity caption when qtyUpperBound is at or under the policy cutoff', () => {
   const ui = {
     state: 'success' as const,
+    query: '밀폐용기',
     answer: mockAnswers.inStockLowQty,
     freshness: { class: 'live' as const, observedAt: 0 },
   };
@@ -169,6 +171,7 @@ test('announcementFor leads an error/cached announcement with the banner, then t
   const ui = {
     state: 'error' as const,
     variant: 'cached' as const,
+    query: '밀폐용기',
     answer: mockAnswers.inStock,
     freshness: {
       class: 'cachedWithinThreshold' as const,
@@ -189,6 +192,7 @@ test('announcementFor renders the franchise-partial announcement as body then CT
   const ui = {
     state: 'partial' as const,
     trigger: 'franchise' as const,
+    query: '밀폐용기',
     answer: mockAnswers.franchise,
     freshness: null,
   };
