@@ -64,4 +64,14 @@ describe('createKeywordMockRepository', () => {
     );
     await expect(repo.query(store, { keyword: '' })).rejects.toBeInstanceOf(NoCatalogMatchError);
   });
+
+  test('prototype-chain keys are not scenarios: __proto__ and toString reject (→ Empty)', async () => {
+    const repo = createKeywordMockRepository();
+    await expect(repo.query(store, { keyword: '__proto__' })).rejects.toBeInstanceOf(
+      NoCatalogMatchError,
+    );
+    await expect(repo.query(store, { keyword: 'toString' })).rejects.toBeInstanceOf(
+      NoCatalogMatchError,
+    );
+  });
 });

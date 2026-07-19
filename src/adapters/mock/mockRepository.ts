@@ -24,7 +24,9 @@ export function createKeywordMockRepository(): StoreStockRepository {
   return {
     async query(_store, term) {
       const keyword = (term.keyword ?? '').trim();
-      if (keyword in mockAnswers) return mockAnswers[keyword as Scenario];
+      // Own keys only: `in` would match prototype-chain keys (__proto__, toString, …) and hand
+      // non-answer objects to the UI/cache.
+      if (Object.hasOwn(mockAnswers, keyword)) return mockAnswers[keyword as Scenario];
       if (keyword && mockProductName.includes(keyword)) return mockAnswers.inStock;
       throw new NoCatalogMatchError([]);
     },
