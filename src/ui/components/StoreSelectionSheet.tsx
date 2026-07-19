@@ -40,6 +40,17 @@ export function StoreSelectionSheet({
     searchRef.current?.focus();
   }, []);
 
+  // Escape dismisses like 닫기 — but never on first run (onClose undefined): a Store Context must
+  // exist before the sheet may close. Registered at document level so Escape still works when focus
+  // has drifted outside the dialog (P6-4); this replaces the old section-scoped onKeyDown.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   useEffect(() => {
     let cancelled = false;
     geolocation
@@ -84,16 +95,7 @@ export function StoreSelectionSheet({
 
   return (
     <GlassSurface className="store-selection-sheet">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="store-select-title"
-        onKeyDown={(e) => {
-          // Escape dismisses like 닫기 — but never on first run (onClose undefined): a Store
-          // Context must exist before the sheet may close.
-          if (e.key === 'Escape') onClose?.();
-        }}
-      >
+      <section role="dialog" aria-modal="true" aria-labelledby="store-select-title">
         <div className="store-selection-sheet__header">
           <h2 id="store-select-title" className="text-heading">
             {STORE_SELECT_TITLE}

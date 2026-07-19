@@ -129,6 +129,7 @@ export function AvailabilitySurface() {
   const selectStore = useAvailabilityStore((s) => s.selectStore);
   const [input, setInput] = useState('');
   const changeStoreRef = useRef<HTMLButtonElement>(null);
+  const answerCardRef = useRef<HTMLDivElement>(null);
   const wasSheetOpen = useRef(sheetOpen);
 
   useEffect(() => {
@@ -232,7 +233,13 @@ export function AvailabilitySurface() {
           ui={ui}
           policy={defaultPolicy}
           nowMs={nowMs}
-          onRetry={() => void runQuery(store, ui.query, dispatch)}
+          cardRef={answerCardRef}
+          onRetry={() => {
+            void runQuery(store, ui.query, dispatch);
+            // The retry button unmounts on the Loading swap — move focus to the persistent card
+            // surface so it never falls to <body> (decision 6).
+            answerCardRef.current?.focus();
+          }}
         />
         {searchBar}
       </div>

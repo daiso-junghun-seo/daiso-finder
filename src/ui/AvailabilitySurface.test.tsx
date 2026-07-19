@@ -7,6 +7,19 @@ import { AvailabilitySurface, isCurrentRun, runQuery } from './AvailabilitySurfa
 import { emptyBody } from './copy';
 import { useAvailabilityStore } from './store';
 
+// Retry-focus harness (P6-4 decision 6): when the flag is on, the surface's live pipeline gets a
+// never-resolving runner so the test can observe focus while Loading is still on screen.
+const retryFocus = vi.hoisted(() => ({ neverResolve: false }));
+
+vi.mock('../infra/query-cache', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../infra/query-cache')>();
+  const createQueryRunner: typeof actual.createQueryRunner = (deps) =>
+    retryFocus.neverResolve
+      ? { run: () => new Promise<never>(() => {}) }
+      : actual.createQueryRunner(deps);
+  return { ...actual, createQueryRunner };
+});
+
 beforeEach(() => {
   localStorage.clear();
   useAvailabilityStore.setState({
@@ -39,11 +52,16 @@ describe('first run (D082)', () => {
     useAvailabilityStore.setState({ store: null, sheetOpen: true });
   });
 
-  test('leads with only the store-selection sheet — no store line, no search bar', () => {
+  test('leads with only the store-selection sheet — no store line, no search bar', async () => {
     render(<AvailabilitySurface />);
     expect(screen.getByRole('dialog', { name: '매장 선택' })).toBeInTheDocument();
     expect(screen.queryByLabelText('상품 검색')).not.toBeInTheDocument();
     expect(screen.queryByText('다이소 명동역점')).not.toBeInTheDocument();
+    // Await the sheet's async geolocation settle inside act — jsdom has no position source, so the
+    // no-location note is the settled signal (act() hygiene, P6-4).
+    expect(
+      await screen.findByText('위치를 사용할 수 없어요. 매장명이나 지역명으로 검색해 주세요.'),
+    ).toBeInTheDocument();
   });
 
   test('selecting a store lands on Default with the chosen store in the store line', async () => {
@@ -191,6 +209,25 @@ describe('runner failure (F6)', () => {
       variant: 'noCache',
       query: '밀폐용기',
     });
+  });
+});
+
+describe('retry focus (P6-4 decision 6)', () => {
+  test('다시 확인 moves focus to the answer card, never body, when the button unmounts on Loading', async () => {
+    retryFocus.neverResolve = true;
+    try {
+      useAvailabilityStore.setState({
+        ui: { state: 'error', variant: 'noCache', query: '밀폐용기' },
+      });
+      const { container } = render(<AvailabilitySurface />);
+      await userEvent.click(screen.getByRole('button', { name: '다시 확인' }));
+      const card = container.querySelector('.answer-card');
+      expect(card).not.toBeNull();
+      expect(document.activeElement).toBe(card);
+      expect(document.activeElement).not.toBe(document.body);
+    } finally {
+      retryFocus.neverResolve = false;
+    }
   });
 });
 

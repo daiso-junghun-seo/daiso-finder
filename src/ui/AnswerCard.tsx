@@ -1,6 +1,7 @@
 // src/ui/AnswerCard.tsx
 // Renders the answer-card content for every non-default state (Interface §4). AvailabilitySurface renders
 // Default separately (no card, no GlassSurface — just the landing headline).
+import type { Ref } from 'react';
 import type { DataOwnerPolicy } from '../domain/policy';
 import type { AvailabilityAnswer, UiState } from '../domain/types';
 import { GlassSurface } from './components/GlassSurface';
@@ -33,6 +34,7 @@ export function AnswerCard({
   policy,
   nowMs,
   onRetry,
+  cardRef,
 }: {
   ui: NonDefaultUiState;
   policy: DataOwnerPolicy;
@@ -40,9 +42,14 @@ export function AnswerCard({
   // Wired ONLY to the four 다시 확인 renders (error/cached, error/noCache, partial/locationMissing,
   // partial/staleCache): re-runs the retained query (B15). All other CTAs stay inert stubs.
   onRetry?: () => void;
+  // Retry-focus target (decision 6): the surface root is focusable (tabIndex -1) so focus never falls
+  // to <body> when the retry button unmounts on the Loading swap.
+  cardRef?: Ref<HTMLDivElement>;
 }) {
   return (
-    <GlassSurface className="answer-card">{renderBody(ui, policy, nowMs, onRetry)}</GlassSurface>
+    <GlassSurface className="answer-card" tabIndex={-1} surfaceRef={cardRef}>
+      {renderBody(ui, policy, nowMs, onRetry)}
+    </GlassSurface>
   );
 }
 
@@ -85,6 +92,8 @@ function renderErrorCached(
   // known price but no location (state-machine.ts only gates Success/Partial on hasLocation, not the
   // FAILURE/cache path), so fall back to price-only rather than silently dropping it.
   const priceOnly = !line && answer.kind === 'inStock' ? formatPrice(answer.price) : undefined;
+  // Cached facts keep Success's collapsed disclosure for extra positions (P6-4): same markup shape.
+  const rest = answer.kind === 'inStock' ? answer.locations.slice(1) : [];
   return (
     <div>
       <p className="text-body error-banner">
@@ -95,9 +104,21 @@ function renderErrorCached(
       <p className="text-display">{facts.status}</p>
       {line && <p className="text-heading">{line}</p>}
       {priceOnly && <p className="text-heading">{priceOnly}</p>}
+      {rest.length > 0 && (
+        <button type="button" className="text-caption">
+          {extraPositionsLabel(rest.length)}
+        </button>
+      )}
       <p className="text-caption">
         {cachedFreshnessCaption(formatRelativeTimeKo(observedAt, nowMs))}
       </p>
+      {answer.kind === 'franchiseUndeterminable' && (
+        // Decision 5: a cached franchise answer keeps its own CTA (inert stub) — the outage frame
+        // alone would strand the shopper with a retry that cannot ever determine franchise stock.
+        <button type="button" className="text-label">
+          {facts.cta}
+        </button>
+      )}
       <button type="button" className="text-label" onClick={onRetry}>
         {RETRY_BUTTON}
       </button>

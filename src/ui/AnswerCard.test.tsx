@@ -121,6 +121,41 @@ test('error/cached still shows the known price when the cached inStock answer ha
   expect(screen.getByText('2,000원')).toBeInTheDocument();
 });
 
+test('error/cached with multiple locations shows the collapsed extra-positions disclosure (P6-4)', () => {
+  render(
+    <AnswerCard
+      ui={{
+        state: 'error',
+        variant: 'cached',
+        query: '밀폐용기',
+        answer: mockAnswers.inStockMultiLocation,
+        freshness: { class: 'cachedWithinThreshold', observedAt: YESTERDAY_6PM },
+      }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+    />,
+  );
+  expect(screen.getByRole('button', { name: extraPositionsLabel(1) })).toBeInTheDocument();
+});
+
+test('error/cached with a franchise answer renders the franchise CTA alongside retry (decision 5)', () => {
+  render(
+    <AnswerCard
+      ui={{
+        state: 'error',
+        variant: 'cached',
+        query: '밀폐용기',
+        answer: mockAnswers.franchise,
+        freshness: { class: 'cachedWithinThreshold', observedAt: YESTERDAY_6PM },
+      }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+    />,
+  );
+  expect(screen.getByRole('button', { name: PARTIAL_FRANCHISE_CTA })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: RETRY_BUTTON })).toBeInTheDocument();
+});
+
 test('error/noCache body carries the same Error color role as error/cached (Interface §5/§9 decision 6)', () => {
   render(
     <AnswerCard

@@ -122,6 +122,40 @@ test('Escape dismisses the dialog via onClose (F4)', async () => {
   expect(onClose).toHaveBeenCalled();
 });
 
+test('Escape closes the sheet even when focus is outside the dialog (document-level, P6-4)', async () => {
+  const onClose = vi.fn();
+  render(
+    <StoreSelectionSheet
+      current={{ strCd: '001', strNm: '명동역점' }}
+      directory={directory}
+      geolocation={geoWithStores}
+      onSelect={() => {}}
+      onClose={onClose}
+    />,
+  );
+  await screen.findByRole('button', { name: '명동역점 · 120m' });
+  (document.activeElement as HTMLElement | null)?.blur();
+  expect(document.body).toHaveFocus();
+  await userEvent.keyboard('{Escape}');
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test('Escape outside the dialog still does nothing on first run (onClose undefined)', async () => {
+  render(
+    <StoreSelectionSheet
+      current={null}
+      directory={directory}
+      geolocation={geoEmpty}
+      onSelect={() => {}}
+      onClose={undefined}
+    />,
+  );
+  await screen.findByText(STORE_SELECT_NO_LOCATION_NOTE);
+  (document.activeElement as HTMLElement | null)?.blur();
+  await userEvent.keyboard('{Escape}');
+  expect(screen.getByRole('dialog', { name: STORE_SELECT_TITLE })).toBeInTheDocument();
+});
+
 test('Escape does nothing when onClose is not provided (first run)', async () => {
   render(
     <StoreSelectionSheet
