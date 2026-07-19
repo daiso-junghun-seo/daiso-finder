@@ -15,6 +15,11 @@ import {
   SCAN_BUTTON_LABEL,
   SEARCH_PLACEHOLDER,
   STORE_CHANGE_BUTTON,
+  STORE_SELECT_CLOSE,
+  STORE_SELECT_NEARBY_HEADER,
+  STORE_SELECT_NO_LOCATION_NOTE,
+  STORE_SELECT_SEARCH_PLACEHOLDER,
+  STORE_SELECT_TITLE,
   SUCCESS_ENDED_BODY,
   SUCCESS_ENDED_CTA,
   SUCCESS_IN_STOCK_CTA,
@@ -31,6 +36,7 @@ import {
   extraPositionsLabel,
   factsFor,
   lowQtyCaption,
+  nearbyStoreRowLabel,
   partialLocationMissingBody,
   partialStaleCacheBody,
   priceLocationLine,
@@ -200,4 +206,18 @@ test('announcementFor renders the franchise-partial announcement as body then CT
     PARTIAL_FRANCHISE_BODY,
     PARTIAL_FRANCHISE_CTA,
   ]);
+});
+
+test('store-selection copy reproduces the Bible Store select rows verbatim (Interface §4)', () => {
+  expect(STORE_SELECT_TITLE).toBe('매장 선택');
+  expect(STORE_SELECT_CLOSE).toBe('닫기');
+  expect(STORE_SELECT_NEARBY_HEADER).toBe('가까운 매장');
+  expect(STORE_SELECT_SEARCH_PLACEHOLDER).toBe('매장명 또는 지역명으로 검색');
+  expect(STORE_SELECT_NO_LOCATION_NOTE).toBe(
+    '위치를 사용할 수 없어요. 매장명이나 지역명으로 검색해 주세요.',
+  );
+});
+
+test('nearbyStoreRowLabel parameterizes the Bible example row (명동역점 · 120m)', () => {
+  expect(nearbyStoreRowLabel('명동역점', 120)).toBe('명동역점 · 120m');
 });

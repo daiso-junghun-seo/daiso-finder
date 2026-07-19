@@ -40,6 +40,19 @@ export const PARTIAL_FRANCHISE_CTA = '근처 매장 보기';
 export const PARTIAL_NO_LOCATION_CTA = '다시 확인';
 export const PARTIAL_STALE_CACHE_CTA = '다시 확인';
 
+export const STORE_SELECT_TITLE = '매장 선택';
+export const STORE_SELECT_CLOSE = '닫기';
+export const STORE_SELECT_NEARBY_HEADER = '가까운 매장';
+export const STORE_SELECT_SEARCH_PLACEHOLDER = '매장명 또는 지역명으로 검색';
+export const STORE_SELECT_NO_LOCATION_NOTE =
+  '위치를 사용할 수 없어요. 매장명이나 지역명으로 검색해 주세요.';
+
+// Bible's literal example row is "명동역점 · 120m"; store name and distance are the mechanical
+// parameters (same precedent as B13).
+export function nearbyStoreRowLabel(strNm: string, distanceM: number): string {
+  return `${strNm} · ${distanceM}m`;
+}
+
 export function storeLine(storeName: string): string {
   return `다이소 ${storeName}`;
 }
