@@ -28,6 +28,21 @@ describe('store context (D082)', () => {
     expect(loadStoreContext()).toEqual({ strCd: '002', strNm: '명동중앙점' });
   });
 
+  test('selectStore still updates store/sheetOpen/ui when persistence is blocked (F3)', () => {
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+    try {
+      useAvailabilityStore.getState().selectStore({ strCd: '003', strNm: '을지로점' });
+    } finally {
+      spy.mockRestore();
+    }
+    const s = useAvailabilityStore.getState();
+    expect(s.store).toEqual({ strCd: '003', strNm: '을지로점' });
+    expect(s.sheetOpen).toBe(false);
+    expect(s.ui).toEqual({ state: 'default' });
+  });
+
   test('openSheet/closeSheet toggle the sheet', () => {
     useAvailabilityStore.getState().closeSheet();
     expect(useAvailabilityStore.getState().sheetOpen).toBe(false);

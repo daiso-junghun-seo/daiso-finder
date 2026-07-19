@@ -20,3 +20,14 @@ test('loadStoreContext degrades corrupt storage to null instead of throwing (G3 
   localStorage.setItem('daiso.storeContext', '{not json');
   expect(loadStoreContext()).toBeNull();
 });
+
+test('saveStoreContext is best-effort: blocked storage never throws (D082 operability)', () => {
+  const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('storage blocked');
+  });
+  try {
+    expect(() => saveStoreContext({ strCd: '1', strNm: '명동역점' })).not.toThrow();
+  } finally {
+    spy.mockRestore();
+  }
+});

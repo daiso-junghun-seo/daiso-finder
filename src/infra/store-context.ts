@@ -10,5 +10,10 @@ export function loadStoreContext(): StoreContext | null {
   }
 }
 export function saveStoreContext(store: StoreContext): void {
-  localStorage.setItem(KEY, JSON.stringify(store));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(store));
+  } catch {
+    // blocked/unavailable storage → best-effort persistence only; the in-memory Store Context
+    // still works, so selecting a store never dead-ends the sheet (D082 operability)
+  }
 }
