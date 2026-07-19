@@ -23,7 +23,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
     // test/e2e/** holds Playwright specs (npm run e2e), not Vitest specs — keep the two runners apart.
-    exclude: [...configDefaults.exclude, 'test/e2e/**'],
+    // .claude/** is Claude Code tooling scratch (marketplace skill packages), not part of the product.
+    exclude: [...configDefaults.exclude, 'test/e2e/**', '.claude/**'],
     // Vitest stubs all CSS imports to an empty string by default (including `?raw`), so
     // `import css from './x.css?raw'` specs would otherwise always see ''. Opt only the
     // `?raw` query back into real processing — plain CSS side-effect imports stay stubbed.
