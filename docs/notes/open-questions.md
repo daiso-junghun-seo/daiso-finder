@@ -4,7 +4,7 @@
 >
 > **철칙**(CLAUDE.md §2·§3): Canon에 답 있으면 따른다. 없거나 모순이면 **중단·질문**. 스펙 갭은 앱에서 임의 결정 금지 → **Bible에 결정/RFC로 에스컬레이션**(Bible 세션에서, 이 세션과 분리) 후 따른다. 앱-레벨 결정만 이 저장소가 자체 기록(Bible D-번호 미소비).
 >
-> 최종 갱신: 2026-07-19 (Phase 6 착수 — §B17 앱-레벨 결정 추가).
+> 최종 갱신: 2026-07-20 (Phase 6 완료 — §B14 검증 종결, §B18 추가).
 
 ---
 
@@ -45,10 +45,11 @@
 | **B11** | **CORS/프록시 필요성** | **가설 — Inc 0 검증** | 프로덕션 API 브라우저 CORS 차단 여부 미검증; 기본값=프록시(직접호출 베팅 시 전면 재작업 리스크) | 🔬 Inc 0 검증 |
 | B12 | 신선도 캡션 상대시간 포맷 알고리즘 | **앱 자체 알고리즘** | Bible은 예시 카피만 제공("어제 오후 6시"), 알고리즘은 미정의. 확정: 캘린더-일 차이 0→오늘/1→어제/≥2→"M월 D일"; 시각은 24h→12h+오전/오후 변환, 분은 절삭(Bible 예시가 분을 보이지 않음) | ✅ 확정(Phase 4) |
 | B13 | "다른 위치 N곳 더 ▾" 카운트 파라미터화 | **앱 자체** | Bible 예시는 "다른 위치 1곳 더 ▾" 단일 값뿐; `locations.length - 1`을 대입하는 것은 순수 기계적 파라미터화(카피 자체는 불변) | ✅ 확정(Phase 4) |
-| B14 | D083 glass 토큰(`--surface-solid` 등) 최소 정의 시점 | **Phase 4에서 최소 세트 선정의**, 전체 대비/성능 튜닝은 Phase 6 | `glass.css`가 참조하는 4개 커스텀 프로퍼티가 `tokens.css`에 미정의라 카드가 투명 렌더됨(Phase 2 Minor 발견); D083의 ≥4.5:1 대비 보장은 비협상이라 Phase 4는 라이트/다크 최소 토큰만 공급 | 🔬 Phase 6에서 전체 검증 |
+| B14 | D083 glass 토큰(`--surface-solid` 등) 최소 정의 시점 | **Phase 4 최소 세트 → Phase 6 전체 검증 완료.** 최종값: 라이트 tint α0.92 / raised α0.96, 다크 α0.85 / α0.92 | `src/styles/contrast.test.ts`가 WCAG 대비를 기계 검증(12행×2테마: 솔리드+glass 최악 합성(흑/백 언더레이 min)+raised, 전부 ≥4.5:1). 검증이 실결함 검출: 라이트 success가 α0.85에서 3.84:1 → α0.92로 교정. `-webkit-backdrop-filter` 동반 선언(iOS Safari <18). **의도적 이월**: 스크롤-트리거 적응 투명도(D083의 hover/focus/scroll 중 scroll — JS/scroll-timeline 필요), reduced-transparency 시 스크림은 반투명 유지(텍스트·blur 없음 → 대비 보장 무관) | ✅ 확정(Phase 6) |
 | B15 | UiState 쿼리 보존 형태 | **모든 non-default variant가 `query: string` 보유** | Bible은 "모든 답 상태에서 재검색→Loading"(Interface §3)을 요구하나 `error`/`success`/`partial`이 원 쿼리를 잃어 재시도 배선 불가(Phase 4 발견). reduce가 loading의 query를 RESULT/FAILURE로 스레딩; 재시도=보존 쿼리로 SUBMIT 재디스패치. 순수 앱 내부 타입 결정 | ✅ 확정(Phase 5) |
 | B16 | 매장 검색/근처 매장 라이브 데이터 소스 | **UI+포트 심+mock까지 구현, 실 API 배선은 추후 과제** (owner 지시 2026-07-19) | 층/구역 표시·API 호출 구조는 유지(P3/P4 기구축), 매장 검색 실 데이터 소스는 owner가 자료 공유 후 확정(§A9). Phase 5는 `StoreDirectoryPort` 심 뒤 mock 디렉토리로 D082 시트를 완성 — 실 어댑터 교체 시 UI 재작성 없음 | ✅ 확정(Phase 5) |
 | B17 | SW 업데이트 전략 | **`registerType: 'autoUpdate'` + `registerSW({ immediate: true })`, 업데이트 프롬프트 UI 없음** | Bible은 PWA 업데이트 UX를 정의하지 않음(카피 발명 금지). 기존 `prompt` 타입 + 무UI는 업데이트가 영구 미표시(Phase 0 Minor 발견). autoUpdate는 카피 불필요·설치 PWA 신선도 보장; Bible에 업데이트 UX가 정의되면 재전환 가능한 순수 인프라 결정 | ✅ 확정(Phase 6) |
+| B18 | 저장소 줄바꿈 정책 | **`.gitattributes` — `* text=auto eol=lf`** | Windows autocrlf 체크아웃에서 `tokens.css` 워킹카피가 CRLF로 스머지되어 Biome formatter 게이트가 비결정적으로 실패(Phase 6 리뷰 Critical). 전 텍스트 파일 LF 강제로 커밋 전 게이트(B8)의 결정론 확보 | ✅ 확정(Phase 6) |
 
 ---
 
