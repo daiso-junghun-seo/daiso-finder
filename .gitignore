@@ -44,3 +44,4 @@ test-results/
 # Tooling scratch (agent workflow state, not part of the product)
 .headroom/
 .superpowers/
+.claude/
