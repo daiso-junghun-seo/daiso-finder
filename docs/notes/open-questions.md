@@ -4,7 +4,7 @@
 >
 > **철칙**(CLAUDE.md §2·§3): Canon에 답 있으면 따른다. 없거나 모순이면 **중단·질문**. 스펙 갭은 앱에서 임의 결정 금지 → **Bible에 결정/RFC로 에스컬레이션**(Bible 세션에서, 이 세션과 분리) 후 따른다. 앱-레벨 결정만 이 저장소가 자체 기록(Bible D-번호 미소비).
 >
-> 최종 갱신: 2026-07-21 (브랜치 마감 픽스 패스 — §A10·§B19 추가, §A8에 `strCd` 요청 키 갭(F2) 반영).
+> 최종 갱신: 2026-07-21 (브랜치 마감 — 픽스 패스 §A10·§B19 추가·§A8 `strCd` 갭(F2) 반영; docs-on-main 정리 §B20 vitest CVE 기록).
 
 ---
 
@@ -52,6 +52,7 @@
 | B17 | SW 업데이트 전략 | **`registerType: 'autoUpdate'` + `registerSW({ immediate: true })`, 업데이트 프롬프트 UI 없음** | Bible은 PWA 업데이트 UX를 정의하지 않음(카피 발명 금지). 기존 `prompt` 타입 + 무UI는 업데이트가 영구 미표시(Phase 0 Minor 발견). autoUpdate는 카피 불필요·설치 PWA 신선도 보장; Bible에 업데이트 UX가 정의되면 재전환 가능한 순수 인프라 결정 | ✅ 확정(Phase 6) |
 | B18 | 저장소 줄바꿈 정책 | **`.gitattributes` — `* text=auto eol=lf`** | Windows autocrlf 체크아웃에서 `tokens.css` 워킹카피가 CRLF로 스머지되어 Biome formatter 게이트가 비결정적으로 실패(Phase 6 리뷰 Critical). 전 텍스트 파일 LF 강제로 커밋 전 게이트(B8)의 결정론 확보 | ✅ 확정(Phase 6) |
 | B19 | PWA 설치 아이콘/자산 | **미구현 — 갭 기록만(owner 지시 2026-07-21, 이번 세션 착수 안 함)** | `vite.config.ts` manifest에 `icons` 배열 없음·`public/` 아이콘 자산 없음 → 현재 빌드는 홈화면 추가 시 아이콘 결손으로 **설치 불가**. Inc 0 셸 범위는 상태-머신·표면·게이트 확립이었고 브랜딩 자산은 후속 과제. 실 배포 전 아이콘 세트(192/512 + maskable) + manifest `icons` 배선 필요. 순수 앱 자산 결정(Bible D-번호 미소비) | 🔬 후속(배포 전) |
+| B20 | vitest CVE(GHSA-5xrq-8626-4rwp, CVSS 9.8) 대응 | **ACCEPT + 후속 추적(2026-07-15 결정)** | 브리프가 `vitest ^2.1.1` 핀. 취약점은 `vitest --ui`/개발 서버 경로 — 이 저장소에서 **도달 불가**(`--ui` 실행 스크립트 없음), dev-only, 프로덕션 PWA 번들 부재. 버전 핀 유지. **후속(미예약)**: dev 툴체인 메이저 범프(vitest ≥3.2.6 + vite/plugin 호환) 전용 작업 후 `npm audit`로 lockfile 청결 확인 | 🔬 후속(비블로킹) |
 
 ---
 

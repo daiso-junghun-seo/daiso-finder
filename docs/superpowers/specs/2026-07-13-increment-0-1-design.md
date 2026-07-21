@@ -190,8 +190,10 @@ sleStsCd === "9" && qty < 1            → Discontinued
 sleStsCd === null && directYn === "Y"  → NotCarried
 directYn === "N" && no zone/stair       → FranchiseUndeterminable → Partial
 mrkGdsYn === "Y"                       → RestockArriving (lchDay)
-stairNoList[] × zoneNoList[] 병합       → 복수 (층,존); 대표 표시 + 나머지 접힘(다른 위치 N곳 더 ▾)
+stairNoList[]·zoneNoList[] positional zip → (층,존) 쌍 = index별 페어링(짧은 배열 길이까지); 대표 표시 + 나머지 접힘(다른 위치 N곳 더 ▾)
 ```
+
+> **정정(Phase 3, 2026-07-15):** 이 규칙은 처음 `×`(교차곱)로 기술되었으나 **문서 오류**다. 실제 매핑(`mapResponse.zipLocations`)은 **positional zip** — `stairNoList[i]`와 `zoneNoList[i]`를 index별로 짝짓고 짧은 배열 길이에서 멈춘다. 오라클 `inStockMultiLocation`(2층·2존)이 이를 강제: 교차곱이면 4쌍, positional zip이면 **2쌍** — 9-시나리오 패리티 테스트가 2쌍을 검증한다. 정본은 `src/adapters/newIntSelStr/mapResponse.ts`.
 
 - 전부 어댑터 **한 모듈**에 캡슐화 → data-owner 교정 시 매핑 한 곳만 바뀜.
 - **`sleStsCd` 값 열거 미완(A8)**: 미지값·미예상 조합은 **안전 폴백(Partial 또는 Error)으로 라우팅** — 조작된 Success 절대 금지(읽기 전용 낙관 UI 금지, Engineering §7).

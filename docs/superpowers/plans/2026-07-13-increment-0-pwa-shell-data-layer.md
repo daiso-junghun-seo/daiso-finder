@@ -815,6 +815,21 @@ git commit -m "feat(infra): add IndexedDB answer cache (read-only serving)"
 
 ## Task 8: Query-cache orchestrator (freshness-native, 2s abort, cache-on-fail classify)
 
+> **⚠️ CORRECTION — Step 3 code below is SUPERSEDED. 정본은 `src/infra/query-cache.ts`(커밋됨).**
+> The Step-3 orchestrator (2026-07-15, user-approved) had a **plan defect**: it enforced the 2s budget
+> ONLY by `ctrl.abort()` + passing `ctrl.signal` and awaiting `deps.repo.query(...)` — it never
+> self-enforced. The canonical mock's `query()` is zero-arg (ignores the signal), so the
+> `timeout beyond timeoutMs → FAILURE` test deterministically failed. **Resolution:** `createQueryRunner`
+> now **races** `deps.repo.query(...)` against a rejecting timer via `Promise.race` (the signal is still
+> passed for early cancel), and a `.catch(()=>{})` on the losing repo promise prevents an unhandled
+> rejection when a real abort-aware adapter rejects after the timeout wins. The test helper's
+> `answer: any` was also changed to `AvailabilityAnswer` (Biome `noExplicitAny` gate B8).
+> **Additionally**, the whole-branch final-review fix pass (F1/F3) hardened the same runner: the
+> success-path cache **write is best-effort** (a write failure never demotes a live answer), the
+> failure-path cache **read degrades to noCache** on throw, and a **stale (beyond-threshold) NEGATIVE**
+> cached answer degrades to `noCache` instead of a fabricated Partial(staleCache) (open-questions §A10).
+> The test count grew from 6 to 11 accordingly. Read the committed file, not the block below.
+
 **Files:**
 - Create: `src/infra/query-cache.ts`
 - Test: `src/infra/query-cache.test.ts`
