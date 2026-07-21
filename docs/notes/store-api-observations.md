@@ -20,7 +20,7 @@
 
 | 용도 | 메서드·경로 | 요청 바디 | 인증 | 응답 |
 |---|---|---|---|---|
-| **매장** | `POST /ms/msg/selStr` | `{"inclusiveStrCd":"10803"}` | 쿠키(Bearer 없음) | ✅ 아래 |
+| **매장(3-모드)** | `POST /ms/msg/selStr` | 상세: `{inclusiveStrCd}` · 검색: `{keyword,srchYn:"Y",curLttd,curLitd,…}` · 근처: `{keyword:"",srchYn:"N",curLttd,curLitd,…}` | 쿠키(Bearer 없음) | ✅ 아래 |
 | 인증 | `GET /auth/request` | — | — | 익명 JWT + `x-dm-uid`(30s) — 메커니즘은 k-skill SKILL.md |
 | **재고+상태** | `POST /pd/pdh/selStrPkupStck` | `[{"pdNo","strCd"}]`(배치) | Bearer + X-DM-UID | ✅ 아래 (`stck`+`sleStsCd`) |
 | **위치(진열)** | `POST /pdo/selIntPdStDispInfo` | `{"pdNo","strCd"}` | Bearer + X-DM-UID | ✅ 아래 |
@@ -37,19 +37,28 @@
 `data[]`→`StoreLocation[]`. **`data[]`가 이미 `{stairNo,zoneNo}` 쌍으로 오므로 newIntSelStr의 positional-zip 불필요**
 (엔드포인트마다 위치 형태가 다름 → 어느 게 정본인지 Bible 판단).
 
-### `selStr` 응답 (확보) — 매장 상세
+### `selStr` (확보) — 매장 상세 + **검색** + 근처 (A9 소스)
 
-요청 `{"inclusiveStrCd":"10803"}` → `data:[{…}]` (매봉역점). Bible §3 store-identity/hours/geo/facilities/type와 1:1:
+**한 엔드포인트가 세 모드**(요청 파라미터로 분기):
+- **상세**: `{inclusiveStrCd:"10803"}` → 단일 매장.
+- **검색(A9)**: `{keyword:"명동역점","srchYn":"Y","curLttd":37.486592,"curLitd":127.0480896,"currentPage":1,"pageSize":10,"srchBassPkupStrYn":"Y","geolocationAgrYn":"N"}` → 이름 매칭 매장 + 거리. **매장명→strCd 해석 = 여기.** `FindStoreGoods`(www)는 상품/통합검색이라 매장 선택엔 불필요.
+- **근처**: `{keyword:"","srchYn":"N",curLttd,curLitd,…}` → 좌표 기반 근처 매장(거리순).
+
+검색 응답(요청 `keyword:"명동역점"`) → `data:[{strCd:"11043","strNm:"명동역점","strAddr":"서울특별시 중구 퇴계로 134-1","km":"9.9","directYn":"Y","strLttd":37.5607,"strLitd":126.9867,"opngTime":"10:00","clsngTime":"22:00","elvtYn":"Y","entrRampYn":"Y",…}]`, `totalCnt:1`.
+
+- **요청 키**: `keyword·srchYn·srchBassPkupStrYn·geolocationAgrYn·curLttd·curLitd·currentPage·pageSize` — **Bible `newIntSelStr` 관측 요청 키와 정합**(curLttd/curLitd/geolocationAgrYn/currentPage/pageSize). `strCd`는 요청 키 아님(§A8/F2와 일치 — 스코핑은 keyword/좌표).
+- **`km`=거리(km, float), 좌표 있을 때 유효**: 검색(좌표)에선 `9.9`, 상세(좌표 없음)에선 쓰레기값 `13183.1`. D082 행 라벨은 m 단위이므로 앱이 km→m 변환(예: 0.12km→120m).
+
+상세 응답 예(매봉역점, `inclusiveStrCd`, 좌표 없음):
 
 ```json
-{"strCd":"10803","strNm":"매봉역점","strZip":"06297","strAddr":"서울 강남구 남부순환로 2748","strDtlAddr":null,"strTno":"1522-4400","opngTime":"10:00","clsngTime":"22:00","hldyDt":null,"strLttd":37.4866152698895,"strLitd":127.047198914992,"km":"13183.1","directYn":"Y","useYn":"Y","elvtYn":"Y","entrRampYn":"N","parkYn":"Y","pkupYn":"Y"}
+{"strCd":"10803","strNm":"매봉역점","strZip":"06297","strAddr":"서울 강남구 남부순환로 2748","strTno":"1522-4400","opngTime":"10:00","clsngTime":"22:00","hldyDt":null,"strLttd":37.4866152698895,"strLitd":127.047198914992,"km":"13183.1","directYn":"Y","useYn":"Y","elvtYn":"Y","entrRampYn":"N","parkYn":"Y","pkupYn":"Y"}
 ```
-(전체 필드 중 발췌; `pntAcmYn`·`nmtkYn`·`usimYn` 등 몰/부가 플래그 다수 동반.)
+(Bible §3 store-identity/hours/geo/facilities/type와 1:1; `pntAcmYn`·`nmtkYn`·`usimYn` 등 몰/부가 플래그 다수 동반.)
 
-- **`strLttd`=위도(latitude), `strLitd`=경도(longitude)** — 값으로 확정(강남 ≈ 위도 37.5/경도 127.0). **open-questions §A8의 "curLitd/strLitd 철자(경도?) 미확인" 을 관측으로 해소**(Bible 확정 대기).
-- **`km`(거리, string)는 요청에 사용자 좌표가 없으면 쓰레기값**(여기 `"13183.1"`). D082 거리순은 요청에 `curLttd/curLitd` 필수(Bible newIntSelStr 요청 키와 정합).
-- **`directYn`=`Y`(직영)** — 6상태 `franchiseUndeterminable`(=`N`) 판정 입력. 여기 소스 = `selStr`.
-- 매핑: `strCd·strNm`→`StoreContext`, `strLttd/strLitd/km`→거리/근처, `directYn`→franchise 게이트.
+- **`strLttd`=위도(latitude), `strLitd`=경도(longitude)** — 값으로 확정(강남 ≈ 위도 37.5/경도 127.0; 명동 ≈ 37.56/126.98). **open-questions §A8의 "curLitd/strLitd 철자(경도?) 미확인" 을 관측으로 해소**(Bible 확정 대기).
+- **`directYn`=`Y`(직영)** — 6상태 `franchiseUndeterminable`(=`N`) 판정 입력. 소스 = `selStr`.
+- 매핑: `strCd·strNm`→`StoreContext`, `km`→거리(km→m), `strLttd/strLitd`→좌표, `directYn`→franchise 게이트.
 
 ### `selStrPkupStck` 응답 (확보) — 재고 + 판매상태
 
@@ -79,7 +88,7 @@
 
 ## Bible/data-owner가 확정해야 할 미해결 항목
 
-1. **매장 검색(A9) 정본 — 여전히 열림**: fapi `selStr`은 `{inclusiveStrCd}`(매장 **코드**)로 부르는 **매장 상세**지 이름 검색이 아님. 매장명("매봉역점")→코드(10803) 해석하는 **매장 검색**은 미확보 — `FindStoreGoods`(www 통합검색) 또는 k-skill `selStr*`/`selStrSrchKeyword`(www) 응답 필요.
+1. **매장 검색(A9) — 소스 확인됨(Bible 확정 대기)**: `fapi/ms/msg/selStr`이 **3-모드 단일 엔드포인트** — 상세(`inclusiveStrCd`)·**검색**(`keyword`+`srchYn:"Y"`+좌표)·근처(`keyword:""`+`srchYn:"N"`+좌표). 매장명→strCd는 검색 모드가 해결(명동역점→11043, km=9.9). `FindStoreGoods`(www)는 상품/통합검색이라 매장 선택엔 불필요. 남은 것: 넓은 keyword의 다중 결과 랭킹/페이징 형태 확인.
 2. **6상태 판정 소스 — 대부분 해소**: `qty`(=`stck`)+매장 `sleStsCd`←`selStrPkupStck` ✅, `directYn`←`selStr` ✅, 위치←`selIntPdStDispInfo` ✅, **상품명·가격·pdNo←`SearchGoods`** ✅(ProductIdentity). **남은 것**: `mrkGdsYn`/`lchDay`(입고예정) 소스 불명. **`sleStsCd` 코드 체계 확정 필요 — 두 곳에서 다름**: SearchGoods=`"03"`(카탈로그), selStrPkupStck=`"1"`(매장); 6상태는 매장 값 사용. 각 코드 전체 열거는 data-owner.
 3. **재고 종류**: `selStrPkupStck`가 `stck`+`sleStsCd`를 함께 반환 → Flow 1 가용성 소스로 성립(이름의 "Pkup"과 달리 매장 재고+판매상태). `stck`이 진열 재고인지 픽업예약 가능수인지만 라이브 확인.
 4. **인증 스코프**: 어느 엔드포인트가 Bearer 필수인지(위치·재고는 필수, 매장 selStr은 쿠키만?).
