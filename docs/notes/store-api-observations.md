@@ -69,9 +69,10 @@
 ```
 
 - **`stck`=`"6"`(재고 수량, string)** → Bible §4 `qty` 역할. `qty>0`→inStock.
-- **`sleStsCd`=`"1"`(판매상태 코드)** → `"1"`=정상판매로 관측. Bible §4 매핑: `"9"`→discontinued, `null`→(직영 시)notCarried. **전체 코드 열거는 미완**(§A8).
-- 이름은 "Pkup(픽업)"이지만 실제로 **매장 재고 + 판매상태**를 반환 — 6상태 핵심 두 입력. 위치는 여기 없음(→ `selIntPdStDispInfo` 별도).
-- 배치 in/out: 요청 배열 ↔ 응답 `data[]` 대응.
+- **`sleStsCd`=`"1"`(매장 판매상태 코드)** → `"1"`=정상판매로 관측. Bible §4 매핑: `"9"`→discontinued, `null`→(직영 시)notCarried. **전체 코드 열거는 미완**(§A8).
+- **`mrkGdsYn`·`lchDay`도 이 응답에 있음(입고예정 소스 — SCR_MSG_0015 소스 확인)**: `selOfflStrStck`가 `data[0].mrkGdsYn`·`data[0].lchDay`를 읽음. 관측 상품엔 비어서 안 보였을 뿐. → Bible §4 `mrkGdsYn==="Y"`→restockArriving. `lchDay` 포맷 = `"YYYY-MM-DD"`, 앱은 `"M월 D일"`로 렌더(다이소 `formatLchDay`: split('-')→`${month}월 ${day}일`; Bible 카피 "{lchDay} 전후에 들어올 예정"과 정합).
+- 이름은 "Pkup(픽업)"이지만 실제로 **매장 재고 + 판매상태 + 입고예정**을 반환 — 6상태 입력 다수. 위치는 여기 없음(→ `selIntPdStDispInfo` 별도).
+- 배치 in/out: 요청 배열 ↔ 응답 `data[]` 대응. 요청 바디 = `[{pdNo,strCd}]`.
 
 ### `SearchGoods` 응답 (확보) — 상품 검색 / ProductIdentity
 
@@ -86,11 +87,26 @@
 - `onlyOnlYn:"Y"`=온라인 전용(매장 미취급 후보), `soldOutYn`/`ONL_STCK_QY`=**온라인** 품절/재고(매장 재고 아님 — 매장은 selStrPkupStck). `MASTER_PD_NO`≠""인 `B…` 항목은 대량/온라인 변형(base pdNo로 접힘).
 - 매핑: `pdNo`→쿼리 키(→ selStrPkupStck/selIntPdStDispInfo), `pdNm`→`productName`, `pdPrc`(number 변환)→`price`. 매장 상태·재고·위치는 별도 엔드포인트에서.
 
+## Flow 1 조합/오케스트레이션 (다이소몰 `SCR_MSG_0015` 클라이언트 소스 관측)
+
+다이소 자체 "매장 상품 찾기" 페이지의 조합 순서(계약/규칙만 추출, 코드는 미복사):
+
+1. 상품 검색(`SearchGoods`) → `pdNo` 선택. 매장 검색(`selStr` keyword) → 매장 선택 → `srchForm = {pdNo, strCd}`.
+2. 선택 콜백(`selStrCloseCallback`)에서 병렬 조회:
+   - **직영(`directYn==='Y'`)**: `selIntPdStDispInfo`(위치) + `selStrPkupStck`(재고+상태) **둘 다**.
+   - **가맹(`directYn!=='Y'`)**: `selIntPdStDispInfo`(위치)만. **단** 위치 응답의 `zoneNo`가 비어있지 않으면 `selStrPkupStck`(재고)도 조회.
+3. 인증 게이트 엔드포인트(`selIntPdStDispInfo`·`selStrPkupStck`)는 `authPost`(JWT+Bearer 핸드셰이크) 사용. `selStr`은 비인증.
+
+**⚠️ 프랜차이즈 판정 뉘앙스(escalation)**: Bible §4는 `directYn==='N' → franchiseUndeterminable(Partial)`로 단순 규정하나, 실제는 **가맹점이라도 진열 위치(`zoneNo`)가 있으면 재고를 확정**한다. 즉 franchiseUndeterminable은 "가맹 AND 위치 없음"에 가깝다. Bible 판정 규칙 재검토 필요.
+
+**진열정보 필드 사용**: 다이소 페이지는 `selIntPdStDispInfo` 응답에서 `zoneNo`(구역)만 읽고 `stairNo`(층)는 미사용. 우리 앱 Flow 2는 층+구역 둘 다 필요 — 데이터엔 둘 다 있음(관측), 표기 규칙만 Bible 확인.
+
 ## Bible/data-owner가 확정해야 할 미해결 항목
 
 1. **매장 검색(A9) — 소스 확인됨(Bible 확정 대기)**: `fapi/ms/msg/selStr`이 **3-모드 단일 엔드포인트** — 상세(`inclusiveStrCd`)·**검색**(`keyword`+`srchYn:"Y"`+좌표)·근처(`keyword:""`+`srchYn:"N"`+좌표). 매장명→strCd는 검색 모드가 해결(명동역점→11043, km=9.9). `FindStoreGoods`(www)는 상품/통합검색이라 매장 선택엔 불필요. 남은 것: 넓은 keyword의 다중 결과 랭킹/페이징 형태 확인.
-2. **6상태 판정 소스 — 대부분 해소**: `qty`(=`stck`)+매장 `sleStsCd`←`selStrPkupStck` ✅, `directYn`←`selStr` ✅, 위치←`selIntPdStDispInfo` ✅, **상품명·가격·pdNo←`SearchGoods`** ✅(ProductIdentity). **남은 것**: `mrkGdsYn`/`lchDay`(입고예정) 소스 불명. **`sleStsCd` 코드 체계 확정 필요 — 두 곳에서 다름**: SearchGoods=`"03"`(카탈로그), selStrPkupStck=`"1"`(매장); 6상태는 매장 값 사용. 각 코드 전체 열거는 data-owner.
-3. **재고 종류**: `selStrPkupStck`가 `stck`+`sleStsCd`를 함께 반환 → Flow 1 가용성 소스로 성립(이름의 "Pkup"과 달리 매장 재고+판매상태). `stck`이 진열 재고인지 픽업예약 가능수인지만 라이브 확인.
+2. **6상태 판정 소스 — 전부 확보** ✅: `qty`(`stck`)+매장 `sleStsCd`+`mrkGdsYn`+`lchDay`←`selStrPkupStck`, `directYn`←`selStr`, 위치←`selIntPdStDispInfo`, 상품명·가격·pdNo←`SearchGoods`. **확정 필요(data-owner)**: `sleStsCd` 코드 열거 — 두 체계(카탈로그 `"02"`판매예정/`"03"`판매중; 매장 `"1"`정상/`"9"`단종?/`null`미취급). 6상태는 매장 값.
+2b. **⚠️ franchiseUndeterminable 규칙 재검토(신규 escalation)**: Bible §4 `directYn==='N'→franchise Partial`이 실제와 어긋남 — 가맹점이라도 진열 위치(`zoneNo`)가 있으면 재고 확정(다이소 `SCR_MSG_0015` 로직). franchise = "가맹 AND 위치 없음"에 가까움 → Bible 판정 규칙 확인.
+3. **재고 종류**: `selStrPkupStck`가 `stck`+`sleStsCd`+입고예정을 함께 반환 → Flow 1 가용성 소스로 성립(이름의 "Pkup"과 달리 매장 재고+판매상태). `stck`이 진열 재고인지 픽업예약 가능수인지만 라이브 확인.
 4. **인증 스코프**: 어느 엔드포인트가 Bearer 필수인지(위치·재고는 필수, 매장 selStr은 쿠키만?).
 5. **호스트 정합** + **프록시 설계**: fapi/mapi/www 다중 업스트림, 인증(익명 JWT+AES+uid)은 **서버(CF Worker)에서** 처리, 클라이언트는 내부 `/api/*`만(B10/B11 재검토).
 6. **ToS/robots**: 익명이어도 anti-abuse 게이트 우회이므로 이용약관 확인.
