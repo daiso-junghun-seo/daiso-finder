@@ -27,21 +27,32 @@
 - **재입고 구독**(로그인 게이트) · **다국어 입력 별칭**(A4).
 - **PWA 설치 아이콘/자산**(§B19) — 배포 전 필수.
 
-### 열린 Bible 에스컬레이션 (앱에서 임의 결정 금지)
+### 거버넌스 조정 (2026-07-21) — 데이터 계약·구현은 앱이 소유
 
-[`docs/notes/open-questions.md`](notes/open-questions.md) §A: A2(staleness 임계값)·A3(저재고 컷오프)·A4(다국어)·A5(직원 데드엔드 텐션)·A6(D062 범위)·A7(판매종료 범위)·A8(데이터 계약 Evidence L2 + `strCd` 요청 키 갭)·A9(매장 검색 소스)·**A10(노후 캐시 부정-관측 카피 — F3 임시 폴백 `noCache`)**. 전부 data-owner/Bible 결정 대기, 심 뒤 격리로 코어 비블로킹.
+`CLAUDE.md §1/§3` 조정: **제품 철학**(안티골·플로우·6상태 의미·UX 카피 규칙·정직성)만 Bible SSOT. **벤더 데이터 계약·구현·매핑**(daisomall 엔드포인트·스키마·프록시·어댑터·정책값)은 **이 저장소가 소유**하고 자체 기록에 남긴다(Bible 미수정). 라우팅 기준 = "철학이 바뀌는가?". → **실 데이터 배선은 Bible 왕복 없이 이 프로젝트에서 완성한다.**
 
-## 다음 작업 (여기서 재개)
+### 실 데이터 소스 — 리버스 엔지니어링 완료 (도시어가 정본)
 
-1. **페이즈 게이트 결정** — Phase 6가 로드맵 마지막. 다음은 owner 판단: 잔여 Increment-1 스코프 착수 여부/순서, 또는 실 데이터 배선(A9) 선행.
-2. **실 데이터 배선(A9)** 착수 시: Bible 세션에서 매장 검색 data-contract 확정(§A9 후보 증거 = k-skill `daiso-product-search` 관측) → 앱이 소비. **앱에서 임의 결정 금지.**
-3. **Bible 에스컬레이션 소비**: A2·A3·A10 등이 Bible에서 결정되면 심/게이트를 그 정책으로 교체.
+[`docs/notes/store-api-observations.md`](notes/store-api-observations.md): Flow 1 실 API를 `fapi.daisomall.co.kr` 분리 엔드포인트로 전부 매핑 — 매장 `selStr`(3-모드) · 재고+상태+입고예정 `selStrPkupStck` · 위치 `selIntPdStDispInfo` · 상품명/가격 `SearchGoods` · 인증 `auth/request`(익명 JWT+AES+uid). 6상태 입력 전부 실 응답 확보. 조합·직영/가맹 규칙 확인.
+
+### 남은 미해결 (data-owner 확인 또는 앱 결정)
+
+- **data-owner 경험적**: `sleStsCd` 코드 열거(매장 `1`/`9`/`null` vs 카탈로그 `02`/`03`), `stck` 종류 — 심 뒤 격리하며 진행.
+- **철학(→ Bible)**: A5(직원 데드엔드 텐션)·A10(노후 부정-관측 **카피**)·A4(다국어 범위) 등 UX/제품 결정.
+- **앱 소유**: A2(staleness 임계값)·A3(저재고 컷오프) 정책값, A8/A9 데이터 계약, franchiseUndeterminable 판정 정제("가맹 AND 위치없음"), 지하층(`stairNo:-1`) formatter, km→m.
+
+## 다음 작업 (여기서 재개) — 실 데이터 배선 (앱에서 완성)
+
+1. **CF 프록시**(`functions/`): `/auth/request`+AES로 익명 Bearer 발급, `selStr`/`selStrPkupStck`/`selIntPdStDispInfo`/`SearchGoods` 팬아웃 오케스트레이션 → `AvailabilityAnswer` 합성. 키는 서버에만.
+2. **실 어댑터**: `StoreStockRepository`(B6) + `StoreDirectoryPort`(B16) 심 뒤 mock을 실 어댑터로 교체. **UI/도메인 재작성 없음**(헥사고날).
+3. **도메인 소폭 조정**: franchise 판정 규칙(위치 유무 반영), `formatLocation` 지하층, km→m 거리. 철학(무-날조·정직 분리·신선도) 유지. TDD.
+4. **미해소 data-owner 항목**은 심 뒤 격리(mock/placeholder) 유지.
 
 ## 저장소 경계 (중요)
 
-- 제품 요구는 **Product Bible이 SSOT**(read-only). 여기서 재서술 금지 — 링크/인용.
-- 스펙 갭 발견 시 앱에서 임의 결정 금지 → **Bible에 결정/RFC로 에스컬레이션**한 뒤 따른다. 앱-레벨 결정만 이 저장소 자체 기록(open-questions §B, Bible D-번호 미소비).
-- 재고·거래 **읽기 전용** — 변형 금지(INDEX §7). Bible 세션과 이 세션을 섞지 않는다(교차는 읽기로만).
+- **제품 철학**은 Product Bible이 SSOT(read-only) — 재서술 금지, 링크/인용. **벤더 데이터 계약·구현은 앱 소유**(도시어 + open-questions §B).
+- 철학이 바뀌는 갭만 Bible로 에스컬레이션. 데이터·구현·매핑은 앱이 근거 기록하고 결정(§3 라우팅).
+- 재고·거래 **읽기 전용** — 변형 금지(INDEX §7).
 
 ## 규범 입력 (정본, 필요 시 원문 확인)
 
