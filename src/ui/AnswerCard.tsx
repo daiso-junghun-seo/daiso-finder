@@ -14,6 +14,7 @@ import {
   PARTIAL_FRANCHISE_BODY,
   PARTIAL_FRANCHISE_CTA,
   PARTIAL_NO_LOCATION_CTA,
+  PARTIAL_NO_LOCATION_NOTE,
   PARTIAL_STALE_CACHE_CTA,
   RETRY_BUTTON,
   cachedFreshnessCaption,
@@ -21,7 +22,7 @@ import {
   extraPositionsLabel,
   factsFor,
   lowQtyCaption,
-  partialLocationMissingBody,
+  partialLocationMissingConfirmed,
   partialStaleCacheBody,
   priceLocationLine,
 } from './copy';
@@ -206,10 +207,14 @@ function renderPartial(
   }
   if (trigger === 'locationMissing') {
     if (answer.kind !== 'inStock') return null; // unreachable: state machine only routes inStock here
+    // Two honestly-separated blocks (Interface §333, I6): the confirmed line in Text Primary (.text-body),
+    // the unconfirmed location note in Text Secondary (.text-caption). Separation is carried by the two
+    // paragraphs (layout) and their distinct sentences (text) — the color role only reinforces it (F5).
     return (
       <div>
         <p className="text-heading">{answer.productName}</p>
-        <p className="text-body">{partialLocationMissingBody(answer.price)}</p>
+        <p className="text-body">{partialLocationMissingConfirmed(answer.price)}</p>
+        <p className="text-caption">{PARTIAL_NO_LOCATION_NOTE}</p>
         <button type="button" className="text-label" onClick={onRetry}>
           {PARTIAL_NO_LOCATION_CTA}
         </button>

@@ -10,6 +10,7 @@ import {
   PARTIAL_FRANCHISE_BODY,
   PARTIAL_FRANCHISE_CTA,
   PARTIAL_NO_LOCATION_CTA,
+  PARTIAL_NO_LOCATION_NOTE,
   PARTIAL_STALE_CACHE_CTA,
   RETRY_BUTTON,
   SCAN_BUTTON_LABEL,
@@ -37,7 +38,7 @@ import {
   factsFor,
   lowQtyCaption,
   nearbyStoreRowLabel,
-  partialLocationMissingBody,
+  partialLocationMissingConfirmed,
   partialStaleCacheBody,
   priceLocationLine,
   restockBody,
@@ -76,6 +77,7 @@ test('static copy constants reproduce the Bible final-copy table verbatim (Inter
   );
   expect(PARTIAL_FRANCHISE_CTA).toBe('근처 매장 보기');
   expect(PARTIAL_NO_LOCATION_CTA).toBe('다시 확인');
+  expect(PARTIAL_NO_LOCATION_NOTE).toBe('위치 정보가 없어요. 직원에게 위치를 문의해 주세요.');
   expect(PARTIAL_STALE_CACHE_CTA).toBe('다시 확인');
 });
 
@@ -106,10 +108,11 @@ test('restockBody composes the arriving-date sentence (Interface §4 example: 7�
   expect(restockBody('7월 15일')).toBe('7월 15일 전후에 들어올 예정이에요.');
 });
 
-test('partialLocationMissingBody composes the confirmed-price sentence (Interface §4 example: 2,000원)', () => {
-  expect(partialLocationMissingBody(2000)).toBe(
-    '이 매장에 있어요 · 2,000원 / 위치 정보가 없어요. 직원에게 위치를 문의해 주세요.',
-  );
+test('partialLocationMissingConfirmed is the confirmed block only; the note is a separate Text-Secondary sentence, never joined by " / " (Interface §333, F5)', () => {
+  expect(partialLocationMissingConfirmed(2000)).toBe('이 매장에 있어요 · 2,000원');
+  // The literal slash from the Bible copy TABLE must never appear in rendered copy.
+  expect(partialLocationMissingConfirmed(2000)).not.toContain('/');
+  expect(PARTIAL_NO_LOCATION_NOTE).toBe('위치 정보가 없어요. 직원에게 위치를 문의해 주세요.');
 });
 
 test('partialStaleCacheBody composes the last-seen sentence (Interface §4 example: 어제 오후 6시)', () => {
@@ -191,6 +194,21 @@ test('announcementFor leads an error/cached announcement with the banner, then t
     '2,000원 · 11층 56번',
     cachedFreshnessCaption('어제 오후 6시'),
     RETRY_BUTTON,
+  ]);
+});
+
+test('announcementFor emits the locationMissing partial as three entries — confirmed block, Text-Secondary note, CTA — never one joined string (a11y split, F5)', () => {
+  const ui = {
+    state: 'partial' as const,
+    trigger: 'locationMissing' as const,
+    query: '밀폐용기',
+    answer: mockAnswers.noLocation,
+    freshness: null,
+  };
+  expect(announcementFor(ui, defaultPolicy, 0)).toEqual([
+    partialLocationMissingConfirmed(2000),
+    PARTIAL_NO_LOCATION_NOTE,
+    PARTIAL_NO_LOCATION_CTA,
   ]);
 });
 

@@ -79,9 +79,15 @@ export function restockBody(lchDay: string): string {
   return `${lchDay} 전후에 들어올 예정이에요.`;
 }
 
-export function partialLocationMissingBody(price: number): string {
-  return `이 매장에 있어요 · ${formatPrice(price)} / 위치 정보가 없어요. 직원에게 위치를 문의해 주세요.`;
+// Interface §333 / Experience §160: the location-missing Partial is TWO honestly-separated blocks,
+// not one sentence. The confirmed line (Text Primary) states what we know; the note (Text Secondary,
+// PARTIAL_NO_LOCATION_NOTE) states what we do not. The Bible copy TABLE compacts them with a " / "
+// cell separator — that slash is a table artifact, never rendered UX copy (F5). Separation is carried
+// by text + layout (two blocks) and reinforced, never replaced, by the Primary/Secondary color roles (I6).
+export function partialLocationMissingConfirmed(price: number): string {
+  return `이 매장에 있어요 · ${formatPrice(price)}`;
 }
+export const PARTIAL_NO_LOCATION_NOTE = '위치 정보가 없어요. 직원에게 위치를 문의해 주세요.';
 
 export function partialStaleCacheBody(relativeTime: string): string {
   return `이 매장에서 판매하는 상품이에요. 오늘 재고는 확인하지 못했어요 — ${relativeTime}에는 있었어요.`;
@@ -158,7 +164,11 @@ export function announcementFor(
       if (ui.trigger === 'franchise') return [PARTIAL_FRANCHISE_BODY, PARTIAL_FRANCHISE_CTA];
       if (ui.trigger === 'locationMissing') {
         if (ui.answer.kind !== 'inStock') return []; // unreachable: state machine only routes inStock here
-        return [partialLocationMissingBody(ui.answer.price), PARTIAL_NO_LOCATION_CTA];
+        return [
+          partialLocationMissingConfirmed(ui.answer.price),
+          PARTIAL_NO_LOCATION_NOTE,
+          PARTIAL_NO_LOCATION_CTA,
+        ];
       }
       const relative = ui.freshness ? formatRelativeTimeKo(ui.freshness.observedAt, nowMs) : '';
       return [partialStaleCacheBody(relative), PARTIAL_STALE_CACHE_CTA];

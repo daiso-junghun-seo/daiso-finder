@@ -4,7 +4,7 @@
 >
 > **철칙**(CLAUDE.md §2·§3): Canon에 답 있으면 따른다. 없거나 모순이면 **중단·질문**. 스펙 갭은 앱에서 임의 결정 금지 → **Bible에 결정/RFC로 에스컬레이션**(Bible 세션에서, 이 세션과 분리) 후 따른다. 앱-레벨 결정만 이 저장소가 자체 기록(Bible D-번호 미소비).
 >
-> 최종 갱신: 2026-07-20 (Phase 6 완료 — §B14 검증 종결, §B18 추가).
+> 최종 갱신: 2026-07-21 (브랜치 마감 픽스 패스 — §A10·§B19 추가, §A8에 `strCd` 요청 키 갭(F2) 반영).
 
 ---
 
@@ -21,8 +21,9 @@
 | A5 | **5/6 복구 경로가 Korean 직원 종료(B7 텐션)** | AI Unknown 리다이렉트·위치 없음 Partial·no-cache Error는 물을 수 없는 쇼퍼(B7)에게 데드엔드 — 플로우가 금지하는 것. Bible가 "기록된 텐션, 둘째 데이터-기반 엔딩 대기"로 이미 인지. | Inc 1 복구 카피 | 아니오 | 신규 갭 아님(기록됨). 둘째 엔딩 확보 시 Bible가 갱신. |
 | A6 | **D062 범위 이중성(마이너)** | Engineering 로그는 'qty 상한만', Interface/data-contract 로그는 '4개 부정 답+Partial 재트리거'로 글로스 — 한 D-번호가 두 교정을 묶은 듯. | Inc 1 구현 해석 | 아니오 | Bible에 정확 범위 확인 요청(경미). 구현은 양쪽 다 만족하게. |
 | A7 | **판매종료 범위(매장 vs 체인)** | Flow 3(Inc 3) Group B 발행 게이트. 미결 동안 discontinued 진입은 nearby withhold. | Inc 3(선행: Inc 0 심 설계) | 아니오 | Inc 0 심을 **매트릭스 재작성 없이 스위치** 가능하게 설계. data-owner 확인. |
-| A8 | **데이터 계약 = 단일-샘플 Evidence Level 2** | `sleStsCd` 값 열거 미완, `curLitd`/`strLitd` 철자(경도?) 미확인, 결손 행 처리 미정의, hldyDt 시맨틱 미정의 — 전부 구현 전 확인 필요. | Inc 0/1 데이터 레이어 | 아니오(관측값 mock) | data-owner와 라이브 페이로드 대조 → Bible data-contract 갱신. |
+| A8 | **데이터 계약 = 단일-샘플 Evidence Level 2** | `sleStsCd` 값 열거 미완, `curLitd`/`strLitd` 철자(경도?) 미확인, 결손 행 처리 미정의, hldyDt 시맨틱 미정의 — 전부 구현 전 확인 필요. **추가(F2)**: `newIntSelStrAdapter`가 요청 바디에 `strCd`를 보내나 data-contract §2 관측 요청 키(keyword·pdNo·curLttd·curLitd·geolocationAgrYn·pkupYn·intCd·pageSize·currentPage)에 `strCd` 부재 — `strCd`는 응답 store-identity 필드(§3). 관측 엔드포인트는 지오로케이션으로 스코프하고 `msStrVOList[]`(근처 매장 다수)를 반환 → 단일 매장 스코핑/다중 매장 재조정 방식 미확인. 어댑터 코드에 `UNVERIFIED` 주석으로 격리. | Inc 0/1 데이터 레이어 | 아니오(관측값 mock, 어댑터 미배선) | data-owner와 라이브 페이로드 대조(요청 계약 포함) → Bible data-contract 갱신 → A9 라이브 배선 전 확정. |
 | A9 | **매장 검색/근처 매장 데이터 소스 미관측** | Engineering §5(D082)는 매장명·지역 검색과 거리순 근처 매장 목록을 요구하지만 data-contract에 매장 검색/목록 API가 관측되어 있지 않음(문서화된 것은 상품 스코프 `newIntSelStr`뿐). 관측 증거 후보는 존재(`.claude/skills/k-skill` 번들 `daiso-product-search`가 daisomall `selStr`·`selStrSrchKeyword`·`selStrInfo` 표면 문서화) — Bible 세션에서 data-contract 반영 후에만 앱이 소비. | Inc 1 매장 선택 시트 | 아니오(§B16 심 뒤 mock) | Bible 세션에서 data-contract 갱신(k-skill 관측 + 라이브 검증) → 실 어댑터 배선. |
+| A10 | **노후 캐시의 부정 관측 카피 미정의(F3)** | Bible의 stale-cache Partial 카피(`…에는 있었어요`)는 **긍정 과거 관측**(inStock)을 전제한다. 캐시된 답이 **부정 관측**(품절/단종/미취급)이고 노후 임계값을 넘으면, 이 카피를 재생하는 것은 쇼퍼가 가진 적 없는 과거 재고를 **날조**(Confidence Theater 안티패턴)한다. Bible은 이 케이스(stale-negative)의 카피를 규정하지 않음. | Inc 1 Partial/Error | 아니오(임시 폴백 존재) | **임시 앱 동작**: 부정 관측이 임계값 초과 시 `noCache`로 강등(날조 대신 정직한 무-캐시; `query-cache.ts` inStock 게이트). Bible에 stale-negative 카피 결정 요청 → 확정 후 앱이 게이트를 그 정책으로 교체. |
 
 ---
 
@@ -50,6 +51,7 @@
 | B16 | 매장 검색/근처 매장 라이브 데이터 소스 | **UI+포트 심+mock까지 구현, 실 API 배선은 추후 과제** (owner 지시 2026-07-19) | 층/구역 표시·API 호출 구조는 유지(P3/P4 기구축), 매장 검색 실 데이터 소스는 owner가 자료 공유 후 확정(§A9). Phase 5는 `StoreDirectoryPort` 심 뒤 mock 디렉토리로 D082 시트를 완성 — 실 어댑터 교체 시 UI 재작성 없음 | ✅ 확정(Phase 5) |
 | B17 | SW 업데이트 전략 | **`registerType: 'autoUpdate'` + `registerSW({ immediate: true })`, 업데이트 프롬프트 UI 없음** | Bible은 PWA 업데이트 UX를 정의하지 않음(카피 발명 금지). 기존 `prompt` 타입 + 무UI는 업데이트가 영구 미표시(Phase 0 Minor 발견). autoUpdate는 카피 불필요·설치 PWA 신선도 보장; Bible에 업데이트 UX가 정의되면 재전환 가능한 순수 인프라 결정 | ✅ 확정(Phase 6) |
 | B18 | 저장소 줄바꿈 정책 | **`.gitattributes` — `* text=auto eol=lf`** | Windows autocrlf 체크아웃에서 `tokens.css` 워킹카피가 CRLF로 스머지되어 Biome formatter 게이트가 비결정적으로 실패(Phase 6 리뷰 Critical). 전 텍스트 파일 LF 강제로 커밋 전 게이트(B8)의 결정론 확보 | ✅ 확정(Phase 6) |
+| B19 | PWA 설치 아이콘/자산 | **미구현 — 갭 기록만(owner 지시 2026-07-21, 이번 세션 착수 안 함)** | `vite.config.ts` manifest에 `icons` 배열 없음·`public/` 아이콘 자산 없음 → 현재 빌드는 홈화면 추가 시 아이콘 결손으로 **설치 불가**. Inc 0 셸 범위는 상태-머신·표면·게이트 확립이었고 브랜딩 자산은 후속 과제. 실 배포 전 아이콘 세트(192/512 + maskable) + manifest `icons` 배선 필요. 순수 앱 자산 결정(Bible D-번호 미소비) | 🔬 후속(배포 전) |
 
 ---
 

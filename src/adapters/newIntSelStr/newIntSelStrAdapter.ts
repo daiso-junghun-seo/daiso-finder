@@ -35,6 +35,13 @@ export function createNewIntSelStrAdapter(deps: {
       const res = await doFetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        // UNVERIFIED (F2 → open-questions §A8): data-contract §2 lists the OBSERVED request keys as
+        // keyword, pdNo, curLttd, curLitd, geolocationAgrYn, pkupYn, intCd, pageSize, currentPage —
+        // strCd is NOT among them (it is a Store-identity RESPONSE field, §3). The observed endpoint
+        // scopes by geolocation and returns msStrVOList[] (one row per nearby store); single-store
+        // scoping by strCd is an assumption. This adapter is never constructed in production yet (only in
+        // its own test); the true request contract + multi-store reconciliation must be settled with the
+        // data owner before A9 wiring. Kept here only so the shape is visible for that escalation.
         body: JSON.stringify({ keyword: term.keyword, pdNo: term.pdNo, strCd: store.strCd }),
         signal,
       });

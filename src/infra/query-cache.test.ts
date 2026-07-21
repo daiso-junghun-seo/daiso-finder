@@ -111,6 +111,75 @@ test('a late repo rejection after the timeout already won registers no unhandled
     process.off('unhandledRejection', onUnhandled);
   }
 });
+test('a failing cache write never demotes a successful live answer (write is best-effort)', async () => {
+  const blockedWriteCache: CacheStorage = {
+    async readAnswer() {
+      return null;
+    },
+    async writeAnswer() {
+      throw new Error('quota exceeded');
+    },
+  };
+  const run = createQueryRunner({
+    repo: createMockRepository('inStock'),
+    cache: blockedWriteCache,
+    policy: defaultPolicy,
+    now: () => 5000,
+  });
+  // The live answer already arrived — bookkeeping failure must not reroute it to the FAILURE path.
+  expect(await run.run(store, { keyword: '밀폐용기' })).toEqual({
+    type: 'RESULT',
+    answer: mockAnswers.inStock,
+    freshness: { class: 'live', observedAt: 5000 },
+  });
+});
+test('a failing cache read during failure classification degrades to noCache instead of throwing', async () => {
+  const blockedReadCache: CacheStorage = {
+    async readAnswer() {
+      throw new Error('idb blocked');
+    },
+    async writeAnswer() {},
+  };
+  const run = createQueryRunner({
+    repo: createMockRepository('inStock', { fail: true }),
+    cache: blockedReadCache,
+    policy: defaultPolicy,
+    now: () => 8000,
+  });
+  expect(await run.run(store, { keyword: '밀폐용기' })).toEqual({
+    type: 'FAILURE',
+    cache: { kind: 'noCache' },
+  });
+});
+test('a cached NEGATIVE answer beyond threshold degrades to noCache, never Partial(staleCache) (§A10 interim)', async () => {
+  const cache = memCache();
+  await cache.writeAnswer('1:온도계', mockAnswers.temporarilyOut, 0);
+  const run = createQueryRunner({
+    repo: createMockRepository('temporarilyOut', { fail: true }),
+    cache,
+    policy: { ...defaultPolicy, stalenessThresholdMs: 1000 },
+    now: () => 8000,
+  });
+  // The staleCache Partial copy asserts "…에는 있었어요" — the opposite of a cached 품절 observation.
+  expect(await run.run(store, { keyword: '온도계' })).toEqual({
+    type: 'FAILURE',
+    cache: { kind: 'noCache' },
+  });
+});
+test('a cached negative answer within threshold still serves Error(cached) with kind-true facts', async () => {
+  const cache = memCache();
+  await cache.writeAnswer('1:온도계', mockAnswers.temporarilyOut, 7000);
+  const run = createQueryRunner({
+    repo: createMockRepository('temporarilyOut', { fail: true }),
+    cache,
+    policy: { ...defaultPolicy, stalenessThresholdMs: 10_000 },
+    now: () => 8000,
+  });
+  expect(await run.run(store, { keyword: '온도계' })).toMatchObject({
+    type: 'FAILURE',
+    cache: { kind: 'withinThreshold', answer: mockAnswers.temporarilyOut },
+  });
+});
 test('no catalog match → NO_MATCH (never serves stale cache)', async () => {
   const cache = memCache();
   await cache.writeAnswer('1:없는상품', mockAnswers.inStock, 0); // a stale cache exists…

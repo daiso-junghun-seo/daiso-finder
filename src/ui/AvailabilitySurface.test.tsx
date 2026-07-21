@@ -196,6 +196,57 @@ describe('staleness guard (F2)', () => {
       query: '밀폐용기',
     });
   });
+
+  test('same keyword+store submitted twice: the LATER run wins even when the earlier lands first (run token, not keyword — F6)', async () => {
+    let resolveFirst: (event: StoreEvent) => void = () => {};
+    const firstRunner = () =>
+      new Promise<StoreEvent>((resolve) => {
+        resolveFirst = resolve;
+      });
+    let resolveSecond: (event: StoreEvent) => void = () => {};
+    const secondRunner = () =>
+      new Promise<StoreEvent>((resolve) => {
+        resolveSecond = resolve;
+      });
+    const dispatch = useAvailabilityStore.getState().dispatch;
+    // Identical keyword + store for both runs — isCurrentRun cannot tell them apart; only the token can.
+    const runFirst = runQuery(storeA, '밀폐용기', dispatch, firstRunner);
+    const runSecond = runQuery(storeA, '밀폐용기', dispatch, secondRunner);
+    // The EARLIER submit resolves FIRST, as a failure. It is superseded, so it must be dropped, not land.
+    resolveFirst({ type: 'FAILURE', cache: { kind: 'noCache' } });
+    await runFirst;
+    expect(useAvailabilityStore.getState().ui).toMatchObject({
+      state: 'loading',
+      query: '밀폐용기',
+    });
+    // The later submit resolves second, as a success, and wins.
+    resolveSecond({
+      type: 'RESULT',
+      answer: mockAnswers.inStock,
+      freshness: { class: 'live', observedAt: Date.now() },
+    });
+    await runSecond;
+    expect(useAvailabilityStore.getState().ui).toMatchObject({
+      state: 'success',
+      query: '밀폐용기',
+    });
+  });
+});
+
+describe('scenario harness is dev-only (F4)', () => {
+  test('a ?scenario= URL is ignored in a production build — no fabricated answer paints over Default', () => {
+    vi.stubEnv('DEV', false);
+    window.history.pushState({}, '', '/?scenario=temporarilyOut');
+    try {
+      render(<AvailabilitySurface />);
+      // Gated off in prod: the harness never dispatches SUBMIT, so the surface stays on Default.
+      expect(useAvailabilityStore.getState().ui).toEqual({ state: 'default' });
+      expect(screen.getByText('이 매장에 있는지 바로 확인해 보세요')).toBeInTheDocument();
+    } finally {
+      vi.unstubAllEnvs();
+      window.history.pushState({}, '', '/');
+    }
+  });
 });
 
 describe('runner failure (F6)', () => {

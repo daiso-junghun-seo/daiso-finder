@@ -2,7 +2,13 @@ import { NoCatalogMatchError } from '../domain/errors';
 import { classifyFreshness } from '../domain/freshness';
 import type { DataOwnerPolicy } from '../domain/policy';
 import type { StoreStockRepository } from '../domain/ports';
-import type { CacheOutcome, Freshness, StoreContext, StoreEvent } from '../domain/types';
+import type {
+  AvailabilityAnswer,
+  CacheOutcome,
+  Freshness,
+  StoreContext,
+  StoreEvent,
+} from '../domain/types';
 import type { CacheStorage } from './cache-storage';
 
 export function createQueryRunner(deps: {
@@ -37,7 +43,14 @@ export function createQueryRunner(deps: {
         const answer = await Promise.race([repoPromise, timeout]);
         clearTimeout(timer);
         const observedAt = deps.now();
-        await deps.cache.writeAnswer(key, answer, observedAt);
+        // Caching is best-effort bookkeeping: a write failure (quota, blocked/corrupt IndexedDB) must
+        // NEVER demote a live answer that already arrived to the FAILURE path. Swallow it here so the
+        // outer catch only ever sees genuine query failures (F1).
+        try {
+          await deps.cache.writeAnswer(key, answer, observedAt);
+        } catch {
+          /* best-effort cache write — the live answer stands */
+        }
         const freshness: Freshness = { class: 'live', observedAt }; // live is never demoted
         return { type: 'RESULT', answer, freshness };
       } catch (err) {
@@ -52,7 +65,14 @@ export function createQueryRunner(deps: {
             suggestions: err.suggestions,
           };
         }
-        const cached = await deps.cache.readAnswer(key);
+        // A cache read can itself fail (blocked/corrupt IndexedDB). Treat a read failure exactly like an
+        // absent cache — degrade to noCache rather than throwing out of the runner (F1).
+        let cached: { answer: AvailabilityAnswer; observedAt: number } | null;
+        try {
+          cached = await deps.cache.readAnswer(key);
+        } catch {
+          cached = null;
+        }
         if (!cached) return { type: 'FAILURE', cache: { kind: 'noCache' } };
         const cls = classifyFreshness({
           observedAt: cached.observedAt,
@@ -60,6 +80,14 @@ export function createQueryRunner(deps: {
           isLive: false,
           thresholdMs: deps.policy.stalenessThresholdMs,
         });
+        // Beyond the staleness threshold, the reducer frames the cached answer as Partial(staleCache),
+        // whose copy asserts "…에는 있었어요" — a POSITIVE past observation. That is only truthful for a
+        // cached inStock answer; replaying it over a cached NEGATIVE observation (품절/단종/미취급) would
+        // fabricate a past availability the shopper never had. Until the Bible rules the stale-negative
+        // copy (§A10 interim), a stale negative degrades to noCache rather than inventing a positive past.
+        if (cls === 'cachedBeyondThreshold' && cached.answer.kind !== 'inStock') {
+          return { type: 'FAILURE', cache: { kind: 'noCache' } };
+        }
         const freshness: Freshness = { class: cls, observedAt: cached.observedAt };
         const cache: CacheOutcome =
           cls === 'cachedWithinThreshold'

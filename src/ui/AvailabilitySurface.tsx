@@ -98,6 +98,13 @@ export function isCurrentRun(
   );
 }
 
+// Monotonic run token: every runQuery claims the next value. A late outcome only lands if its token is
+// still the newest. isCurrentRun compares keyword+store, so it cannot tell two SUBMITs of the SAME
+// keyword+store apart (a double-submit or a double-tapped 다시 확인) — without the token the FIRST run
+// to resolve would win and the later submit's outcome would be dropped. The token makes the LAST submit
+// authoritative (F6). It is process-wide and only ever increases; no test depends on its absolute value.
+let latestRunToken = 0;
+
 // Live typed-search pipeline: the keyword mock repository (B16) behind the same runner/cache as the
 // harness. Every 다시 확인 re-runs this verbatim with the retained query (B15).
 export async function runQuery(
@@ -106,6 +113,7 @@ export async function runQuery(
   dispatch: (event: StoreEvent) => void,
   runner: QueryOutcomeRunner = liveQueryRunner,
 ) {
+  const token = ++latestRunToken;
   dispatch({ type: 'SUBMIT', query: keyword });
   let event: StoreEvent;
   try {
@@ -115,6 +123,9 @@ export async function runQuery(
     // the runner's own failure path) still resolves the surface to error/noCache.
     event = { type: 'FAILURE', cache: { kind: 'noCache' } };
   }
+  // A newer run superseded this one (same keyword resubmitted, or a different one) → drop this outcome.
+  if (token !== latestRunToken) return;
+  // A non-run state change (selectStore → Default) also invalidates the run; isCurrentRun catches those.
   if (!isCurrentRun(useAvailabilityStore.getState(), { keyword, strCd: store.strCd })) return;
   dispatch(event);
 }
@@ -133,6 +144,10 @@ export function AvailabilitySurface() {
   const wasSheetOpen = useRef(sheetOpen);
 
   useEffect(() => {
+    // The ?scenario= harness drives the Playwright state sweep against the MOCK pipeline. It must never
+    // run in a production build: a crafted URL could otherwise paint a fabricated answer over live data,
+    // violating the read-only/no-fabrication boundary (F4). DEV is true under vitest and the dev server.
+    if (!import.meta.env.DEV) return;
     const scenario = new URLSearchParams(window.location.search).get('scenario');
     if (!scenario) return;
     void runScenario(scenario, dispatch);

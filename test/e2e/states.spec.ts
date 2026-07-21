@@ -9,11 +9,18 @@ test.beforeEach(async ({ page }) => {
 
 // Bible-verbatim strings inlined here (never imported from src/ui/copy.ts): E2E is a black-box net,
 // so copy drift in the UI must FAIL this suite even if it happened to stay in sync with copy.ts.
-const scenarios: { name: string; signatures: string[] }[] = [
+const scenarios: { name: string; signatures: string[]; absent?: string[] }[] = [
   { name: 'inStock', signatures: ['이 매장에 있어요'] },
   {
     name: 'noLocation',
-    signatures: ['이 매장에 있어요 · 2,000원 / 위치 정보가 없어요. 직원에게 위치를 문의해 주세요.'],
+    // Two honestly-separated blocks (Interface §333, F5): the confirmed line and the location note as
+    // distinct signatures. The " / " table joiner must never render — asserted NEGATIVELY via `absent`
+    // so a revert to the single joined string (which still contains both substrings) FAILS this net.
+    signatures: [
+      '이 매장에 있어요 · 2,000원',
+      '위치 정보가 없어요. 직원에게 위치를 문의해 주세요.',
+    ],
+    absent: [' / '],
   },
   {
     name: 'temporarilyOut',
@@ -51,7 +58,7 @@ const scenarios: { name: string; signatures: string[] }[] = [
   },
 ];
 
-for (const { name, signatures } of scenarios) {
+for (const { name, signatures, absent } of scenarios) {
   test(`state "${name}" renders a non-blank surface (no dead end)`, async ({ page }) => {
     await page.goto(`/?scenario=${name}`);
     const main = page.locator('main');
@@ -59,6 +66,9 @@ for (const { name, signatures } of scenarios) {
     await expect(main).not.toBeEmpty(); // Blank screens prohibited in every state
     for (const signature of signatures) {
       await expect(main).toContainText(signature); // Bible-verbatim copy signature for this scenario
+    }
+    for (const forbidden of absent ?? []) {
+      await expect(main).not.toContainText(forbidden); // copy artifact that must never render
     }
   });
 }

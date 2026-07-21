@@ -11,6 +11,7 @@ import {
   PARTIAL_FRANCHISE_BODY,
   PARTIAL_FRANCHISE_CTA,
   PARTIAL_NO_LOCATION_CTA,
+  PARTIAL_NO_LOCATION_NOTE,
   PARTIAL_STALE_CACHE_CTA,
   RETRY_BUTTON,
   SUCCESS_ENDED_BODY,
@@ -27,7 +28,7 @@ import {
   emptyBody,
   extraPositionsLabel,
   lowQtyCaption,
-  partialLocationMissingBody,
+  partialLocationMissingConfirmed,
   partialStaleCacheBody,
   restockBody,
 } from './copy';
@@ -284,8 +285,8 @@ test('partial/franchise shows the franchise body and CTA', () => {
   expect(screen.getByRole('button', { name: PARTIAL_FRANCHISE_CTA })).toBeInTheDocument();
 });
 
-test('partial/locationMissing shows the confirmed-price body and the retry CTA', () => {
-  render(
+test('partial/locationMissing splits the confirmed block (Text Primary) from the note (Text Secondary), never one joined sentence (Interface §333, F5)', () => {
+  const { container } = render(
     <AnswerCard
       ui={{
         state: 'partial',
@@ -298,7 +299,16 @@ test('partial/locationMissing shows the confirmed-price body and the retry CTA',
       nowMs={NOW}
     />,
   );
-  expect(screen.getByText(partialLocationMissingBody(2000))).toBeInTheDocument();
+  // Confirmed block renders in Text Primary (.text-body), the note in Text Secondary (.text-caption) —
+  // two separate paragraphs (layout separation, not the " / " table artifact).
+  const confirmed = screen.getByText(partialLocationMissingConfirmed(2000));
+  expect(confirmed).toBeInTheDocument();
+  expect(confirmed).toHaveClass('text-body');
+  const note = screen.getByText(PARTIAL_NO_LOCATION_NOTE);
+  expect(note).toBeInTheDocument();
+  expect(note).toHaveClass('text-caption');
+  // The literal " / " joiner from the Bible copy table must never reach the DOM.
+  expect(container.textContent).not.toContain(' / ');
   expect(screen.getByRole('button', { name: PARTIAL_NO_LOCATION_CTA })).toBeInTheDocument();
 });
 
