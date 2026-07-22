@@ -41,12 +41,19 @@
 - **철학(→ Bible)**: A5(직원 데드엔드 텐션)·A10(노후 부정-관측 **카피**)·A4(다국어 범위) 등 UX/제품 결정.
 - **앱 소유**: A2(staleness 임계값)·A3(저재고 컷오프) 정책값, A8/A9 데이터 계약, franchiseUndeterminable 판정 정제("가맹 AND 위치없음"), 지하층(`stairNo:-1`) formatter, km→m.
 
-## 다음 작업 (여기서 재개) — 실 데이터 배선 (앱에서 완성)
+## 다음 작업 (여기서 재개) — 실 데이터 배선 (설계 승인 완료 2026-07-22)
 
-1. **CF 프록시**(`functions/`): `/auth/request`+AES로 익명 Bearer 발급, `selStr`/`selStrPkupStck`/`selIntPdStDispInfo`/`SearchGoods` 팬아웃 오케스트레이션 → `AvailabilityAnswer` 합성. 키는 서버에만.
-2. **실 어댑터**: `StoreStockRepository`(B6) + `StoreDirectoryPort`(B16) 심 뒤 mock을 실 어댑터로 교체. **UI/도메인 재작성 없음**(헥사고날).
-3. **도메인 소폭 조정**: franchise 판정 규칙(위치 유무 반영), `formatLocation` 지하층, km→m 거리. 철학(무-날조·정직 분리·신선도) 유지. TDD.
-4. **미해소 data-owner 항목**은 심 뒤 격리(mock/placeholder) 유지.
+**설계 승인 완료** — 브레인스토밍으로 접근 확정, 스펙 정본 = [`docs/superpowers/specs/2026-07-22-flow1-live-data-design.md`](superpowers/specs/2026-07-22-flow1-live-data-design.md). 구현 미착수.
+
+승인된 결정: **헤르메틱 검증**(라이브 daisomall 미호출) · **범위=가용성+매장검색**(GPS·AI·바코드 제외) · **6상태 합성=클라이언트 매핑**(프록시=인증·CORS·조건부 팬아웃 + 정규화 raw 레코드) · 구식 `newIntSelStr`/`stock.ts` **제거**(precedence → `mapStoreObservation` 이식) · km→m **유틸만**(배선은 근처-GPS 패스) · **route-intercept E2E 포함**(구현 후 검증).
+
+**다음 세션 순서**:
+1. `writing-plans`로 스펙 → 구현 플랜(프록시 → 어댑터 → 도메인 조정 → 컴포지션 → E2E) 작성·커밋.
+2. 새 브랜치 `feat/flow1-live-data`(main 분기).
+3. TDD 실행(스펙 §14 순서: daisoAuth/upstream → 프록시 → 어댑터 → format+구식제거 → 컴포지션+배선 → route-intercept E2E). 커밋 전 게이트: `test`·`typecheck`·`lint`·`e2e` green.
+4. `open-questions §B`·`progress`·`HANDOFF` 갱신, 완료 후 로컬 머지.
+
+**불변 원칙**: UI/도메인/reducer/query-runner/캐시 불변(헥사고날 심 교체만). 무-날조·정직 분리·신선도(D061)·읽기전용 준수. 키·토큰은 서버에만(커밋/클라 노출 금지).
 
 ## 저장소 경계 (중요)
 
