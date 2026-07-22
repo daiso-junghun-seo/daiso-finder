@@ -21,8 +21,8 @@ import { useAvailabilityStore } from './store';
 // sweep's default store when no store context has been saved yet.
 const PLACEHOLDER_STORE = { strCd: '0', strNm: '명동역점' };
 
-// Injected seams for the D082 sheet: mock store directory (B16 — the live daisomall directory adapter
-// is deferred to A9) and the browser geolocation stub (returns [] until A9 wires real nearby lookup).
+// Store directory for the D082 sheet: the composition root selects the live /api/stores adapter in prod
+// builds and the mock in dev/test. The browser geolocation stub returns [] until GPS-nearby is wired (A9).
 const storeDirectory = createStoreDirectory();
 const browserGeolocation = createBrowserGeolocation();
 
@@ -105,8 +105,8 @@ export function isCurrentRun(
 // authoritative (F6). It is process-wide and only ever increases; no test depends on its absolute value.
 let latestRunToken = 0;
 
-// Live typed-search pipeline: the keyword mock repository (B16) behind the same runner/cache as the
-// harness. Every 다시 확인 re-runs this verbatim with the retained query (B15).
+// Live typed-search pipeline: the composition root selects the /api/availability adapter in prod (mock in
+// dev/test), behind the same runner/cache. Every 다시 확인 re-runs this verbatim with the retained query (B15).
 export async function runQuery(
   store: StoreContext,
   keyword: string,
