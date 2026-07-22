@@ -1,4 +1,10 @@
-import { formatLocation, formatPrice, formatRelativeTimeKo } from './format';
+import {
+  formatLchDay,
+  formatLocation,
+  formatPrice,
+  formatRelativeTimeKo,
+  kmToMeters,
+} from './format';
 
 test('formatPrice adds the Korean won suffix with thousands separators', () => {
   expect(formatPrice(2000)).toBe('2,000원');
@@ -37,4 +43,20 @@ test('formatRelativeTimeKo: noon (12시) renders as "오후 12시"', () => {
   const now = new Date(2026, 6, 15, 13, 0).getTime();
   const observed = new Date(2026, 6, 15, 12, 5).getTime();
   expect(formatRelativeTimeKo(observed, now)).toBe('오늘 오후 12시');
+});
+
+test('formatLocation renders a basement floor as "지하 N층 M번"', () => {
+  expect(formatLocation({ floor: '-1', zone: '30' })).toBe('지하 1층 30번');
+  expect(formatLocation({ floor: '11', zone: '56' })).toBe('11층 56번'); // aboveground unchanged
+});
+
+test('formatLchDay renders an ISO date as "M월 D일"', () => {
+  expect(formatLchDay('2026-07-15')).toBe('7월 15일');
+  expect(formatLchDay('2026-12-03')).toBe('12월 3일');
+});
+
+test('kmToMeters rounds kilometers to whole meters', () => {
+  expect(kmToMeters(9.9)).toBe(9900);
+  expect(kmToMeters(0.12)).toBe(120);
+  expect(kmToMeters(0.1204)).toBe(120);
 });

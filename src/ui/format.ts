@@ -6,7 +6,23 @@ export function formatPrice(price: number): string {
 }
 
 export function formatLocation(location: StoreLocation): string {
-  return `${location.floor}층 ${location.zone}번`;
+  const floor = location.floor.startsWith('-')
+    ? `지하 ${location.floor.slice(1)}층`
+    : `${location.floor}층`;
+  return `${floor} ${location.zone}번`;
+}
+
+// Upstream lchDay is 'YYYY-MM-DD'; the Bible copy ("{lchDay} 전후에 들어올 예정") wants "M월 D일"
+// (daiso formatLchDay). App-owned presentation decision (open-questions §B).
+export function formatLchDay(iso: string): string {
+  const parts = iso.split('-');
+  return `${Number(parts[1])}월 ${Number(parts[2])}일`;
+}
+
+// km→m for the D082 distance label (selStr km is a float). App-owned; surfaced only in the GPS-nearby
+// pass (out of scope here) — util + test only.
+export function kmToMeters(km: number): number {
+  return Math.round(km * 1000);
 }
 
 // Korean relative-time for the freshness caption (Interface §4 example: "어제 오후 6시").
