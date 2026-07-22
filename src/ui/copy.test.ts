@@ -108,6 +108,10 @@ test('restockBody composes the arriving-date sentence (Interface §4 example: 7�
   expect(restockBody('7월 15일')).toBe('7월 15일 전후에 들어올 예정이에요.');
 });
 
+test('restockBody states the date is undetermined instead of fabricating an empty-date sentence when lchDay is unknown', () => {
+  expect(restockBody('')).toBe('재입고 예정이지만 입고일은 아직 미정이에요.');
+});
+
 test('partialLocationMissingConfirmed is the confirmed block only; the note is a separate Text-Secondary sentence, never joined by " / " (Interface §333, F5)', () => {
   expect(partialLocationMissingConfirmed(2000)).toBe('이 매장에 있어요 · 2,000원');
   // The literal slash from the Bible copy TABLE must never appear in rendered copy.

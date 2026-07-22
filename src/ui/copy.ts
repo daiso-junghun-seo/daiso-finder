@@ -76,7 +76,9 @@ export function extraPositionsLabel(count: number): string {
 }
 
 export function restockBody(lchDay: string): string {
-  return `${lchDay} 전후에 들어올 예정이에요.`;
+  return lchDay
+    ? `${lchDay} 전후에 들어올 예정이에요.`
+    : '재입고 예정이지만 입고일은 아직 미정이에요.';
 }
 
 // Interface §333 / Experience §160: the location-missing Partial is TWO honestly-separated blocks,
