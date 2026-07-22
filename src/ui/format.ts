@@ -16,7 +16,10 @@ export function formatLocation(location: StoreLocation): string {
 // (daiso formatLchDay). App-owned presentation decision (open-questions §B).
 export function formatLchDay(iso: string): string {
   const parts = iso.split('-');
-  return `${Number(parts[1])}월 ${Number(parts[2])}일`;
+  const month = Number(parts[1]);
+  const day = Number(parts[2]);
+  if (parts.length !== 3 || Number.isNaN(month) || Number.isNaN(day)) return '';
+  return `${month}월 ${day}일`;
 }
 
 // km→m for the D082 distance label (selStr km is a float). App-owned; surfaced only in the GPS-nearby

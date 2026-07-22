@@ -55,6 +55,14 @@ test('formatLchDay renders an ISO date as "M월 D일"', () => {
   expect(formatLchDay('2026-12-03')).toBe('12월 3일');
 });
 
+test('formatLchDay returns empty string for empty input (no NaN leak)', () => {
+  expect(formatLchDay('')).toBe('');
+});
+
+test('formatLchDay returns empty string for a malformed date (no NaN leak)', () => {
+  expect(formatLchDay('2026-07')).toBe('');
+});
+
 test('kmToMeters rounds kilometers to whole meters', () => {
   expect(kmToMeters(9.9)).toBe(9900);
   expect(kmToMeters(0.12)).toBe(120);
