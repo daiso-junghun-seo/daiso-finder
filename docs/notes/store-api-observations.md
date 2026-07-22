@@ -113,4 +113,18 @@
 
 ## 관측된 실 데이터 엣지 (앱 영향)
 
-- `stairNo:"-1"` = **지하층**. 앱 `formatLocation`의 `${floor}층`이 "-1층"으로 오표기 → 지하 표기 규칙 필요(Bible 카피 확인). A9 배선 시 formatter 수정 대상.
+- `stairNo:"-1"` = **지하층**. 앱 `formatLocation`의 `${floor}층`이 "-1층"으로 오표기 → 지하 표기 규칙 필요(Bible 카피 확인). A9 배선 시 formatter 수정 대상. **(2026-07-22 라이브 스모크로 재확인 — 실제 매봉역점에서 관측; formatLocation "지하 1층"로 해소됨.)**
+
+## 라이브 스모크 검증 (2026-07-22 — 프록시 계약 end-to-end 확인)
+
+owner 승인 하에 실 daisomall에 **읽기 전용** 프로브(세션 토큰 리댁트). **결론: 프록시 코드 변경 불필요 — 구현이 라이브와 일치.**
+
+- **인증 키 = 리터럴 `"PRE_AUTH_ENC_KEY"`(16 ASCII바이트 = AES-128)** — k-skill `daiso-product-search/SKILL.md`대로 JS 번들에 하드코딩된 **공개 상수**이며 `.dev.vars.example` 값이 곧 실 값. (세션 JWT·`x-dm-uid`·Bearer만 민감 — 서버 전용, 30s TTL.)
+- **호스트 정합(B27 확정)**: `fapi.daisomall.co.kr` = auth·`/ms/msg/selStr`·`/pd/pdh/selStrPkupStck`·`/pdo/selIntPdStDispInfo`, `www.daisomall.co.kr` = `/ssn/search/SearchGoods` — 전부 200. (`www.daisomall.co.kr/api/ms/msg/selStr`도 200 = 동일 결과; fapi 채택 유효.)
+- **인증 end-to-end 확정**: 우리 `daisoAuth`의 AES-128-CBC/PKCS7 Bearer(키 `"PRE_AUTH_ENC_KEY"`, 랜덤 IV, `base64(IV)+base64(ct)`)로 selStrPkupStck **200 수락**; Bearer 없이 호출 시 **403**(게이트 실재). 구현 정확.
+- **selStr 검색 좌표 optional 확정**: 우리 프록시 `stores.ts`의 **좌표-없는** 바디(`{keyword,srchYn:'Y',srchBassPkupStrYn:'Y',geolocationAgrYn:'N',currentPage,pageSize}`)로 **200 + 정상 결과(명동역점 strCd 11043)**. 좌표는 `km`(거리)값에만 영향(무좌표=쓰레기 13174.9, 유좌표=9.9) — `/api/stores`는 `{strCd,strNm}`만 반환하므로 무관. (초기 curl 400은 **셸 UTF-8 인코딩 아티팩트**였고 API 요건 아님; node/Workers fetch+JSON.stringify는 정상.)
+- **selStr 상세 응답 래핑 확정**: `data`는 **배열(`data[]`)** — `extractDirectYn`의 배열/객체 양쪽 처리로 커버.
+- **selStrPkupStck 행 형태**: `{pdNo,strCd,sleStsCd,stck}`; `mrkGdsYn`/`lchDay`는 입고예정 없는 상품엔 **부재**(→ null, `fetchStock`가 처리). 관측값 `sleStsCd:"1"`(정상판매)·`stck:"0"`(재고없음) → 매핑 rule 6 `temporarilyOut`(정직).
+- **§4.1 불변식 라이브 성립**: 직영(directYn `Y`) 매장은 재고를 실제로 조회(200, `stck` non-null) — `stck:null` 직영 레코드 방출 경로 없음.
+
+**여전히 미해결(비블로킹, 심 뒤 격리 유지)**: `sleStsCd` 전체 열거(단종 `"9"`/미취급 `null`은 해당 상품이 없어 미관측), `stck`이 진열재고인지 픽업예약수인지 구분, selStrPkupStck 빈 `data[]` 의미(직영 notCarried 가정). **ToS/robots**: 배포 전 확인(익명이어도 anti-abuse 게이트 통과이므로 이용약관 검토).
