@@ -55,6 +55,8 @@
 
 **새 세션 진입 규칙**: 이 HANDOFF → 플랜 → **첫 미체크 `- [ ]`** 탐색 → 거기서 재개. 세션당 커밋 전 게이트: `test`·`typecheck`·`lint`·`e2e` green. 유닛별 red→green. 실행 스킬 = `superpowers:subagent-driven-development`(권장) 또는 `superpowers:executing-plans`.
 
+> **붙여넣기용 킥오프 프롬프트(세션별)** = [`superpowers/plans/SESSION-KICKOFFS.md`](superpowers/plans/SESSION-KICKOFFS.md). 새 세션에서 이 파일을 열어 해당 세션 블록을 복사해 시작하면 된다(진행 체크박스 포함).
+
 **불변 원칙**: UI/도메인/reducer/query-runner/캐시 불변(헥사고날 심 교체만). 무-날조·정직 분리·신선도(D061)·읽기전용 준수. 키·토큰은 서버에만(커밋/클라 노출 금지).
 
 ## 저장소 경계 (중요)
