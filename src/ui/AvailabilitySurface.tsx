@@ -1,9 +1,9 @@
 // src/ui/AvailabilitySurface.tsx
 import { useEffect, useRef, useState } from 'react';
+import { createStoreDirectory, createStoreStockRepository } from '../adapters/composition';
 import { createBrowserGeolocation } from '../adapters/geolocation/browserGeolocation';
 import { type Scenario, mockAnswers } from '../adapters/mock/fixtures';
-import { createKeywordMockRepository, createMockRepository } from '../adapters/mock/mockRepository';
-import { createMockStoreDirectory } from '../adapters/mock/storeDirectory';
+import { createMockRepository } from '../adapters/mock/mockRepository';
 import { defaultPolicy } from '../domain/policy';
 import type { StoreContext, StoreEvent, UiState } from '../domain/types';
 import { createIndexedDbCache } from '../infra/cache-storage';
@@ -23,7 +23,7 @@ const PLACEHOLDER_STORE = { strCd: '0', strNm: '명동역점' };
 
 // Injected seams for the D082 sheet: mock store directory (B16 — the live daisomall directory adapter
 // is deferred to A9) and the browser geolocation stub (returns [] until A9 wires real nearby lookup).
-const storeDirectory = createMockStoreDirectory();
+const storeDirectory = createStoreDirectory();
 const browserGeolocation = createBrowserGeolocation();
 
 // Dev-only scenario switch driving the mock pipeline for the Playwright sweep. NOT production routing —
@@ -77,7 +77,7 @@ const liveQueryRunner: QueryOutcomeRunner = (store, keyword) => {
   const cache = createIndexedDbCache();
   const now = () => Date.now();
   return createQueryRunner({
-    repo: createKeywordMockRepository(),
+    repo: createStoreStockRepository(),
     cache,
     policy: defaultPolicy,
     now,

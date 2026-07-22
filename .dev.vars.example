@@ -1,0 +1,6 @@
+# Copy to .dev.vars (gitignored) for `wrangler pages dev`. NEVER commit real values.
+# Public vendor constant (16 ASCII bytes). Kept in env for rotation/hygiene, not hardcoded.
+PRE_AUTH_ENC_KEY=PRE_AUTH_ENC_KEY
+# Upstream host overrides (defaults per docs/notes/store-api-observations.md; confirm via live smoke).
+UPSTREAM_BASE=https://fapi.daisomall.co.kr
+SEARCH_BASE=https://www.daisomall.co.kr
