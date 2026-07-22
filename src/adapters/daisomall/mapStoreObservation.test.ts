@@ -31,6 +31,16 @@ test('restockArriving formats lchDay from ISO to "M월 D일"', () => {
   });
 });
 
+test('a restock observation with no arrival date maps to an empty-lchDay answer (honest, no fabricated date)', () => {
+  const noDate: RawStoreObservation = { ...observationFixtures.restockArriving, lchDay: null };
+  expect(mapStoreObservation(noDate)).toEqual({
+    kind: 'restockArriving',
+    productName: '리빙 밀폐용기 1.2L',
+    price: 2000,
+    lchDay: '',
+  });
+});
+
 test('an unmapped combination throws UnmappableAnswerError (safe fallback, never a fabricated Success)', () => {
   const weird: RawStoreObservation = {
     ...observationFixtures.franchise,
