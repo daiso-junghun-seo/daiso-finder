@@ -68,11 +68,13 @@
 
 **미해결(라이브 스모크 / data-owner 확인 — 심 뒤 격리):** `sleStsCd` 매장 코드 전체 열거('9'/null 외 qty 폴백 격리) · `stck` 종류(진열 vs 픽업예약) · selStrPkupStck 빈 `data[]` 의미(직영 notCarried 가정) · selStr 상세 응답 래핑(data 객체 vs 배열; extractDirectYn 양쪽 처리) · 매장검색 좌표 optional 가정 · ToS/robots(배포 전, 헤르메틱 유지로 CI 회피).
 
+> **✅ 라이브 스모크 해소(2026-07-22, owner 승인 — 도시어 `store-api-observations.md §라이브 스모크 검증`)**: **B27 호스트정합**(fapi=auth/selStr/stck/disp · www=SearchGoods 전부 200) · **인증**(우리 Bearer 키 `"PRE_AUTH_ENC_KEY"` 공개상수로 selStrPkupStck 200 수락, 무-Bearer 403) · **selStr 좌표 optional**(무좌표 바디 200; km만 영향, 미반환이라 무관) · **selStr 상세 `data[]` 래핑** · **`sleStsCd:"1"`(정상)·`stck` 관측**·**지하 위치**(`stairNo:"-1"`) = 전부 라이브 확인, **프록시 무변경**. **잔여(심 뒤)**: `sleStsCd` 단종`"9"`/미취급`null` 미관측(해당 상품 필요)·`stck` 진열vs픽업 구분·빈 `data[]`·**ToS/robots(배포 전)**.
+
 **추가 미해결/후속(전체-브랜치 최종 리뷰, 2026-07-22):**
 
-- **restock-무일자 카피(철학→Bible):** `mrkGdsYn:'Y'`인데 `lchDay:null`인 입고예정 행에서 `formatLchDay`가 이제 `''` 반환(→ NaN 누출 제거, 커밋 `a8da068`). "날짜 없는 입고예정"을 어떻게 프레이밍할지(예: "입고 예정일 미정")는 **UX 카피 결정 → Bible 에스컬레이션** 대상. 현재는 정직한 kind(`restockArriving`) + 무일자 카피로 안전.
-- **/api/* 오픈 릴레이(배포 전 보안):** `access-control-allow-origin:'*'` + origin 제한/레이트리밋 없음 → 실배포 전 **origin allowlist + rate-limit** 권장. 시크릿 누출은 아님(AES 키=공개 상수, 세션 JWT/uid는 서버 전용).
-- **스테일 주석(후속 정리):** `src/ui/AvailabilitySurface.tsx:24-25/108-109` 주석이 컷오버 후 실제 라이브 배선을 mock으로 기술 — 정리 필요(로직 정확).
+- **restock-무일자 카피(철학→Bible):** `mrkGdsYn:'Y'`인데 `lchDay:null`인 입고예정 행에서 `formatLchDay`가 이제 `''` 반환(→ NaN 누출 제거, 커밋 `a8da068`). **✅ 사용자 지시로 정직 해소(커밋 `21a210a`)**: 날짜 없으면 `'재입고 예정이지만 입고일은 아직 미정이에요.'`(날짜 날조 없음). Bible-owned 카피 string이므로 **정본 문구는 Bible ratification 대기**.
+- **/api/* 오픈 릴레이:** `access-control-allow-origin:'*'` + origin 제한/레이트리밋 없음. **✅ 사용자 종결**: `PRE_AUTH_ENC_KEY`는 공개 벤더 상수 → 노출 무관, allowlist/rate-limit **불필요**. (별개로 프록시 남용 자체가 우려되면 배포 시 재검토 가능.)
+- **스테일 주석:** `src/ui/AvailabilitySurface.tsx` 어댑터-배선 주석. **✅ 정리 완료(커밋 `f9ee11e`)** — 컴포지션 기반(prod=live/dev=mock) 정확히 기술.
 - **툴체인 결정(앱 소유):** 플랜 verbatim 코드가 설치된 TS 5.9.3에서 `iv:Uint8Array` → `Uint8Array<ArrayBuffer>` 협소화 필요(커밋 `c7cd306`, 동작 동일). 앱 소유 구현 결정.
 
 ---
