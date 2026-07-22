@@ -41,21 +41,16 @@
 - **철학(→ Bible)**: A5(직원 데드엔드 텐션)·A10(노후 부정-관측 **카피**)·A4(다국어 범위) 등 UX/제품 결정.
 - **앱 소유**: A2(staleness 임계값)·A3(저재고 컷오프) 정책값, A8/A9 데이터 계약, franchiseUndeterminable 판정 정제("가맹 AND 위치없음"), 지하층(`stairNo:-1`) formatter, km→m.
 
-## 다음 작업 (여기서 재개) — 실 데이터 배선 (플랜 완료 2026-07-22, 구현 3-세션 분할)
+## 다음 작업 (여기서 재개) — 라이브 스모크 + 잔여 후속 (Flow 1 live-data 구현·머지 완료 2026-07-22)
 
-**플랜 작성·커밋 완료** — 스펙 정본 = [`docs/superpowers/specs/2026-07-22-flow1-live-data-design.md`](superpowers/specs/2026-07-22-flow1-live-data-design.md), 구현 플랜(태스크 분해 + 실 코드) = [`docs/superpowers/plans/2026-07-22-flow1-live-data.md`](superpowers/plans/2026-07-22-flow1-live-data.md). 브랜치 `feat/flow1-live-data`(main 분기) 생성됨. **구현 미착수(Session 1부터).**
+**Flow 1 live-data 배선 구현 완료, `feat/flow1-live-data` → `main` 머지 완료(2026-07-22, 3-세션 TDD 분할: Session 1 서버 프록시 · Session 2 클라 어댑터+포맷 · Session 3 컷오버).** 스펙 정본 = [`docs/superpowers/specs/2026-07-22-flow1-live-data-design.md`](superpowers/specs/2026-07-22-flow1-live-data-design.md), 구현 플랜(전 태스크 체크 완료) = [`docs/superpowers/plans/2026-07-22-flow1-live-data.md`](superpowers/plans/2026-07-22-flow1-live-data.md). 앱 소유 결정 기록 = `docs/notes/open-questions.md` §B21–B27.
 
-승인된 결정: **헤르메틱 검증**(라이브 daisomall 미호출) · **범위=가용성+매장검색**(GPS·AI·바코드 제외) · **6상태 합성=클라이언트 매핑**(프록시=인증·CORS·조건부 팬아웃 + 정규화 raw 레코드) · 구식 `newIntSelStr`/`stock.ts` **제거**(precedence → `mapStoreObservation` 이식) · km→m **유틸만**(배선은 근처-GPS 패스) · **route-intercept E2E 포함**(구현 후 검증).
+**다음 작업(우선순위 순):**
 
-**구현은 3개 세션으로 분할됨**(응답 스톨 회피 + 세션 경계 명확화 — 각 세션은 green 게이트 + 커밋으로 마감, 세션 간 파일 의존성이 걸치지 않음):
-
-- **SESSION 1 — 서버 프록시**(Tasks 1–4 + setup): `functions/**`만, `src/` 무변경. `daisoUpstream`·`daisoAuth`(WebCrypto Bearer)·`/api/availability`(조건부 팬아웃)·`/api/stores`.
-- **SESSION 2 — 클라 어댑터+포맷**(Tasks 5–9): `src/adapters/daisomall/**`(rawObservation·mapStoreObservation+parity oracle·storeStockRepository·storeDirectory) + `format.ts`(지하/lchDay/km→m). **미배선** → mock 유지 → 앱/E2E green.
-- **SESSION 3 — 컷오버**(Tasks 10–14): 구식 제거 + 컴포지션 루트 + `AvailabilitySurface` 배선 + route-intercept preview E2E + 전체 게이트 + 보안 grep + 문서(open-questions §B21–B27·progress·HANDOFF) + 로컬 `--no-ff` 머지.
-
-**새 세션 진입 규칙**: 이 HANDOFF → 플랜 → **첫 미체크 `- [ ]`** 탐색 → 거기서 재개. 세션당 커밋 전 게이트: `test`·`typecheck`·`lint`·`e2e` green. 유닛별 red→green. 실행 스킬 = `superpowers:subagent-driven-development`(권장) 또는 `superpowers:executing-plans`.
-
-> **붙여넣기용 킥오프 프롬프트(세션별)** = [`superpowers/plans/SESSION-KICKOFFS.md`](superpowers/plans/SESSION-KICKOFFS.md). 새 세션에서 이 파일을 열어 해당 세션 블록을 복사해 시작하면 된다(진행 체크박스 포함).
+1. **라이브 스모크**(최우선, 배포 전 필수) — 실 `.dev.vars`(`PRE_AUTH_ENC_KEY`/`UPSTREAM_BASE`/`SEARCH_BASE`, `.dev.vars.example` 참고)로 `wrangler pages dev` 실행 → **B27 호스트 정합**(fapi=auth/selStr/stck/disp, www=SearchGoods) 확인. 헤르메틱 테스트는 라이브 daisomall을 호출하지 않으므로 이 확인은 수동으로만 가능.
+2. **미해결 data-owner 항목**(§B21–B27 미해결 목록, 심 뒤 격리 유지하며 순차 해소): `sleStsCd` 매장 코드 전체 열거, `stck` 종류(진열 vs 픽업예약), `selStrPkupStck` 빈 `data[]` 의미, `selStr` 상세 응답 래핑, 매장검색 좌표 optional 가정.
+3. **범위 밖 패스**(design 승인 시 제외): GPS-근처 매장 실 배선(현재 `kmToMeters` 유틸만 존재), AI 검색어 해석 레이어, 바코드 스캔 진입.
+4. **배포 전 항목**: `/api/*` 오픈 릴레이 보안(origin allowlist + rate-limit, §B 후속), PWA 설치 아이콘/자산(§B19, 미구현).
 
 **불변 원칙**: UI/도메인/reducer/query-runner/캐시 불변(헥사고날 심 교체만). 무-날조·정직 분리·신선도(D061)·읽기전용 준수. 키·토큰은 서버에만(커밋/클라 노출 금지).
 

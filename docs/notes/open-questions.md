@@ -4,7 +4,7 @@
 >
 > **철칙**(CLAUDE.md §2·§3): Canon에 답 있으면 따른다. 없거나 모순이면 **중단·질문**. 스펙 갭은 앱에서 임의 결정 금지 → **Bible에 결정/RFC로 에스컬레이션**(Bible 세션에서, 이 세션과 분리) 후 따른다. 앱-레벨 결정만 이 저장소가 자체 기록(Bible D-번호 미소비).
 >
-> 최종 갱신: 2026-07-21 (브랜치 마감 — 픽스 패스 §A10·§B19 추가·§A8 `strCd` 갭(F2) 반영; docs-on-main 정리 §B20 vitest CVE 기록).
+> 최종 갱신: 2026-07-22 (Flow 1 live-data 컷오버 — §B21–B27 앱 소유 결정 + 전체-브랜치 최종 리뷰 후속 4건 추가).
 
 ---
 
@@ -53,6 +53,27 @@
 | B18 | 저장소 줄바꿈 정책 | **`.gitattributes` — `* text=auto eol=lf`** | Windows autocrlf 체크아웃에서 `tokens.css` 워킹카피가 CRLF로 스머지되어 Biome formatter 게이트가 비결정적으로 실패(Phase 6 리뷰 Critical). 전 텍스트 파일 LF 강제로 커밋 전 게이트(B8)의 결정론 확보 | ✅ 확정(Phase 6) |
 | B19 | PWA 설치 아이콘/자산 | **미구현 — 갭 기록만(owner 지시 2026-07-21, 이번 세션 착수 안 함)** | `vite.config.ts` manifest에 `icons` 배열 없음·`public/` 아이콘 자산 없음 → 현재 빌드는 홈화면 추가 시 아이콘 결손으로 **설치 불가**. Inc 0 셸 범위는 상태-머신·표면·게이트 확립이었고 브랜딩 자산은 후속 과제. 실 배포 전 아이콘 세트(192/512 + maskable) + manifest `icons` 배선 필요. 순수 앱 자산 결정(Bible D-번호 미소비) | 🔬 후속(배포 전) |
 | B20 | vitest CVE(GHSA-5xrq-8626-4rwp, CVSS 9.8) 대응 | **ACCEPT + 후속 추적(2026-07-15 결정)** | 브리프가 `vitest ^2.1.1` 핀. 취약점은 `vitest --ui`/개발 서버 경로 — 이 저장소에서 **도달 불가**(`--ui` 실행 스크립트 없음), dev-only, 프로덕션 PWA 번들 부재. 버전 핀 유지. **후속(미예약)**: dev 툴체인 메이저 범프(vitest ≥3.2.6 + vite/plugin 호환) 전용 작업 후 `npm audit`로 lockfile 청결 확인 | 🔬 후속(비블로킹) |
+
+> **2026-07-22 확정 — Flow 1 live-data 배선** (플랜 `docs/superpowers/plans/2026-07-22-flow1-live-data.md`; 도시어 `store-api-observations.md`). 앱 소유 결정(Bible D-번호 미소비).
+
+| # | 결정 | 확정 | 근거/검증 |
+|---|---|---|---|
+| B21 | 6상태 합성 위치 | 클라이언트 `mapStoreObservation` | 프록시=인증·CORS·조건부 팬아웃+정규화 raw; 매핑 유닛 TDD. |
+| B22 | 프록시 아키텍처 | CF Pages Functions `/api/availability`·`/api/stores` | 클라는 내부 /api만; JWT·AES키·uid 서버 전용(env); 화이트리스트 반환. |
+| B23 | 인증 | 익명 JWT→AES-128-CBC(WebCrypto)→Bearer+X-DM-UID, 401/403 1회 재발급 | SKILL.md 관측; 키=env `PRE_AUTH_ENC_KEY`(하드코딩·커밋 금지). |
+| B24 | franchise 판정 정제 | "가맹 AND 위치없음"=franchiseUndeterminable | SCR_MSG_0015 로직; 철학 불변(정직한 미확정) → Bible 미에스컬레이션. |
+| B25 | stck:null 불변식 | null ⟺ 의도적 미조회(가맹+무존); 직영 재고실패→502 | rule 0 guard가 fetch 실패의 notCarried 오분류 차단. |
+| B26 | 포맷 결정 | 지하 N층 · lchDay 'YYYY-MM-DD'→'M월 D일' · km→m(round×1000) | format.ts TDD; km→m는 GPS-근처 패스에서 표면화. |
+| B27 | 호스트 정합 | 기본 fapi(auth/selStr/stck/disp)+www(SearchGoods), env 오버라이드 | 라이브 스모크로 확정. |
+
+**미해결(라이브 스모크 / data-owner 확인 — 심 뒤 격리):** `sleStsCd` 매장 코드 전체 열거('9'/null 외 qty 폴백 격리) · `stck` 종류(진열 vs 픽업예약) · selStrPkupStck 빈 `data[]` 의미(직영 notCarried 가정) · selStr 상세 응답 래핑(data 객체 vs 배열; extractDirectYn 양쪽 처리) · 매장검색 좌표 optional 가정 · ToS/robots(배포 전, 헤르메틱 유지로 CI 회피).
+
+**추가 미해결/후속(전체-브랜치 최종 리뷰, 2026-07-22):**
+
+- **restock-무일자 카피(철학→Bible):** `mrkGdsYn:'Y'`인데 `lchDay:null`인 입고예정 행에서 `formatLchDay`가 이제 `''` 반환(→ NaN 누출 제거, 커밋 `a8da068`). "날짜 없는 입고예정"을 어떻게 프레이밍할지(예: "입고 예정일 미정")는 **UX 카피 결정 → Bible 에스컬레이션** 대상. 현재는 정직한 kind(`restockArriving`) + 무일자 카피로 안전.
+- **/api/* 오픈 릴레이(배포 전 보안):** `access-control-allow-origin:'*'` + origin 제한/레이트리밋 없음 → 실배포 전 **origin allowlist + rate-limit** 권장. 시크릿 누출은 아님(AES 키=공개 상수, 세션 JWT/uid는 서버 전용).
+- **스테일 주석(후속 정리):** `src/ui/AvailabilitySurface.tsx:24-25/108-109` 주석이 컷오버 후 실제 라이브 배선을 mock으로 기술 — 정리 필요(로직 정확).
+- **툴체인 결정(앱 소유):** 플랜 verbatim 코드가 설치된 TS 5.9.3에서 `iv:Uint8Array` → `Uint8Array<ArrayBuffer>` 협소화 필요(커밋 `c7cd306`, 동작 동일). 앱 소유 구현 결정.
 
 ---
 

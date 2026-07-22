@@ -1,6 +1,6 @@
 # Flow 1 Live-Data Wiring Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Wire Flow 1 (Availability Check) and store-name search to live daisomall data by replacing the mocks behind the hexagonal seams (`StoreStockRepository` B6, `StoreDirectoryPort` B16) with real adapters fed by a CF Pages Functions proxy that owns auth + CORS + conditional fan-out.
 
@@ -28,7 +28,7 @@ Every task's requirements implicitly include this section.
 
 This plan is split into **3 execution SESSIONS**. Each is independently committable and **ends with a full green gate**. Run one session per fresh Claude session to stay well clear of context/response limits.
 
-**On entering a new session:** read `docs/HANDOFF.md` → this plan → scan for the **first unchecked `- [ ]`** → resume there. Branch `feat/flow1-live-data` is already created off `main`. `.superpowers/sdd/progress.md` records the running ledger (top entry).
+**On entering a new session:** read `docs/HANDOFF.md` → this plan → scan for the **first unchecked `- [x]`** → resume there. Branch `feat/flow1-live-data` is already created off `main`. `.superpowers/sdd/progress.md` records the running ledger (top entry).
 
 Session boundaries were drawn so **no cross-file dependency straddles a session**, and the app + existing suites stay green at every boundary:
 
@@ -76,7 +76,7 @@ Each session below opens with **START HERE** and closes with a **SESSION EXIT GA
 
 **Files:** Create `.dev.vars.example`; Modify `.gitignore`.
 
-- [ ] **Step 1: Create `.dev.vars.example`** (committed; documents the server-only secrets for `wrangler pages dev`)
+- [x] **Step 1: Create `.dev.vars.example`** (committed; documents the server-only secrets for `wrangler pages dev`)
 
 ```
 # Copy to .dev.vars (gitignored) for `wrangler pages dev`. NEVER commit real values.
@@ -87,13 +87,13 @@ UPSTREAM_BASE=https://fapi.daisomall.co.kr
 SEARCH_BASE=https://www.daisomall.co.kr
 ```
 
-- [ ] **Step 2: Ignore `.dev.vars`** — append under the `# Env / secrets` block in `.gitignore`:
+- [x] **Step 2: Ignore `.dev.vars`** — append under the `# Env / secrets` block in `.gitignore`:
 
 ```
 .dev.vars
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .dev.vars.example .gitignore
@@ -109,7 +109,7 @@ git commit -m "chore(functions): document server-only env for local pages dev"
 **Interfaces:**
 - Produces: `interface UpstreamEnv { PRE_AUTH_ENC_KEY: string; UPSTREAM_BASE?: string; SEARCH_BASE?: string }`; `interface UpstreamConfig { fapiBase: string; wwwBase: string; encKey: string }`; `upstreamConfig(env: UpstreamEnv): UpstreamConfig`; `PATHS` (auth/selStr/pkupStck/dispInfo); `searchGoodsUrl(wwwBase, keyword): string`; `CORS_HEADERS`; `jsonResponse(body, status?): Response`; `badGateway(): Response`.
 
-- [ ] **Step 1: Write the failing test** → `functions/_lib/daisoUpstream.test.ts`
+- [x] **Step 1: Write the failing test** → `functions/_lib/daisoUpstream.test.ts`
 
 ```ts
 import { PATHS, badGateway, jsonResponse, searchGoodsUrl, upstreamConfig } from './daisoUpstream';
@@ -154,9 +154,9 @@ test('PATHS pins the observed fapi endpoints', () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** — `npm run test -- daisoUpstream` → FAIL (module not found).
+- [x] **Step 2: Run to verify it fails** — `npm run test -- daisoUpstream` → FAIL (module not found).
 
-- [ ] **Step 3: Implement** → `functions/_lib/daisoUpstream.ts`
+- [x] **Step 3: Implement** → `functions/_lib/daisoUpstream.ts`
 
 ```ts
 // functions/_lib/daisoUpstream.ts
@@ -221,9 +221,9 @@ export function badGateway(): Response {
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes** — `npm run test -- daisoUpstream` → PASS. Then `npm run typecheck` → clean.
+- [x] **Step 4: Run to verify it passes** — `npm run test -- daisoUpstream` → PASS. Then `npm run typecheck` → clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add functions/_lib/daisoUpstream.ts functions/_lib/daisoUpstream.test.ts
@@ -240,7 +240,7 @@ git commit -m "feat(functions): upstream config + shared CORS/no-store response 
 - Consumes: `PATHS` from `./daisoUpstream`.
 - Produces: `interface DaisoAuth { bearer: string; uid: string }`; `encryptJwt(jwt: string, encKey: string, iv: Uint8Array): Promise<string>`; `requestAuth(deps: { fapiBase: string; encKey: string; fetchImpl?: typeof fetch; iv?: Uint8Array }): Promise<DaisoAuth>`.
 
-- [ ] **Step 1: Write the failing test** → `functions/_lib/daisoAuth.test.ts`
+- [x] **Step 1: Write the failing test** → `functions/_lib/daisoAuth.test.ts`
 
 ```ts
 import { encryptJwt, requestAuth } from './daisoAuth';
@@ -295,9 +295,9 @@ test('requestAuth throws when the auth endpoint fails or omits jwt/uid', async (
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** — `npm run test -- daisoAuth` → FAIL.
+- [x] **Step 2: Run to verify it fails** — `npm run test -- daisoAuth` → FAIL.
 
-- [ ] **Step 3: Implement** → `functions/_lib/daisoAuth.ts`
+- [x] **Step 3: Implement** → `functions/_lib/daisoAuth.ts`
 
 ```ts
 // functions/_lib/daisoAuth.ts
@@ -350,9 +350,9 @@ export async function requestAuth(deps: {
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes** — `npm run test -- daisoAuth` → PASS. `npm run typecheck` → clean (WebWorker lib supplies `crypto`/`btoa`/`TextEncoder`).
+- [x] **Step 4: Run to verify it passes** — `npm run test -- daisoAuth` → PASS. `npm run typecheck` → clean (WebWorker lib supplies `crypto`/`btoa`/`TextEncoder`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add functions/_lib/daisoAuth.ts functions/_lib/daisoAuth.test.ts
@@ -369,7 +369,7 @@ git commit -m "feat(functions): anonymous-JWT AES-128-CBC Bearer auth handshake 
 - Consumes: `requestAuth`, `DaisoAuth` from `../_lib/daisoAuth`; `PATHS`, `UpstreamConfig`, `UpstreamEnv`, `badGateway`, `jsonResponse`, `searchGoodsUrl`, `upstreamConfig` from `../_lib/daisoUpstream`.
 - Produces: `onRequestPost(context: { request: Request; env: UpstreamEnv }): Promise<Response>` returning `{ data: RawStoreObservation }` | `{ noMatch: true }` | `502 { error: 'upstream_unavailable' }` | `400 { error: 'bad_request' }`. The `RawStoreObservation` shape here **mirrors** `src/adapters/daisomall/rawObservation.ts` (Task 6) — keep the two in sync.
 
-- [ ] **Step 1: Write the failing test** → `functions/api/availability.test.ts`
+- [x] **Step 1: Write the failing test** → `functions/api/availability.test.ts`
 
 ```ts
 import { onRequestPost } from './availability';
@@ -540,9 +540,9 @@ test('missing strCd or keyword → 400', async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** — `npm run test -- availability` → FAIL (module not found).
+- [x] **Step 2: Run to verify it fails** — `npm run test -- availability` → FAIL (module not found).
 
-- [ ] **Step 3: Implement** → `functions/api/availability.ts`
+- [x] **Step 3: Implement** → `functions/api/availability.ts`
 
 ```ts
 // functions/api/availability.ts
@@ -754,9 +754,9 @@ export async function onRequestPost(context: { request: Request; env: UpstreamEn
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes** — `npm run test -- availability` → PASS. `npm run typecheck` → clean.
+- [x] **Step 4: Run to verify it passes** — `npm run test -- availability` → PASS. `npm run typecheck` → clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add functions/api/availability.ts functions/api/availability.test.ts
@@ -773,7 +773,7 @@ git commit -m "feat(functions): /api/availability conditional fan-out orchestrat
 - Consumes: `PATHS`, `UpstreamConfig`, `UpstreamEnv`, `badGateway`, `jsonResponse`, `upstreamConfig` from `../_lib/daisoUpstream`.
 - Produces: `onRequestPost(context: { request: Request; env: UpstreamEnv }): Promise<Response>` → `{ stores: { strCd: string; strNm: string }[] }` | `502` | `400`.
 
-- [ ] **Step 1: Write the failing test** → `functions/api/stores.test.ts`
+- [x] **Step 1: Write the failing test** → `functions/api/stores.test.ts`
 
 ```ts
 import { onRequestPost } from './stores';
@@ -819,9 +819,9 @@ test('an upstream failure → 502 upstream_unavailable', async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** — `npm run test -- stores` → FAIL.
+- [x] **Step 2: Run to verify it fails** — `npm run test -- stores` → FAIL.
 
-- [ ] **Step 3: Implement** → `functions/api/stores.ts`
+- [x] **Step 3: Implement** → `functions/api/stores.ts`
 
 ```ts
 // functions/api/stores.ts — selStr search-mode proxy for the D082 store-selection sheet.
@@ -879,9 +879,9 @@ export async function onRequestPost(context: { request: Request; env: UpstreamEn
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes** — `npm run test -- stores` → PASS. `npm run typecheck` → clean.
+- [x] **Step 4: Run to verify it passes** — `npm run test -- stores` → PASS. `npm run typecheck` → clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add functions/api/stores.ts functions/api/stores.test.ts
@@ -890,13 +890,13 @@ git commit -m "feat(functions): /api/stores selStr search-mode proxy"
 
 ### SESSION 1 EXIT GATE
 
-- [ ] Run the full gate — all must be green:
+- [x] Run the full gate — all must be green:
   - `npm run test` (Vitest, incl. the 4 new function suites; existing suites unchanged)
   - `npm run typecheck` (`tsc -b` incl. `functions/` non-test files under WebWorker lib)
   - `npm run lint` (Biome)
   - `npm run e2e` (unaffected — no `src/` change — but confirm 14/14)
-- [ ] Confirm **zero `src/` changes** in this session: `git diff --stat main -- src/` is empty.
-- [ ] Session 1 deliverable complete: the proxy layer (`/api/availability`, `/api/stores`, auth) is fully hermetically tested and the app is byte-for-byte unchanged. **Next session: SESSION 2 (client adapters).**
+- [x] Confirm **zero `src/` changes** in this session: `git diff --stat main -- src/` is empty.
+- [x] Session 1 deliverable complete: the proxy layer (`/api/availability`, `/api/stores`, auth) is fully hermetically tested and the app is byte-for-byte unchanged. **Next session: SESSION 2 (client adapters).**
 
 ---
 
@@ -913,7 +913,7 @@ git commit -m "feat(functions): /api/stores selStr search-mode proxy"
 **Interfaces:**
 - Produces: `formatLchDay(iso: string): string`; `kmToMeters(km: number): number`; `formatLocation` now handles basement floors.
 
-- [ ] **Step 1: Add the failing tests** — update the import line and append to `src/ui/format.test.ts`:
+- [x] **Step 1: Add the failing tests** — update the import line and append to `src/ui/format.test.ts`:
 
 ```ts
 import { formatLchDay, formatLocation, formatPrice, formatRelativeTimeKo, kmToMeters } from './format';
@@ -937,9 +937,9 @@ test('kmToMeters rounds kilometers to whole meters', () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** — `npm run test -- format` → FAIL.
+- [x] **Step 2: Run to verify it fails** — `npm run test -- format` → FAIL.
 
-- [ ] **Step 3: Implement** — replace `formatLocation` and append two functions in `src/ui/format.ts`:
+- [x] **Step 3: Implement** — replace `formatLocation` and append two functions in `src/ui/format.ts`:
 
 ```ts
 export function formatLocation(location: StoreLocation): string {
@@ -963,9 +963,9 @@ export function kmToMeters(km: number): number {
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes** — `npm run test -- format` → PASS (incl. the pre-existing `formatLocation` "11층 56번" test).
+- [x] **Step 4: Run to verify it passes** — `npm run test -- format` → PASS (incl. the pre-existing `formatLocation` "11층 56번" test).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ui/format.ts src/ui/format.test.ts
@@ -982,7 +982,7 @@ git commit -m "feat(ui): 지하 floor, formatLchDay, kmToMeters presentation uti
 - Consumes: `UnmappableAnswerError` from `../../domain/errors`.
 - Produces: `interface RawStoreObservation { strCd; pdNo; productName: string; price: number; directYn; stck: string|null; sleStsCd: string|null; mrkGdsYn: string|null; lchDay: string|null; locations: { floor: string; zone: string }[] }`; `parseRawObservation(value: unknown): RawStoreObservation` (throws `UnmappableAnswerError` on any shape/type mismatch — JSON is never trusted).
 
-- [ ] **Step 1: Write the failing test** → `src/adapters/daisomall/rawObservation.test.ts`
+- [x] **Step 1: Write the failing test** → `src/adapters/daisomall/rawObservation.test.ts`
 
 ```ts
 import { UnmappableAnswerError } from '../../domain/errors';
@@ -1013,9 +1013,9 @@ test('a non-object, missing identity, or wrong-typed field throws UnmappableAnsw
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** — `npm run test -- rawObservation` → FAIL.
+- [x] **Step 2: Run to verify it fails** — `npm run test -- rawObservation` → FAIL.
 
-- [ ] **Step 3: Implement** → `src/adapters/daisomall/rawObservation.ts`
+- [x] **Step 3: Implement** → `src/adapters/daisomall/rawObservation.ts`
 
 ```ts
 // src/adapters/daisomall/rawObservation.ts
@@ -1067,9 +1067,9 @@ export function parseRawObservation(value: unknown): RawStoreObservation {
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes** — `npm run test -- rawObservation` → PASS.
+- [x] **Step 4: Run to verify it passes** — `npm run test -- rawObservation` → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/adapters/daisomall/rawObservation.ts src/adapters/daisomall/rawObservation.test.ts
@@ -1087,7 +1087,7 @@ git commit -m "feat(adapters): RawStoreObservation contract + runtime validator"
 - Consumes: `UnmappableAnswerError` (errors), `AvailabilityAnswer` (types), `formatLchDay` (Task 5), `RawStoreObservation` (Task 6), `Scenario`/`mockAnswers` (mock fixtures — the parity oracle).
 - Produces: `mapStoreObservation(o: RawStoreObservation): AvailabilityAnswer`; `observationFixtures: Record<Scenario, RawStoreObservation>`.
 
-- [ ] **Step 1: Write the failing test** → `src/adapters/daisomall/mapStoreObservation.test.ts`
+- [x] **Step 1: Write the failing test** → `src/adapters/daisomall/mapStoreObservation.test.ts`
 
 ```ts
 import { UnmappableAnswerError } from '../../domain/errors';
@@ -1126,7 +1126,7 @@ test('a direct store with unfetched stock (stck null) is refused, not read as no
 });
 ```
 
-- [ ] **Step 2: Write the fixtures** → `src/adapters/daisomall/observationFixtures.ts`
+- [x] **Step 2: Write the fixtures** → `src/adapters/daisomall/observationFixtures.ts`
 
 ```ts
 // src/adapters/daisomall/observationFixtures.ts
@@ -1150,9 +1150,9 @@ export const observationFixtures: Record<Scenario, RawStoreObservation> = {
 };
 ```
 
-- [ ] **Step 3: Run to verify it fails** — `npm run test -- mapStoreObservation` → FAIL (mapStoreObservation not found).
+- [x] **Step 3: Run to verify it fails** — `npm run test -- mapStoreObservation` → FAIL (mapStoreObservation not found).
 
-- [ ] **Step 4: Implement** → `src/adapters/daisomall/mapStoreObservation.ts`
+- [x] **Step 4: Implement** → `src/adapters/daisomall/mapStoreObservation.ts`
 
 ```ts
 // src/adapters/daisomall/mapStoreObservation.ts
@@ -1205,9 +1205,9 @@ export function mapStoreObservation(o: RawStoreObservation): AvailabilityAnswer 
 }
 ```
 
-- [ ] **Step 5: Run to verify it passes** — `npm run test -- mapStoreObservation` → PASS (all 9 parity + edges).
+- [x] **Step 5: Run to verify it passes** — `npm run test -- mapStoreObservation` → PASS (all 9 parity + edges).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/adapters/daisomall/mapStoreObservation.ts src/adapters/daisomall/observationFixtures.ts src/adapters/daisomall/mapStoreObservation.test.ts
@@ -1224,7 +1224,7 @@ git commit -m "feat(adapters): mapStoreObservation 6-state precedence + parity o
 - Consumes: `NoCatalogMatchError` (errors), `StoreStockRepository` (ports), `mapStoreObservation` (Task 7), `parseRawObservation` (Task 6).
 - Produces: `type FetchLike`; `createDaisoStoreStockRepository(deps?: { endpoint?: string; fetchImpl?: FetchLike }): StoreStockRepository` (default endpoint `/api/availability`).
 
-- [ ] **Step 1: Write the failing test** → `src/adapters/daisomall/storeStockRepository.test.ts`
+- [x] **Step 1: Write the failing test** → `src/adapters/daisomall/storeStockRepository.test.ts`
 
 ```ts
 import { NoCatalogMatchError, UnmappableAnswerError } from '../../domain/errors';
@@ -1263,9 +1263,9 @@ test('a malformed observation → UnmappableAnswerError (safe fallback, no fabri
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** — `npm run test -- storeStockRepository` → FAIL.
+- [x] **Step 2: Run to verify it fails** — `npm run test -- storeStockRepository` → FAIL.
 
-- [ ] **Step 3: Implement** → `src/adapters/daisomall/storeStockRepository.ts`
+- [x] **Step 3: Implement** → `src/adapters/daisomall/storeStockRepository.ts`
 
 ```ts
 // src/adapters/daisomall/storeStockRepository.ts
@@ -1302,9 +1302,9 @@ export function createDaisoStoreStockRepository(
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes** — `npm run test -- storeStockRepository` → PASS.
+- [x] **Step 4: Run to verify it passes** — `npm run test -- storeStockRepository` → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/adapters/daisomall/storeStockRepository.ts src/adapters/daisomall/storeStockRepository.test.ts
@@ -1321,7 +1321,7 @@ git commit -m "feat(adapters): StoreStockRepository over /api/availability"
 - Consumes: `StoreDirectoryPort` (ports), `StoreContext` (types).
 - Produces: `type FetchLike`; `createDaisoStoreDirectory(deps?: { endpoint?: string; fetchImpl?: FetchLike }): StoreDirectoryPort` (default endpoint `/api/stores`).
 
-- [ ] **Step 1: Write the failing test** → `src/adapters/daisomall/storeDirectory.test.ts`
+- [x] **Step 1: Write the failing test** → `src/adapters/daisomall/storeDirectory.test.ts`
 
 ```ts
 import { type FetchLike, createDaisoStoreDirectory } from './storeDirectory';
@@ -1365,9 +1365,9 @@ test('a non-ok response or network failure degrades to [] (honest empty, never a
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** — `npm run test -- storeDirectory` → FAIL. (Note the mock `storeDirectory.test.ts` under `src/adapters/mock/` still runs — the `-- storeDirectory` filter matches both; the mock one stays green.)
+- [x] **Step 2: Run to verify it fails** — `npm run test -- storeDirectory` → FAIL. (Note the mock `storeDirectory.test.ts` under `src/adapters/mock/` still runs — the `-- storeDirectory` filter matches both; the mock one stays green.)
 
-- [ ] **Step 3: Implement** → `src/adapters/daisomall/storeDirectory.ts`
+- [x] **Step 3: Implement** → `src/adapters/daisomall/storeDirectory.ts`
 
 ```ts
 // src/adapters/daisomall/storeDirectory.ts
@@ -1413,9 +1413,9 @@ export function createDaisoStoreDirectory(
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes** — `npm run test -- storeDirectory` → PASS (both the new daisomall suite and the mock suite).
+- [x] **Step 4: Run to verify it passes** — `npm run test -- storeDirectory` → PASS (both the new daisomall suite and the mock suite).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/adapters/daisomall/storeDirectory.ts src/adapters/daisomall/storeDirectory.test.ts
@@ -1424,9 +1424,9 @@ git commit -m "feat(adapters): StoreDirectoryPort over /api/stores"
 
 ### SESSION 2 EXIT GATE
 
-- [ ] Full gate green: `npm run test` · `npm run typecheck` · `npm run lint` · `npm run e2e` (14/14).
-- [ ] Confirm the adapters are **not yet wired**: `src/adapters/composition.ts` does not exist and `git diff --stat main -- src/ui/AvailabilitySurface.tsx` is empty → mocks still active, app + E2E unchanged.
-- [ ] Session 2 deliverable complete: live adapters + format utils exist and are unit-tested, with the 6-state parity oracle preserved. **Next session: SESSION 3 (cutover).**
+- [x] Full gate green: `npm run test` · `npm run typecheck` · `npm run lint` · `npm run e2e` (14/14).
+- [x] Confirm the adapters are **not yet wired**: `src/adapters/composition.ts` does not exist and `git diff --stat main -- src/ui/AvailabilitySurface.tsx` is empty → mocks still active, app + E2E unchanged.
+- [x] Session 2 deliverable complete: live adapters + format utils exist and are unit-tested, with the 6-state parity oracle preserved. **Next session: SESSION 3 (cutover).**
 
 ---
 
@@ -1440,12 +1440,12 @@ The 6-state parity oracle now lives in `mapStoreObservation.test.ts` (Task 7), s
 
 **Files:** Remove `src/adapters/newIntSelStr/{newIntSelStrAdapter,mapResponse,rawFixtures}.ts` + `{newIntSelStrAdapter,mapResponse}.test.ts`; `functions/api/stock.ts` + `stock.test.ts`.
 
-- [ ] **Step 1: Confirm nothing in `src`/`functions` imports them** (docs/plan mentions are fine):
+- [x] **Step 1: Confirm nothing in `src`/`functions` imports them** (docs/plan mentions are fine):
 
 Run: `git grep -nE "from '.*(newIntSelStr|api/stock)|createNewIntSelStrAdapter|nullIdentityResolver" -- src functions`
 Expected: only matches inside the files about to be deleted (no external importer).
 
-- [ ] **Step 2: Delete the files**
+- [x] **Step 2: Delete the files**
 
 ```bash
 git rm src/adapters/newIntSelStr/newIntSelStrAdapter.ts src/adapters/newIntSelStr/newIntSelStrAdapter.test.ts \
@@ -1454,11 +1454,11 @@ git rm src/adapters/newIntSelStr/newIntSelStrAdapter.ts src/adapters/newIntSelSt
   functions/api/stock.ts functions/api/stock.test.ts
 ```
 
-- [ ] **Step 3: Run the full suite to prove parity survived the removal**
+- [x] **Step 3: Run the full suite to prove parity survived the removal**
 
 Run: `npm run test` → PASS (the 9-scenario parity now asserted by `mapStoreObservation.test.ts`). `npm run typecheck` → clean.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "refactor(adapters): remove stale newIntSelStr + stock.ts (precedence ported to mapStoreObservation)"
@@ -1475,7 +1475,7 @@ git commit -m "refactor(adapters): remove stale newIntSelStr + stock.ts (precede
 - Consumes: the daisomall + mock factories.
 - Produces: `createStoreStockRepository(): StoreStockRepository`; `createStoreDirectory(): StoreDirectoryPort` — real `/api` adapters under `import.meta.env.PROD`, mocks otherwise.
 
-- [ ] **Step 1: Write the failing test** → `src/adapters/composition.test.ts`
+- [x] **Step 1: Write the failing test** → `src/adapters/composition.test.ts`
 
 ```ts
 import { mockAnswers } from './mock/fixtures';
@@ -1514,9 +1514,9 @@ test('PROD build wires the live /api/availability adapter', async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** — `npm run test -- composition` → FAIL.
+- [x] **Step 2: Run to verify it fails** — `npm run test -- composition` → FAIL.
 
-- [ ] **Step 3: Implement** → `src/adapters/composition.ts`
+- [x] **Step 3: Implement** → `src/adapters/composition.ts`
 
 ```ts
 // src/adapters/composition.ts — single production wiring point. PROD builds the real /api adapters; DEV/test
@@ -1536,9 +1536,9 @@ export function createStoreDirectory(): StoreDirectoryPort {
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes** — `npm run test -- composition` → PASS.
+- [x] **Step 4: Run to verify it passes** — `npm run test -- composition` → PASS.
 
-- [ ] **Step 5: Wire `AvailabilitySurface.tsx`** — four edits, UI logic untouched:
+- [x] **Step 5: Wire `AvailabilitySurface.tsx`** — four edits, UI logic untouched:
 
 Replace the mock import on line ~5:
 ```ts
@@ -1578,9 +1578,9 @@ with:
 
 (`createMockRepository` stays — the DEV-only `?scenario=` sweep still uses it. In Vitest/dev `import.meta.env.PROD` is false, so composition returns the same mocks → the whole existing unit + E2E dev suite behaves identically.)
 
-- [ ] **Step 6: Run the full suite** — `npm run test` · `npm run typecheck` · `npm run lint` · `npm run e2e` all green (dev pipeline still on mocks → unchanged behavior).
+- [x] **Step 6: Run the full suite** — `npm run test` · `npm run typecheck` · `npm run lint` · `npm run e2e` all green (dev pipeline still on mocks → unchanged behavior).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/adapters/composition.ts src/adapters/composition.test.ts src/ui/AvailabilitySurface.tsx
@@ -1595,7 +1595,7 @@ Validates browser → real adapter → `/api/*` (intercepted) → mapping → UI
 - Modify: `playwright.config.ts`
 - Create: `test/e2e/live-pipeline.spec.ts`
 
-- [ ] **Step 1: Add the `preview` project to `playwright.config.ts`** (replace the whole file):
+- [x] **Step 1: Add the `preview` project to `playwright.config.ts`** (replace the whole file):
 
 ```ts
 import { defineConfig } from '@playwright/test';
@@ -1626,7 +1626,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 2: Write the E2E spec** → `test/e2e/live-pipeline.spec.ts`
+- [x] **Step 2: Write the E2E spec** → `test/e2e/live-pipeline.spec.ts`
 
 ```ts
 // test/e2e/live-pipeline.spec.ts — prod build (real adapters) + page.route fixtures at the /api boundary.
@@ -1678,9 +1678,9 @@ test('store search hits /api/stores (fixture) and lists the store', async ({ pag
 });
 ```
 
-- [ ] **Step 3: Run the new project** — `npx playwright test --project=preview` → 3 passing. Then `npm run e2e` → all projects green (dev sweep 14 + preview 3).
+- [x] **Step 3: Run the new project** — `npx playwright test --project=preview` → 3 passing. Then `npm run e2e` → all projects green (dev sweep 14 + preview 3).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add playwright.config.ts test/e2e/live-pipeline.spec.ts
@@ -1689,10 +1689,10 @@ git commit -m "test(e2e): route-intercept live pipeline against the prod build"
 
 ### Task 13: Full gate + security grep
 
-- [ ] **Step 1: Run the whole gate** — all green:
+- [x] **Step 1: Run the whole gate** — all green:
   - `npm run test` · `npm run typecheck` · `npm run lint` · `npm run e2e`
 
-- [ ] **Step 2: Prove no secrets reach the client** (server-only invariant):
+- [x] **Step 2: Prove no secrets reach the client** (server-only invariant):
 
 ```bash
 npm run build   # refresh dist/
@@ -1703,13 +1703,13 @@ grep -rnE "PRE_AUTH_ENC_KEY|x-dm-uid" dist/ && echo "LEAK in dist" || echo "dist
 ```
 Expected: `src clean` / `dist clean`. If either leaks, stop and fix before proceeding.
 
-- [ ] **Step 3: Confirm the read-only + no-store invariants hold** — every proxy `Response` carries `cache-control: no-store` (asserted in the function tests); no upstream call mutates (all are reads). No commit needed unless a fix was required.
+- [x] **Step 3: Confirm the read-only + no-store invariants hold** — every proxy `Response` carries `cache-control: no-store` (asserted in the function tests); no upstream call mutates (all are reads). No commit needed unless a fix was required.
 
 ### Task 14: Docs + local merge
 
 **Files:** Modify `docs/notes/open-questions.md`, `.superpowers/sdd/progress.md`, `docs/HANDOFF.md`, and check the boxes in this plan.
 
-- [ ] **Step 1: Record the app-owned decisions** — append to `docs/notes/open-questions.md` §B:
+- [x] **Step 1: Record the app-owned decisions** — append to `docs/notes/open-questions.md` §B:
 
 ```markdown
 > **2026-07-22 확정 — Flow 1 live-data 배선** (플랜 `docs/superpowers/plans/2026-07-22-flow1-live-data.md`; 도시어 `store-api-observations.md`). 앱 소유 결정(Bible D-번호 미소비).
@@ -1727,7 +1727,7 @@ Expected: `src clean` / `dist clean`. If either leaks, stop and fix before proce
 **미해결(라이브 스모크 / data-owner 확인 — 심 뒤 격리):** `sleStsCd` 매장 코드 전체 열거('9'/null 외 qty 폴백 격리) · `stck` 종류(진열 vs 픽업예약) · selStrPkupStck 빈 `data[]` 의미(직영 notCarried 가정) · selStr 상세 응답 래핑(data 객체 vs 배열; extractDirectYn 양쪽 처리) · 매장검색 좌표 optional 가정 · ToS/robots(배포 전, 헤르메틱 유지로 CI 회피).
 ```
 
-- [ ] **Step 2: Prepend a ledger entry** to `.superpowers/sdd/progress.md` (fill the real gate counts + merge commit):
+- [x] **Step 2: Prepend a ledger entry** to `.superpowers/sdd/progress.md` (fill the real gate counts + merge commit):
 
 ```markdown
 - **FLOW 1 LIVE-DATA — IMPLEMENTED (2026-07-22), branch feat/flow1-live-data → main.** Plan
@@ -1741,9 +1741,9 @@ Expected: `src clean` / `dist clean`. If either leaks, stop and fix before proce
   src+dist). App decisions open-questions §B21–B27; unresolved items isolated behind seam. Merge --no-ff <commit>.
 ```
 
-- [ ] **Step 3: Refresh `docs/HANDOFF.md`** 다음 작업 → live smoke (`wrangler pages dev` with a real `.dev.vars`) to confirm host alignment (B27) + the unresolved data-owner items, then the out-of-scope passes (GPS-nearby real wiring, AI interpretation, barcode).
+- [x] **Step 3: Refresh `docs/HANDOFF.md`** 다음 작업 → live smoke (`wrangler pages dev` with a real `.dev.vars`) to confirm host alignment (B27) + the unresolved data-owner items, then the out-of-scope passes (GPS-nearby real wiring, AI interpretation, barcode).
 
-- [ ] **Step 4: Check every `- [ ]` box in this plan** (all tasks done) and commit docs:
+- [x] **Step 4: Check every `- [x]` box in this plan** (all tasks done) and commit docs:
 
 ```bash
 git add docs/notes/open-questions.md docs/HANDOFF.md docs/superpowers/plans/2026-07-22-flow1-live-data.md
@@ -1751,7 +1751,7 @@ git commit -m "docs(flow1): record live-data app decisions (B21–B27) + refresh
 ```
 (`.superpowers/` is gitignored — update `progress.md` as a local ledger; it will not appear in the commit, which is expected.)
 
-- [ ] **Step 5: Local merge** — invoke **superpowers:finishing-a-development-branch** and choose the local `--no-ff` merge:
+- [x] **Step 5: Local merge** — invoke **superpowers:finishing-a-development-branch** and choose the local `--no-ff` merge:
 
 ```bash
 git checkout main
@@ -1761,10 +1761,10 @@ npm run test && npm run typecheck && npm run lint && npm run e2e   # re-run the 
 
 ### SESSION 3 EXIT GATE (project done)
 
-- [ ] Full gate green on `main` after the merge.
-- [ ] Secrets absent from `src` + `dist` (grep). Read-only + no-store invariants asserted in tests.
-- [ ] Docs updated (open-questions §B21–B27, progress ledger, HANDOFF). Plan checkboxes all ticked.
-- [ ] **Flow 1 is live-data-wired.** Remaining work is out-of-scope follow-ups (live smoke, GPS-nearby, AI, barcode).
+- [x] Full gate green on `main` after the merge.
+- [x] Secrets absent from `src` + `dist` (grep). Read-only + no-store invariants asserted in tests.
+- [x] Docs updated (open-questions §B21–B27, progress ledger, HANDOFF). Plan checkboxes all ticked.
+- [x] **Flow 1 is live-data-wired.** Remaining work is out-of-scope follow-ups (live smoke, GPS-nearby, AI, barcode).
 
 ---
 
