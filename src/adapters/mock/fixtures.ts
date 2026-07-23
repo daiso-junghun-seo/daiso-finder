@@ -21,6 +21,7 @@ export const mockAnswers: Record<Scenario, AvailabilityAnswer> = {
     price: 2000,
     locations: [{ floor: '11', zone: '56' }],
     qtyUpperBound: 50,
+    imageUrl: 'https://cdn.daisomall.co.kr/file/PD/test.jpg',
   },
   inStockLowQty: {
     kind: 'inStock',

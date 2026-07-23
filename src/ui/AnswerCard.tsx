@@ -30,6 +30,13 @@ import { formatLocation, formatPrice, formatRelativeTimeKo } from './format';
 
 type NonDefaultUiState = Exclude<UiState, { state: 'default' }>;
 
+// Renders the product photo when the vendor supplied one; never a fake placeholder when absent (honest,
+// no fabricated imagery — empty-slot styling is UI-polish follow-up). alt = product name (Bible §접근성).
+function ProductPhoto({ imageUrl, name }: { imageUrl?: string; name: string }) {
+  if (!imageUrl) return null;
+  return <img className="product-photo" src={imageUrl} alt={name} />;
+}
+
 export function AnswerCard({
   ui,
   policy,
@@ -105,6 +112,7 @@ function renderErrorCached(
         <span aria-hidden="true">⚠ </span>
         {ERROR_CACHED_BANNER}
       </p>
+      <ProductPhoto imageUrl={answer.imageUrl} name={answer.productName} />
       <p className="text-heading">{answer.productName}</p>
       <p className="text-display">{facts.status}</p>
       {line && <p className="text-heading">{line}</p>}
@@ -152,6 +160,7 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy) {
     const isLowQty = answer.qtyUpperBound <= policy.lowQtyCutoff;
     return (
       <div>
+        <ProductPhoto imageUrl={answer.imageUrl} name={answer.productName} />
         <p className="text-heading">{answer.productName}</p>
         <p className="text-display success-status">
           <span aria-hidden="true">✓ </span>
@@ -178,6 +187,7 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy) {
   }
   return (
     <div>
+      <ProductPhoto imageUrl={answer.imageUrl} name={answer.productName} />
       <p className="text-heading">{answer.productName}</p>
       <p className="text-display">{facts.status}</p>
       <button type="button" className="text-label">
@@ -201,6 +211,7 @@ function renderPartial(
   if (trigger === 'franchise') {
     return (
       <div>
+        <ProductPhoto imageUrl={answer.imageUrl} name={answer.productName} />
         <p className="text-heading">{answer.productName}</p>
         <p className="text-body">{PARTIAL_FRANCHISE_BODY}</p>
         <button type="button" className="text-label">
@@ -216,6 +227,7 @@ function renderPartial(
     // paragraphs (layout) and their distinct sentences (text) — the color role only reinforces it (F5).
     return (
       <div>
+        <ProductPhoto imageUrl={answer.imageUrl} name={answer.productName} />
         <p className="text-heading">{answer.productName}</p>
         <p className="text-body">{partialLocationMissingConfirmed(answer.price)}</p>
         <p className="text-caption">{PARTIAL_NO_LOCATION_NOTE}</p>
@@ -228,6 +240,7 @@ function renderPartial(
   const relativeTime = freshness ? formatRelativeTimeKo(freshness.observedAt, nowMs) : '';
   return (
     <div>
+      <ProductPhoto imageUrl={answer.imageUrl} name={answer.productName} />
       <p className="text-heading">{answer.productName}</p>
       <p className="text-body">{partialStaleCacheBody(relativeTime)}</p>
       <button type="button" className="text-label" onClick={onRetry}>

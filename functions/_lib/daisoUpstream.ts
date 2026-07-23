@@ -58,3 +58,13 @@ export function jsonResponse(body: unknown, status = 200): Response {
 export function badGateway(): Response {
   return jsonResponse({ error: 'upstream_unavailable' }, 502);
 }
+
+// pdImgUrl (SearchGoods) is a relative path (/file/PD/...) served only from the image CDN
+// (store-api-observations §라이브 스모크 검증 III — www host 404s; cdn host confirmed live).
+export const IMAGE_CDN_BASE = 'https://cdn.daisomall.co.kr';
+
+export function absolutizeImageUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw === '') return null;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  return `${IMAGE_CDN_BASE}${raw.startsWith('/') ? '' : '/'}${raw}`;
+}

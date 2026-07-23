@@ -8,7 +8,7 @@ import { formatLchDay } from '../../ui/format';
 import type { RawStoreObservation } from './rawObservation';
 
 export function mapStoreObservation(o: RawStoreObservation): AvailabilityAnswer {
-  const { productName, price, directYn, sleStsCd, mrkGdsYn, locations } = o;
+  const { productName, price, directYn, sleStsCd, mrkGdsYn, locations, imageUrl } = o;
 
   // 0. Invariant guard (§4.1): a direct store always fetches stock. stck:null for a direct store would be a
   //    leaked fetch failure — refuse it rather than misread rule 5 as notCarried.
@@ -19,27 +19,46 @@ export function mapStoreObservation(o: RawStoreObservation): AvailabilityAnswer 
 
   // 1. Franchise AND no location → stock undeterminable BY DESIGN (orchestrator did not fetch it).
   if (directYn !== 'Y' && locations.length === 0) {
-    return { kind: 'franchiseUndeterminable', productName };
+    return { kind: 'franchiseUndeterminable', productName, imageUrl: imageUrl ?? undefined };
   }
   // 2. In stock — qty is an UPPER BOUND (data-contract §4); carry it, never present as an exact count.
   if (stck > 0) {
-    return { kind: 'inStock', productName, price, locations, qtyUpperBound: stck };
+    return {
+      kind: 'inStock',
+      productName,
+      price,
+      locations,
+      qtyUpperBound: stck,
+      imageUrl: imageUrl ?? undefined,
+    };
   }
   // 3. Discontinued — store sleStsCd '9' outranks temporarily-out.
   if (sleStsCd === '9') {
-    return { kind: 'discontinued', productName, price };
+    return { kind: 'discontinued', productName, price, imageUrl: imageUrl ?? undefined };
   }
   // 4. Restock arriving — incoming-goods flag; lchDay 'YYYY-MM-DD' → 'M월 D일'.
   if (mrkGdsYn === 'Y') {
-    return { kind: 'restockArriving', productName, price, lchDay: formatLchDay(o.lchDay ?? '') };
+    return {
+      kind: 'restockArriving',
+      productName,
+      price,
+      lchDay: formatLchDay(o.lchDay ?? ''),
+      imageUrl: imageUrl ?? undefined,
+    };
   }
   // 5. Not carried — a direct store with a null store status does not carry it.
   if (sleStsCd === null && directYn === 'Y') {
-    return { kind: 'notCarried', productName };
+    return { kind: 'notCarried', productName, imageUrl: imageUrl ?? undefined };
   }
   // 6. Temporarily out — carried (status present) but zero on hand; a restock offer stands.
   if (stck === 0 && sleStsCd !== null) {
-    return { kind: 'temporarilyOut', productName, price, restockOfferable: true };
+    return {
+      kind: 'temporarilyOut',
+      productName,
+      price,
+      restockOfferable: true,
+      imageUrl: imageUrl ?? undefined,
+    };
   }
   // 7. Unknown combination → safe fallback, NEVER a fabricated Success.
   throw new UnmappableAnswerError(

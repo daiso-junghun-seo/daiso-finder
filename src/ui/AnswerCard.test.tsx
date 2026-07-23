@@ -187,6 +187,39 @@ test('success inStock (ample qty) shows live freshness, price/location, and the 
   expect(screen.getByRole('button', { name: SUCCESS_IN_STOCK_CTA })).toBeInTheDocument();
 });
 
+test('success inStock with an imageUrl renders the product photo (src + alt = product name)', () => {
+  render(
+    <AnswerCard
+      ui={{
+        state: 'success',
+        query: '밀폐용기',
+        answer: mockAnswers.inStock,
+        freshness: { class: 'live', observedAt: NOW },
+      }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+    />,
+  );
+  const img = screen.getByRole('img', { name: mockAnswers.inStock.productName });
+  expect(img).toHaveAttribute('src', mockAnswers.inStock.imageUrl);
+});
+
+test('success without an imageUrl renders no photo (no fabricated placeholder)', () => {
+  render(
+    <AnswerCard
+      ui={{
+        state: 'success',
+        query: '밀폐용기',
+        answer: mockAnswers.discontinued,
+        freshness: { class: 'live', observedAt: NOW },
+      }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+    />,
+  );
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
+
 test('success inStock (low qty) swaps in the upper-bound caption', () => {
   render(
     <AnswerCard

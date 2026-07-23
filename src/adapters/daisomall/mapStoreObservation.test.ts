@@ -22,6 +22,12 @@ for (const s of scenarios) {
   });
 }
 
+test('imageUrl threads from the observation into the mapped inStock answer', () => {
+  expect(mapStoreObservation(observationFixtures.inStock).imageUrl).toBe(
+    'https://cdn.daisomall.co.kr/file/PD/test.jpg',
+  );
+});
+
 test('restockArriving formats lchDay from ISO to "M월 D일"', () => {
   expect(mapStoreObservation(observationFixtures.restockArriving)).toEqual({
     kind: 'restockArriving',

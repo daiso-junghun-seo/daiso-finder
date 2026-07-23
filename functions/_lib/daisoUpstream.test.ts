@@ -1,4 +1,11 @@
-import { PATHS, badGateway, jsonResponse, searchGoodsUrl, upstreamConfig } from './daisoUpstream';
+import {
+  PATHS,
+  absolutizeImageUrl,
+  badGateway,
+  jsonResponse,
+  searchGoodsUrl,
+  upstreamConfig,
+} from './daisoUpstream';
 
 test('upstreamConfig applies fapi/www defaults and requires the enc key', () => {
   expect(upstreamConfig({ PRE_AUTH_ENC_KEY: 'k' })).toEqual({
@@ -28,6 +35,17 @@ test('jsonResponse / badGateway carry CORS + no-store', async () => {
   const bad = badGateway();
   expect(bad.status).toBe(502);
   expect(await bad.json()).toEqual({ error: 'upstream_unavailable' });
+});
+
+test('absolutizeImageUrl prefixes a relative pdImgUrl path with the image CDN host', () => {
+  expect(absolutizeImageUrl('/file/PD/x.jpg')).toBe('https://cdn.daisomall.co.kr/file/PD/x.jpg');
+  expect(absolutizeImageUrl('file/PD/x.jpg')).toBe('https://cdn.daisomall.co.kr/file/PD/x.jpg');
+  expect(absolutizeImageUrl('https://cdn.daisomall.co.kr/file/PD/x.jpg')).toBe(
+    'https://cdn.daisomall.co.kr/file/PD/x.jpg',
+  );
+  expect(absolutizeImageUrl('')).toBeNull();
+  expect(absolutizeImageUrl(undefined)).toBeNull();
+  expect(absolutizeImageUrl(123)).toBeNull();
 });
 
 test('PATHS pins the observed fapi endpoints', () => {

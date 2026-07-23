@@ -4,7 +4,13 @@
 import type { Scenario } from '../mock/fixtures';
 import type { RawStoreObservation } from './rawObservation';
 
-const base = { strCd: '10803', pdNo: '19987', productName: '리빙 밀폐용기 1.2L', price: 2000 };
+const base = {
+  strCd: '10803',
+  pdNo: '19987',
+  productName: '리빙 밀폐용기 1.2L',
+  price: 2000,
+  imageUrl: null,
+};
 
 export const observationFixtures: Record<Scenario, RawStoreObservation> = {
   inStock: {
@@ -15,6 +21,7 @@ export const observationFixtures: Record<Scenario, RawStoreObservation> = {
     mrkGdsYn: null,
     lchDay: null,
     locations: [{ floor: '11', zone: '56' }],
+    imageUrl: 'https://cdn.daisomall.co.kr/file/PD/test.jpg',
   },
   inStockLowQty: {
     ...base,

@@ -13,6 +13,7 @@ const RAW_INSTOCK = {
   mrkGdsYn: null,
   lchDay: null,
   locations: [{ floor: '11', zone: '56' }],
+  imageUrl: null,
 };
 
 test.beforeEach(async ({ page }) => {

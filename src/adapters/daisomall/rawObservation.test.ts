@@ -12,6 +12,7 @@ const valid = {
   mrkGdsYn: null,
   lchDay: null,
   locations: [{ floor: '11', zone: '56' }],
+  imageUrl: 'https://cdn.daisomall.co.kr/file/PD/test.jpg',
 };
 
 test('parseRawObservation accepts a well-formed record', () => {
@@ -32,4 +33,5 @@ test('a non-object, missing identity, or wrong-typed field throws UnmappableAnsw
     UnmappableAnswerError,
   );
   expect(() => parseRawObservation({ ...valid, locations: 'x' })).toThrow(UnmappableAnswerError);
+  expect(() => parseRawObservation({ ...valid, imageUrl: 123 })).toThrow(UnmappableAnswerError);
 });

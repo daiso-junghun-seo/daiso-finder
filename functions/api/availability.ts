@@ -7,6 +7,7 @@ import {
   PATHS,
   type UpstreamConfig,
   type UpstreamEnv,
+  absolutizeImageUrl,
   badGateway,
   jsonResponse,
   searchGoodsUrl,
@@ -26,6 +27,7 @@ interface RawStoreObservation {
   mrkGdsYn: string | null;
   lchDay: string | null;
   locations: { floor: string; zone: string }[];
+  imageUrl: string | null;
 }
 interface ReqBody {
   strCd?: string;
@@ -36,6 +38,7 @@ interface Product {
   pdNo: string;
   productName: string;
   price: number;
+  imageUrl: string | null;
 }
 interface StockFields {
   stck: string;
@@ -49,6 +52,7 @@ interface SearchDoc {
   pdNm?: unknown;
   exhPdNm?: unknown;
   pdPrc?: unknown;
+  pdImgUrl?: unknown;
 }
 interface SearchGoodsPayload {
   resultSet?: { result?: Array<{ resultDocuments?: SearchDoc[] }> };
@@ -70,6 +74,7 @@ async function searchGoods(wwwBase: string, keyword: string): Promise<Product | 
     pdNo: String(doc.pdNo ?? ''),
     productName: String(doc.exhPdNm ?? doc.pdNm ?? ''),
     price: Number.isFinite(price) ? price : 0,
+    imageUrl: absolutizeImageUrl(doc.pdImgUrl),
   };
 }
 
@@ -212,6 +217,7 @@ export async function onRequestPost(context: {
       mrkGdsYn: stock?.mrkGdsYn ?? null,
       lchDay: stock?.lchDay ?? null,
       locations,
+      imageUrl: product.imageUrl,
     };
     return jsonResponse({ data: observation });
   } catch {

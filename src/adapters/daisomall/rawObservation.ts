@@ -14,6 +14,7 @@ export interface RawStoreObservation {
   mrkGdsYn: string | null;
   lchDay: string | null;
   locations: { floor: string; zone: string }[];
+  imageUrl: string | null;
 }
 
 function isStrOrNull(v: unknown): v is string | null {
@@ -42,6 +43,7 @@ export function parseRawObservation(value: unknown): RawStoreObservation {
   ) {
     throw new UnmappableAnswerError('observation: bad stock fields');
   }
+  if (!isStrOrNull(o.imageUrl)) throw new UnmappableAnswerError('observation: bad imageUrl');
   if (!Array.isArray(o.locations))
     throw new UnmappableAnswerError('observation: locations not array');
   const locations = o.locations.map((l) => {
@@ -62,5 +64,6 @@ export function parseRawObservation(value: unknown): RawStoreObservation {
     mrkGdsYn: o.mrkGdsYn,
     lchDay: o.lchDay,
     locations,
+    imageUrl: o.imageUrl,
   };
 }

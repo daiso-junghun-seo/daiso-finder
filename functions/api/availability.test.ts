@@ -27,6 +27,7 @@ const PROD = {
   pdNm: '리빙 밀폐용기 1.2L',
   exhPdNm: '리빙 밀폐용기 1.2L',
   pdPrc: '2000',
+  pdImgUrl: '/file/PD/x.jpg',
 };
 function expectAuth(init?: RequestInit) {
   const h = (init?.headers ?? {}) as Record<string, string>;
@@ -85,6 +86,7 @@ test('direct store: fans out and returns a normalized inStock observation with n
       mrkGdsYn: null,
       lchDay: null,
       locations: [{ floor: '11', zone: '56' }],
+      imageUrl: 'https://cdn.daisomall.co.kr/file/PD/x.jpg',
     },
   });
 });
@@ -255,6 +257,7 @@ test('mall-only upstream fields never appear in the observation (whitelist by co
   expect(Object.keys(body.data).sort()).toEqual(
     [
       'directYn',
+      'imageUrl',
       'lchDay',
       'locations',
       'mrkGdsYn',
