@@ -1,5 +1,6 @@
 // src/ui/store.test.ts
 import { initialState } from '../domain/state-machine';
+import { loadRecentSearches } from '../infra/recent-searches';
 import { loadStoreContext } from '../infra/store-context';
 import { useAvailabilityStore } from './store';
 
@@ -48,5 +49,24 @@ describe('store context (D082)', () => {
     expect(useAvailabilityStore.getState().sheetOpen).toBe(false);
     useAvailabilityStore.getState().openSheet();
     expect(useAvailabilityStore.getState().sheetOpen).toBe(true);
+  });
+});
+
+describe('recent searches', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useAvailabilityStore.setState({ recentSearches: [] });
+  });
+
+  test('recordSearch updates recentSearches and persists it (loadRecentSearches reflects it)', () => {
+    useAvailabilityStore.getState().recordSearch('밀폐용기');
+    expect(useAvailabilityStore.getState().recentSearches).toEqual(['밀폐용기']);
+    expect(loadRecentSearches()).toEqual(['밀폐용기']);
+  });
+
+  test('recording the same keyword twice keeps it as a single entry at the front', () => {
+    useAvailabilityStore.getState().recordSearch('밀폐용기');
+    useAvailabilityStore.getState().recordSearch('밀폐용기');
+    expect(useAvailabilityStore.getState().recentSearches).toEqual(['밀폐용기']);
   });
 });

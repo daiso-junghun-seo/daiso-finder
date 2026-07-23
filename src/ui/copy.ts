@@ -177,3 +177,7 @@ export function announcementFor(
     }
   }
 }
+
+// Interface §2 mockup + Typography mapping: the Caption label above the Default-state L2
+// recent-searches list.
+export const RECENT_SEARCHES_LABEL = '최근 검색';

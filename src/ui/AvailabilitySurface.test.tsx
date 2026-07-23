@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { mockAnswers } from '../adapters/mock/fixtures';
 import type { StoreEvent } from '../domain/types';
 import { AvailabilitySurface, isCurrentRun, runQuery } from './AvailabilitySurface';
-import { emptyBody } from './copy';
+import { RECENT_SEARCHES_LABEL, emptyBody } from './copy';
 import { useAvailabilityStore } from './store';
 
 // Retry-focus harness (P6-4 decision 6): when the flag is on, the surface's live pipeline gets a
@@ -294,5 +294,34 @@ describe('retry (B15)', () => {
       state: 'success',
       query: '밀폐용기',
     });
+  });
+});
+
+describe('recent searches', () => {
+  beforeEach(() => {
+    useAvailabilityStore.setState({ recentSearches: [] });
+  });
+
+  test('first render with no saved recent searches renders no 최근 검색 caption', () => {
+    render(<AvailabilitySurface />);
+    expect(screen.queryByText(RECENT_SEARCHES_LABEL)).not.toBeInTheDocument();
+  });
+
+  test('submitting 밀폐용기 records it, and it shows under 최근 검색 back on Default', async () => {
+    render(<AvailabilitySurface />);
+    await userEvent.type(screen.getByLabelText('상품 검색'), '밀폐용기{Enter}');
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    act(() => {
+      useAvailabilityStore.setState({ ui: { state: 'default' } });
+    });
+    expect(screen.getByText(RECENT_SEARCHES_LABEL)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '밀폐용기' })).toBeInTheDocument();
+  });
+
+  test('tapping a recent search re-runs the query and shows the result', async () => {
+    useAvailabilityStore.setState({ recentSearches: ['밀폐용기'] });
+    render(<AvailabilitySurface />);
+    await userEvent.click(screen.getByRole('button', { name: '밀폐용기' }));
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
   });
 });

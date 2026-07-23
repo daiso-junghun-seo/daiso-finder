@@ -17,7 +17,13 @@ import { LiveRegion } from './a11y/LiveRegion';
 import { GlassSurface } from './components/GlassSurface';
 import { StoreContextLine } from './components/StoreContextLine';
 import { StoreSelectionSheet } from './components/StoreSelectionSheet';
-import { DEFAULT_HEADLINE, SCAN_BUTTON_LABEL, SEARCH_PLACEHOLDER, announcementFor } from './copy';
+import {
+  DEFAULT_HEADLINE,
+  RECENT_SEARCHES_LABEL,
+  SCAN_BUTTON_LABEL,
+  SEARCH_PLACEHOLDER,
+  announcementFor,
+} from './copy';
 import { useAvailabilityStore } from './store';
 
 // Placeholder store for the Inc-0 sweep only — the sheet exists (D082); this is now only the E2E
@@ -141,6 +147,8 @@ export function AvailabilitySurface() {
   const openSheet = useAvailabilityStore((s) => s.openSheet);
   const closeSheet = useAvailabilityStore((s) => s.closeSheet);
   const selectStore = useAvailabilityStore((s) => s.selectStore);
+  const recentSearches = useAvailabilityStore((s) => s.recentSearches);
+  const recordSearch = useAvailabilityStore((s) => s.recordSearch);
   const [input, setInput] = useState('');
   const changeStoreRef = useRef<HTMLButtonElement>(null);
   const answerCardRef = useRef<HTMLDivElement>(null);
@@ -189,6 +197,7 @@ export function AvailabilitySurface() {
           e.preventDefault();
           const keyword = input.trim();
           if (!keyword) return;
+          recordSearch(keyword);
           void runQuery(store, keyword, dispatch);
         }}
       >
@@ -221,6 +230,28 @@ export function AvailabilitySurface() {
             />
           </GlassSurface>
           <h1>{DEFAULT_HEADLINE}</h1>
+          {recentSearches.length > 0 && (
+            <div className="recent-searches">
+              <p className="text-caption">{RECENT_SEARCHES_LABEL}</p>
+              <ul>
+                {recentSearches.map((keyword) => (
+                  <li key={keyword}>
+                    <button
+                      type="button"
+                      className="text-body"
+                      onClick={() => {
+                        setInput(keyword);
+                        recordSearch(keyword); // re-bump to front — keeps recency order consistent on re-tap
+                        void runQuery(store, keyword, dispatch);
+                      }}
+                    >
+                      {keyword}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {searchBar}
         </div>
         {sheetOpen && (
