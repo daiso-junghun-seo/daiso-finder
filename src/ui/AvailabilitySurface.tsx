@@ -30,8 +30,8 @@ import { useAvailabilityStore } from './store';
 // sweep's default store when no store context has been saved yet.
 const PLACEHOLDER_STORE = { strCd: '0', strNm: '명동역점' };
 
-// Store directory for the D082 sheet: the composition root selects the live /api/stores adapter in prod
-// builds and the mock in dev/test. The browser geolocation stub returns [] until GPS-nearby is wired (A9).
+// Store directory + geolocation for the D082 sheet: the composition root selects the live /api adapters
+// in prod builds and the mocks in dev/test. GPS only recommends nearby stores (A9) — it never sets the store.
 const storeDirectory = createStoreDirectory();
 const browserGeolocation = createGeolocation();
 

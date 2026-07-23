@@ -15,11 +15,9 @@ function getPosition(geo: Geolocation): Promise<GeolocationPosition> {
 
 // GPS RECOMMENDS ONLY (D082): never sets the store; failure/denial/no-geolocation/fetch-failure all
 // degrade to an empty list — the sheet's search field remains the fallback (never a dead end).
-// nav keeps its `= navigator` default (production convenience) even though fetchNearby after it is
-// required with no safe default — composition.ts always owns which fetch to wire in.
+// Both params are required: composition.ts owns which fetch to wire and always passes `navigator`.
 export function createBrowserGeolocation(
-  // biome-ignore lint/style/useDefaultParameterLast: see note above; fetchNearby has no safe default.
-  nav: { geolocation?: Geolocation } = navigator,
+  nav: { geolocation?: Geolocation },
   fetchNearby: NearbyStoreFetch,
 ): GeolocationPort {
   return {
