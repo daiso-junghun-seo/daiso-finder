@@ -79,6 +79,12 @@
 - **스테일 주석:** `src/ui/AvailabilitySurface.tsx` 어댑터-배선 주석. **✅ 정리 완료(커밋 `f9ee11e`)** — 컴포지션 기반(prod=live/dev=mock) 정확히 기술.
 - **툴체인 결정(앱 소유):** 플랜 verbatim 코드가 설치된 TS 5.9.3에서 `iv:Uint8Array` → `Uint8Array<ArrayBuffer>` 협소화 필요(커밋 `c7cd306`, 동작 동일). 앱 소유 구현 결정.
 
+**제품/UX 갭 & 제안 (2026-07-23, 로컬 라이브 테스트 중 owner 발견 — 철학/플로우 → Bible 라우팅):**
+
+- **① 상품 후보 disambiguation 미구현 (Canon 정의됨, live-data 범위서 deferred):** `/api/availability`가 키워드 → `SearchGoods` **최상위 1건(`docs[0]`)만** 골라 재고 확인 → 여러 상품이 매칭되는 키워드(예: "밀폐용기")에서 **나머지 후보는 표시/선택 불가**. Canon(`increment-0-1-normative-brief.md §130` / spec `CandidateList(AI)`)은 **AI 해석 Medium 확신도 → 후보 최대 3("이걸 찾으시나요?")** + **`직접 검색 결과 보기` 오버라이드(항상 노출·즉시·영구)** 로 해소하도록 정의하나 **둘 다 미구현**(fallback-first 원칙상 리터럴 top-match만 먼저 구축, AI/후보/오버라이드 deferred). 백엔드는 이미 대비됨 — `storeStockRepository`가 `{strCd,keyword,pdNo}` 전송 + 프록시 `body.pdNo ?? product.pdNo` → **UI 후보 리스트 + 오버라이드만 추가하면** "후보 선택 → 그 pdNo 재조회" 성립. **정직성 갭**: 여러 매칭 중 고른 상품을 THE 답처럼 표기하며 모호성을 미노출(Canon의 후보/오버라이드가 바로 이 방지 장치). → **AI/후보 UX·카피=Bible 정의; 구현 우선순위·타이밍은 owner 결정.**
+
+- **② "반대형" 플로우 제안 — 상품 우선 → 어느 매장에 있나 (store-finder) [owner 제안, → Bible RFC 필수]:** 현재는 **store-first**(매장 고정 → 이 상품 여기 있나). owner 제안 = 반대형(상품 → 재고 있는 (근처) 매장 목록). **데이터/인프라 성립**: `selStrPkupStck`가 `[{pdNo,strCd}]` **배치**라 다-매장 일괄 조회 가능 + 매장검색·재고 인프라 존재. **그러나 앱 임의 구현 금지 — 철학/플로우 변경이라 Bible RFC 대상**: (a) 코어 프레이밍이 **"in-aisle, 폰 든 쇼퍼, 이게 여기 지금 있나"** 인데 반대형은 **여행-계획형**으로 재정의; (b) **Anti-goal 2**("대안·근처매장 재고는 **부정 답 이후에만**, 긍정 답 옆에 절대 금지")와 1차-진입으로 직접 충돌; (c) Flow 3(Alternative Discovery)에 "근처 매장 재고"가 이미 있으나 **부정-답 게이트** 뒤. → **Bible에서 "in-aisle 코어 vs store-finder 확장(어느 매장 조회 범위=GPS-근처 vs 전체)"을 RFC로 결정한 뒤 앱이 구현.** (관련 미구현: GPS-근처 실배선.)
+
 ---
 
 ## C. 가설 — 필드 검증 (구현 블로커 아님, 출시-후)
