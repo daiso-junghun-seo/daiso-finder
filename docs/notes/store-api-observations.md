@@ -152,3 +152,31 @@ owner 승인 하에 실 daisomall에 **읽기 전용** 프로브(세션 토큰 �
 - **결론**: 빈 `data[]`(배치에선 해당 행 누락) = **그 매장이 그 상품을 취급하지 않음.** 엔드포인트는 취급 (pdNo,strCd) 쌍만 행으로 반환. → 프록시 `fetchStock`의 "ok-but-empty = notCarried" 가정 **라이브 검증됨**(직영 미취급 = 빈 `data[]`).
 
 **요청 총계: 11.** 재발급(401/403) 미발생.
+
+## 라이브 스모크 검증 III (2026-07-23 — `pdImgUrl` 절대 호스트 확인)
+
+`SearchGoods` 문서의 `pdImgUrl`이 **상대경로**(`/file/PD/...`)만 반환 → 렌더 가능한 절대 URL의 호스트를 **읽기 전용**으로 확인. Node 런타임, `searchTerm=밀폐용기`로 `searchGoodsUrl`이 만드는 대로(www 호스트, 쿠키만, Bearer 없음) GET 1회 + 후보 호스트 프로브. **총 6 요청**(SearchGoods 1 · 이미지 후보 GET 4 · 2차 이미지 확인 1).
+
+### 확정: 이미지 CDN 호스트 = `https://cdn.daisomall.co.kr` ✅
+
+- `pdImgUrl`의 상대경로에 **`https://cdn.daisomall.co.kr`** 를 붙이면 **HTTP 200 + `content-type: image/jpeg`**(실 이미지). 두 개의 서로 다른 상품 이미지로 재확인(len 236048, 602690).
+- **`www`/`img`/`image` 서브도메인은 전부 404**(placeholder `content-type: image/gif` 반환) — 즉 `www.daisomall.co.kr` + `pdImgUrl`은 **렌더되지 않음**(기존 문서/코드가 www를 상품 검색 호스트로 쓰는 것과는 별개; 이미지 자산은 cdn 전용).
+- SearchGoods 페이로드 본문에는 절대 이미지 호스트가 **명시되지 않음**(웹 프런트가 cdn 프리픽스를 클라이언트에서 붙이는 구조로 추정) — 그래서 후보 프로브로 확정.
+- 예시 full URL: `https://cdn.daisomall.co.kr/file/PD/20231128/dgqGW6SxU7IxQocIvuBh1031166_00_00dgqGW6SxU7IxQocIvuBh.jpg` (pdNo `1031166`, 세로형 밀폐용기 2.8 L).
+- 경로 포맷 일관: `/file/PD/{YYYYMMDD}/{hash}{pdNo}_00_00{hash}.jpg` — 30/30 문서 모두 이 패턴(날짜 세그먼트만 상이).
+
+### 후보-리스트(candidate row) 필드 특성
+
+- **결과 건수 = 다건**: `cntPerPage=30`로 `resultSet.result[]`에 **2 그룹, 총 30 `resultDocuments`** 반환(단건 아님). 프록시 `firstProductDoc`는 첫 문서만 취하지만, 후보 리스트 UI는 30건 전체를 쓸 수 있음.
+- **후보 행 유용 필드**(doc[0] 실측 예):
+  - `pdNo`: `"1031166"` — 매장 조회 키(selStrPkupStck/selIntPdStDispInfo).
+  - `pdNm` / `exhPdNm`: `"세로형 밀폐용기 2.8 L"` (관측 상품들에서 동일값).
+  - `pdPrc`: `"2000"` (string, 원).
+  - `pdImgUrl`: `"/file/PD/20231128/dgqGW6SxU7IxQocIvuBh1031166_00_00dgqGW6SxU7IxQocIvuBh.jpg"` (→ cdn 프리픽스 필요).
+  - `brndNm`: `""` (관측 상품 다수 공란).
+  - `onlyOnlYn`: `"N"` (온라인 전용 여부; doc[1] `B202505134737`는 `"Y"`).
+  - `MASTER_PD_NO`: `""` (base 상품); `B…` 변형 문서는 여기에 base pdNo(`"1031166"`)를 담음.
+  - (참고) `sleStsCd`=`"03"`(**카탈로그** 상태 — 매장 상태 아님, §SearchGoods 경고 참조), `soldOutYn`/`ONL_STCK_QY`=온라인 재고.
+- **`B…` 변형 주의**: doc[1] `pdNo:"B202505134737"`는 동일 상품의 대량/온라인 변형으로 **같은 `pdImgUrl`·`pdNm`**을 갖고 `MASTER_PD_NO:"1031166"`으로 base를 가리킴, `pdPrc`만 상이(24000). 후보 리스트에서 base와 중복 노출 가능 → `MASTER_PD_NO`로 접기 고려.
+
+**요청 총계: 6.** 인증 미사용(www 쿠키-only).
