@@ -91,6 +91,72 @@ test('direct store: fans out and returns a normalized inStock observation with n
   });
 });
 
+test('pdNo-identity: an explicit pdNo picks that doc for identity (not docs[0])', async () => {
+  const OTHER = {
+    pdNo: '19989',
+    pdNm: '밀폐용기 6P 세트',
+    exhPdNm: '밀폐용기 6P 세트',
+    pdPrc: '5000',
+    pdImgUrl: '/file/PD/other.jpg',
+  };
+  route([
+    ['/auth/request', authOk],
+    ['SearchGoods', searchOk([PROD, OTHER])],
+    [
+      '/ms/msg/selStr',
+      () => new Response(JSON.stringify({ strCd: '10803', directYn: 'Y' }), { status: 200 }),
+    ],
+    [
+      '/pdo/selIntPdStDispInfo',
+      () =>
+        new Response(JSON.stringify({ data: [{ zoneNo: '56', stairNo: '11' }] }), { status: 200 }),
+    ],
+    [
+      '/pd/pdh/selStrPkupStck',
+      () =>
+        new Response(JSON.stringify({ data: [{ sleStsCd: '1', stck: '50' }] }), { status: 200 }),
+    ],
+  ]);
+  const res = await onRequestPost(req({ strCd: '10803', keyword: '밀폐용기', pdNo: '19989' }));
+  const body = (await res.json()) as {
+    data: { pdNo: string; productName: string; price: number; imageUrl: string | null };
+  };
+  expect(body.data.pdNo).toBe('19989');
+  expect(body.data.productName).toBe('밀폐용기 6P 세트');
+  expect(body.data.price).toBe(5000);
+  expect(body.data.imageUrl).toBe('https://cdn.daisomall.co.kr/file/PD/other.jpg');
+});
+
+test('pdNo-identity: an unmatched explicit pdNo falls back to docs[0] identity (existing behavior)', async () => {
+  route([
+    ['/auth/request', authOk],
+    ['SearchGoods', searchOk([PROD])],
+    [
+      '/ms/msg/selStr',
+      () => new Response(JSON.stringify({ strCd: '10803', directYn: 'Y' }), { status: 200 }),
+    ],
+    [
+      '/pdo/selIntPdStDispInfo',
+      () =>
+        new Response(JSON.stringify({ data: [{ zoneNo: '56', stairNo: '11' }] }), { status: 200 }),
+    ],
+    [
+      '/pd/pdh/selStrPkupStck',
+      () =>
+        new Response(JSON.stringify({ data: [{ sleStsCd: '1', stck: '50' }] }), { status: 200 }),
+    ],
+  ]);
+  const res = await onRequestPost(
+    req({ strCd: '10803', keyword: '밀폐용기', pdNo: 'no-such-pdno' }),
+  );
+  const body = (await res.json()) as { data: { pdNo: string; productName: string; price: number } };
+  // The requested (unmatched) pdNo still echoes through the pre-existing `body.pdNo ?? product.pdNo`
+  // line (unchanged) — this test is only about which doc supplies productName/price identity.
+  expect(body.data.pdNo).toBe('no-such-pdno');
+  expect(body.data.productName).toBe('리빙 밀폐용기 1.2L');
+  expect(body.data.price).toBe(2000);
+});
+
 test('franchise with no display zone: stock NOT fetched (stck null), locations empty', async () => {
   let stckCalled = false;
   route([

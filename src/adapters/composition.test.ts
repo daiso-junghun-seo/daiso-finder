@@ -1,4 +1,9 @@
-import { createGeolocation, createStoreDirectory, createStoreStockRepository } from './composition';
+import {
+  createGeolocation,
+  createProductSearch,
+  createStoreDirectory,
+  createStoreStockRepository,
+} from './composition';
 import { mockAnswers } from './mock/fixtures';
 
 test('DEV/test build wires the keyword mock repository', async () => {
@@ -70,6 +75,38 @@ test('DEV/test build wires geolocation to the mock store list without hitting th
   } finally {
     globalThis.fetch = originalFetch;
     geo.restore();
+  }
+});
+
+test('DEV/test build wires the mock product search', async () => {
+  const originalFetch = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = (async () => {
+    called = true;
+    return new Response(JSON.stringify({ candidates: [] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    await expect(createProductSearch().search('밀폐용기')).resolves.toHaveLength(3);
+    expect(called).toBe(false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('PROD build wires the live /api/search adapter', async () => {
+  vi.stubEnv('PROD', true);
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (url: RequestInfo | URL) => {
+    calls.push(String(url));
+    return new Response(JSON.stringify({ candidates: [] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    await createProductSearch().search('밀폐용기');
+    expect(calls.some((u) => u.includes('/api/search'))).toBe(true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    vi.unstubAllEnvs();
   }
 });
 

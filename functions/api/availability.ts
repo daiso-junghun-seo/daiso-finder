@@ -57,17 +57,31 @@ interface SearchDoc {
 interface SearchGoodsPayload {
   resultSet?: { result?: Array<{ resultDocuments?: SearchDoc[] }> };
 }
-function firstProductDoc(p: SearchGoodsPayload): SearchDoc | null {
-  for (const g of p?.resultSet?.result ?? []) {
+// pdNo-identity: when a specific pdNo is given (candidate re-query), product identity must come from
+// THAT doc, not docs[0] — otherwise picking candidate #3 would show #1's name/image with #3's stock.
+// No pdNo (or no match for the given pdNo) → docs[0], preserving the original keyword-only behavior.
+function pickProductDoc(p: SearchGoodsPayload, pdNo?: string): SearchDoc | null {
+  const groups = p?.resultSet?.result ?? [];
+  if (pdNo) {
+    for (const g of groups) {
+      const match = (g?.resultDocuments ?? []).find((d) => String(d?.pdNo ?? '') === pdNo);
+      if (match) return match;
+    }
+  }
+  for (const g of groups) {
     const docs = g?.resultDocuments ?? [];
     if (docs.length > 0 && docs[0]) return docs[0];
   }
   return null;
 }
-async function searchGoods(wwwBase: string, keyword: string): Promise<Product | null> {
+async function searchGoods(
+  wwwBase: string,
+  keyword: string,
+  pdNo?: string,
+): Promise<Product | null> {
   const res = await fetch(searchGoodsUrl(wwwBase, keyword), { method: 'GET' });
   if (!res.ok) throw new Error(`SearchGoods ${res.status}`);
-  const doc = firstProductDoc((await res.json()) as SearchGoodsPayload);
+  const doc = pickProductDoc((await res.json()) as SearchGoodsPayload, pdNo);
   if (!doc) return null; // 0 results → noMatch
   const price = Number(doc.pdPrc);
   return {
@@ -177,7 +191,7 @@ export async function onRequestPost(context: {
   if (!strCd || !keyword) return jsonResponse({ error: 'bad_request' }, 400);
 
   // Wave 1 (parallel): product identity, franchise flag, auth handshake.
-  const productP = searchGoods(cfg.wwwBase, keyword);
+  const productP = searchGoods(cfg.wwwBase, keyword, body.pdNo);
   const directYnP = fetchDirectYn(cfg.fapiBase, strCd);
   const authP = requestAuth({ fapiBase: cfg.fapiBase, encKey: cfg.encKey });
   directYnP.catch(() => {}); // guard late rejections while we resolve product first

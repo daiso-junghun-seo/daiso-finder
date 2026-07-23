@@ -1,5 +1,5 @@
 // src/domain/ports.ts
-import type { AvailabilityAnswer, StoreContext } from './types';
+import type { AvailabilityAnswer, ProductCandidate, StoreContext } from './types';
 
 export interface StoreStockRepository {
   query(
@@ -22,4 +22,9 @@ export interface SearchAliasResolverPort {
 // adapter is deferred behind this seam (open-questions.md B16/A9) — only the mock exists today.
 export interface StoreDirectoryPort {
   searchStores(query: string): Promise<StoreContext[]>;
+}
+
+// Literal product search for the pre-answer candidate list (fallback-first; no AI confidence model).
+export interface ProductSearchPort {
+  search(keyword: string): Promise<ProductCandidate[]>;
 }
