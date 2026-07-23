@@ -5,6 +5,7 @@ import type { Ref } from 'react';
 import type { DataOwnerPolicy } from '../domain/policy';
 import type { AvailabilityAnswer, UiState } from '../domain/types';
 import { GlassSurface } from './components/GlassSurface';
+import { ProductPhoto } from './components/ProductPhoto';
 import {
   ERROR_CACHED_BANNER,
   ERROR_NO_CACHE_BODY,
@@ -29,13 +30,6 @@ import {
 import { formatLocation, formatPrice, formatRelativeTimeKo } from './format';
 
 type NonDefaultUiState = Exclude<UiState, { state: 'default' }>;
-
-// Renders the product photo when the vendor supplied one; never a fake placeholder when absent (honest,
-// no fabricated imagery — empty-slot styling is UI-polish follow-up). alt = product name (Bible §접근성).
-function ProductPhoto({ imageUrl, name }: { imageUrl?: string; name: string }) {
-  if (!imageUrl) return null;
-  return <img className="product-photo" src={imageUrl} alt={name} />;
-}
 
 export function AnswerCard({
   ui,

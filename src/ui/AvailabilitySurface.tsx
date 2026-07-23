@@ -2,24 +2,27 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   createGeolocation,
+  createProductSearch,
   createStoreDirectory,
   createStoreStockRepository,
 } from '../adapters/composition';
 import { type Scenario, mockAnswers } from '../adapters/mock/fixtures';
 import { createMockRepository } from '../adapters/mock/mockRepository';
 import { defaultPolicy } from '../domain/policy';
-import type { StoreContext, StoreEvent, UiState } from '../domain/types';
+import type { ProductCandidate, StoreContext, StoreEvent, UiState } from '../domain/types';
 import { createIndexedDbCache } from '../infra/cache-storage';
 import { createQueryRunner } from '../infra/query-cache';
 import { loadStoreContext } from '../infra/store-context';
 import { AnswerCard } from './AnswerCard';
 import { LiveRegion } from './a11y/LiveRegion';
+import { CandidateList } from './components/CandidateList';
 import { GlassSurface } from './components/GlassSurface';
 import { StoreContextLine } from './components/StoreContextLine';
 import { StoreSelectionSheet } from './components/StoreSelectionSheet';
 import {
   DEFAULT_HEADLINE,
   RECENT_SEARCHES_LABEL,
+  RESULTS_NOTICE,
   SCAN_BUTTON_LABEL,
   SEARCH_PLACEHOLDER,
   announcementFor,
@@ -34,6 +37,9 @@ const PLACEHOLDER_STORE = { strCd: '0', strNm: '명동역점' };
 // in prod builds and the mocks in dev/test. GPS only recommends nearby stores (A9) — it never sets the store.
 const storeDirectory = createStoreDirectory();
 const browserGeolocation = createGeolocation();
+// Literal product search for the search-first candidate flow: the composition root selects the live
+// /api/search adapter in prod, the mock (3 fixture candidates on "밀폐용기") in dev/test.
+const productSearch = createProductSearch();
 
 // Dev-only scenario switch driving the mock pipeline for the Playwright sweep. NOT production routing —
 // Flow-1 entry/search/store-selection landed in Phase 5; this harness remains the E2E state sweep.
@@ -78,11 +84,16 @@ async function runScenario(scenario: string, dispatch: (event: StoreEvent) => vo
   dispatch(event);
 }
 
-// Testability seam for runQuery: production always uses the live keyword pipeline; tests inject a
-// controllable-latency runner to exercise the staleness guard below.
-export type QueryOutcomeRunner = (store: StoreContext, keyword: string) => Promise<StoreEvent>;
+// Testability seam for runQuery/runByPdNo: production always uses the live keyword/pdNo pipeline;
+// tests inject a controllable-latency runner to exercise the staleness guard below. pdNo is optional —
+// the 0/1-candidate paths in runQuery pass it only when a single literal candidate was chosen.
+export type QueryOutcomeRunner = (
+  store: StoreContext,
+  keyword: string,
+  pdNo?: string,
+) => Promise<StoreEvent>;
 
-const liveQueryRunner: QueryOutcomeRunner = (store, keyword) => {
+const liveQueryRunner: QueryOutcomeRunner = (store, keyword, pdNo) => {
   const cache = createIndexedDbCache();
   const now = () => Date.now();
   return createQueryRunner({
@@ -90,7 +101,7 @@ const liveQueryRunner: QueryOutcomeRunner = (store, keyword) => {
     cache,
     policy: defaultPolicy,
     now,
-  }).run(store, { keyword });
+  }).run(store, { keyword, pdNo });
 };
 
 // A late outcome may land only while the surface is still waiting for THIS run: same loading query
@@ -114,19 +125,48 @@ export function isCurrentRun(
 // authoritative (F6). It is process-wide and only ever increases; no test depends on its absolute value.
 let latestRunToken = 0;
 
-// Live typed-search pipeline: the composition root selects the /api/availability adapter in prod (mock in
-// dev/test), behind the same runner/cache. Every 다시 확인 re-runs this verbatim with the retained query (B15).
+// Testability seam for runQuery's search step (search-first flow): production searches the live/mock
+// ProductSearchPort; tests inject a controllable search to exercise the candidate-count branches below.
+export type CandidateSearch = (keyword: string) => Promise<ProductCandidate[]>;
+
+// Live typed-search pipeline (search-first, Interface §copy-table AI-low): every submitted keyword is
+// searched for literal candidates FIRST. ≥2 → show the candidate list (a pre-answer state; picking one
+// re-queries via runByPdNo). 0 or 1 → fall straight through to the availability pipeline — 1 candidate
+// carries its own pdNo+name (an unambiguous literal match skips the extra tap); 0 falls back to the raw
+// keyword (→ noMatch/answer/FAILURE+cache, same as before candidates existed). Every 다시 확인 re-runs
+// this verbatim with the retained query (B15).
 export async function runQuery(
   store: StoreContext,
   keyword: string,
   dispatch: (event: StoreEvent) => void,
-  runner: QueryOutcomeRunner = liveQueryRunner,
+  deps: { search?: CandidateSearch; runner?: QueryOutcomeRunner } = {},
 ) {
+  const search = deps.search ?? ((k: string) => productSearch.search(k));
+  const runner = deps.runner ?? liveQueryRunner;
   const token = ++latestRunToken;
-  dispatch({ type: 'SUBMIT', query: keyword });
+  dispatch({ type: 'SUBMIT', query: keyword }); // → loading(query=keyword)
+  let candidates: ProductCandidate[];
+  try {
+    candidates = await search(keyword);
+  } catch {
+    // A search failure degrades to "no literal candidates" — falls through to the keyword availability
+    // path below rather than hanging or erroring the whole run (F1: never a silent hang).
+    candidates = [];
+  }
+  if (token !== latestRunToken) return; // superseded while searching
+  if (candidates.length >= 2) {
+    if (!isCurrentRun(useAvailabilityStore.getState(), { keyword, strCd: store.strCd })) return;
+    dispatch({ type: 'CANDIDATES', query: keyword, candidates });
+    return;
+  }
+  // 0 or 1 candidate → availability. 1: use the chosen product's pdNo+name (unambiguous literal match).
+  // 0: keyword only (→ noMatch, or an answer, or FAILURE+cache — unchanged from the pre-candidates path).
+  const [onlyCandidate] = candidates;
+  const pdNo = onlyCandidate?.pdNo;
+  const runKeyword = onlyCandidate?.name ?? keyword;
   let event: StoreEvent;
   try {
-    event = await runner(store, keyword);
+    event = await runner(store, runKeyword, pdNo);
   } catch {
     // Never a silent hang (Interface §3): a runner that THROWS (e.g. IndexedDB unavailable inside
     // the runner's own failure path) still resolves the surface to error/noCache.
@@ -134,8 +174,34 @@ export async function runQuery(
   }
   // A newer run superseded this one (same keyword resubmitted, or a different one) → drop this outcome.
   if (token !== latestRunToken) return;
-  // A non-run state change (selectStore → Default) also invalidates the run; isCurrentRun catches those.
+  // isCurrentRun compares against the LOADING state's query, which is the ORIGINAL submitted keyword —
+  // NOT runKeyword. In the 1-candidate path runKeyword is the candidate's name, which never equals the
+  // loading query; comparing against it would always mismatch and silently drop every 1-candidate outcome.
   if (!isCurrentRun(useAvailabilityStore.getState(), { keyword, strCd: store.strCd })) return;
+  dispatch(event);
+}
+
+// Candidate-tap pipeline: the shopper picked one literal candidate out of the list runQuery surfaced.
+// Re-queries availability directly by pdNo+name — no re-search (the candidate IS the chosen product).
+export async function runByPdNo(
+  store: StoreContext,
+  candidate: ProductCandidate,
+  dispatch: (event: StoreEvent) => void,
+  runner: QueryOutcomeRunner = liveQueryRunner,
+) {
+  const token = ++latestRunToken;
+  dispatch({ type: 'SELECT_CANDIDATE', query: candidate.name, pdNo: candidate.pdNo }); // → loading(query=candidate.name)
+  let event: StoreEvent;
+  try {
+    event = await runner(store, candidate.name, candidate.pdNo);
+  } catch {
+    event = { type: 'FAILURE', cache: { kind: 'noCache' } };
+  }
+  if (token !== latestRunToken) return;
+  if (
+    !isCurrentRun(useAvailabilityStore.getState(), { keyword: candidate.name, strCd: store.strCd })
+  )
+    return;
   dispatch(event);
 }
 
@@ -252,6 +318,37 @@ export function AvailabilitySurface() {
               </ul>
             </div>
           )}
+          {searchBar}
+        </div>
+        {sheetOpen && (
+          <>
+            <div className="sheet-scrim" aria-hidden="true" />
+            {sheet}
+          </>
+        )}
+      </main>
+    );
+  }
+
+  // Pre-answer literal candidates (search-first): rendered BEFORE the answer-card branch below — a
+  // candidate list is not an AvailabilityAnswer, so AnswerCard never mounts for it (Interface §copy-table
+  // AI-low; honesty — candidate rows never show availability, only after a tap via runByPdNo).
+  if (ui.state === 'candidates') {
+    return (
+      <main>
+        <div className="surface-content" inert={backgroundInert}>
+          <GlassSurface className="store-context-surface">
+            <StoreContextLine
+              store={store}
+              onChangeStore={openSheet}
+              changeButtonRef={changeStoreRef}
+            />
+          </GlassSurface>
+          <LiveRegion message={RESULTS_NOTICE} />
+          <CandidateList
+            candidates={ui.candidates}
+            onSelect={(c) => void runByPdNo(store, c, dispatch)}
+          />
           {searchBar}
         </div>
         {sheetOpen && (

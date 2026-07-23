@@ -25,6 +25,18 @@ test.beforeEach(async ({ page }) => {
 test('real adapter → /api/availability (fixture) → mapStoreObservation → inStock surface', async ({
   page,
 }) => {
+  // PROD build now runs search-first: /api/search is called BEFORE /api/availability. A single
+  // candidate is unambiguous — runQuery proceeds straight through to availability with its pdNo, no
+  // tap needed.
+  await page.route('**/api/search', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        candidates: [{ pdNo: '19987', name: '리빙 밀폐용기 1.2L', price: 2000, imageUrl: null }],
+      }),
+    }),
+  );
   await page.route('**/api/availability', (route) =>
     route.fulfill({
       status: 200,
@@ -41,6 +53,14 @@ test('real adapter → /api/availability (fixture) → mapStoreObservation → i
 });
 
 test('proxy noMatch → Bible empty state', async ({ page }) => {
+  // Zero candidates → search-first falls through to the raw keyword against /api/availability, unchanged.
+  await page.route('**/api/search', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ candidates: [] }),
+    }),
+  );
   await page.route('**/api/availability', (route) =>
     route.fulfill({
       status: 200,

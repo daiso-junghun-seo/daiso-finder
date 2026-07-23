@@ -5,6 +5,9 @@ import { expect, test } from '@playwright/test';
 const EMPTY_BODY =
   "'락앤락같은통'(으)로 등록된 상품을 찾지 못했어요. 바코드를 스캔하거나 다른 이름으로 검색해 보세요.";
 
+// Bible-verbatim literal-results notice (Interface §copy-table AI-low; RESULTS_NOTICE in src/ui/copy.ts).
+const RESULTS_NOTICE = '검색 결과예요. 바코드를 스캔하면 더 정확해요.';
+
 test.describe('with a persisted store context', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
@@ -15,11 +18,22 @@ test.describe('with a persisted store context', () => {
     });
   });
 
-  test('typing 밀폐용기 and submitting ends in Success', async ({ page }) => {
+  // DEV build runs the mock ProductSearchPort (createMockProductSearch), which returns 3 candidates for
+  // "밀폐용기" — search-first shows the candidate list before any answer; picking a candidate re-queries
+  // by pdNo and lands on Success (the keyword-mock repo matches 리빙 밀폐용기 1.2L to inStock).
+  test('typing 밀폐용기 and submitting shows the candidate list, then tapping a candidate ends in Success', async ({
+    page,
+  }) => {
     await page.goto('/');
     const input = page.getByLabel('상품 검색');
     await input.fill('밀폐용기');
     await input.press('Enter');
+    // RESULTS_NOTICE renders in both the visible CandidateList <p> and the hidden a11y LiveRegion —
+    // scope to the paragraph to avoid a strict-mode multiple-match.
+    await expect(page.locator('p', { hasText: RESULTS_NOTICE })).toBeVisible();
+    const candidateRow = page.getByRole('button', { name: /리빙 밀폐용기 1\.2L/ });
+    await expect(candidateRow).toBeVisible();
+    await candidateRow.click();
     await expect(page.getByText('이 매장에 있어요').first()).toBeVisible();
   });
 

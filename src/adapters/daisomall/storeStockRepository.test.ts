@@ -16,6 +16,21 @@ test('a { data } observation is validated and mapped to the domain answer', asyn
   expect(await repo.query(store, { keyword: '밀폐용기' })).toEqual(mockAnswers.inStock);
 });
 
+test('a pdNo term is forwarded on the POST body (candidate-tap re-query)', async () => {
+  const fetchImpl: FetchLike = async (_url, init) => {
+    expect(JSON.parse(init.body)).toEqual({
+      strCd: '10803',
+      keyword: '리빙 밀폐용기 1.2L',
+      pdNo: '19987',
+    });
+    return ok({ data: observationFixtures.inStock });
+  };
+  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  expect(await repo.query(store, { keyword: '리빙 밀폐용기 1.2L', pdNo: '19987' })).toEqual(
+    mockAnswers.inStock,
+  );
+});
+
 test('{ noMatch: true } → NoCatalogMatchError (→ NO_MATCH → Empty)', async () => {
   const repo = createDaisoStoreStockRepository({ fetchImpl: async () => ok({ noMatch: true }) });
   await expect(repo.query(store, { keyword: '없는상품' })).rejects.toBeInstanceOf(
