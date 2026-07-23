@@ -6,7 +6,7 @@
 
 **Increment 0(PWA 셸) + Flow 1(Availability Check) 코어 + 실 데이터 배선 + 라이브 스모크 검증까지 완료 — 전부 `main`에 로컬 머지(원격 푸시·공개 배포 없음).** 앱은 **로컬에서 실 daisomall 데이터로 전체 플로우가 동작**한다(`npm run dev:live`, dev-proxy). 단 **프로덕션 배포는 런타임 차단 + ToS 게이트로 대기 중**(아래 🔴).
 
-**게이트(main 현재, tip `18cda38`)**: vitest **251/251**, tsc clean, biome clean, Playwright **17/17**(dev 14 + preview 3). src+dist에 시크릿 부재.
+**게이트(main 현재, tip `e349668`)**: vitest **280/280**, tsc clean, biome clean, Playwright **17/17**(dev 14 + preview 3). src+dist에 시크릿 부재.
 
 ### 완료된 것 (main, 시간순)
 - **Increment 0 + Flow 1 코어(mock)** — 6상태 UI·Bible-verbatim 카피·D082 매장선택·D083 glass·타이핑 검색·재시도. (머지 `c318e8a`)
@@ -17,6 +17,7 @@
   - **GPS-근처 실배선** (`3ab356f`): `/api/stores` 근처-모드 분기(검색-모드 무변경) + 실 GPS + `createDaisoNearbyFetch`(km→distanceM 어댑터층) + `createGeolocation()` PROD/mock 스위치. **B16 라이브 배선 완료.** GPS는 추천만(전 실패경로 `[]`), `GeolocationPort` 불변.
   - **최근 검색** (`280c96c`): 로컬 `localStorage` 정확-문자열 dedup·MAX_ENTRIES=5·빈목록 캡션미표시·정직 열화. 카피 `"최근 검색"`=Bible 정본. **B28(앱 소유)**.
   - 통합 fast-follow (`18cda38`): 리뷰 findings(nav required·낡은 주석) 반영. 결합 게이트 GREEN: unit **251**·e2e **17**·tsc·biome clean.
+- **리터럴 다중후보 + 상품 이미지**(2026-07-23, main tip `e349668` — 4-태스크 순차 SDD + opus 전체-브랜치 리뷰 "Ready:Yes"): user 지적("검색이 상품 1개만·이미지 없음") 해소. **Bible 기설계의 앱 구현**(6상태·판정 로직 불변). `pdImgUrl`→cdn 절대화(프록시)→계약(양쪽 미러)→매퍼→`ProductPhoto`(AnswerCard+후보행 공유, 없으면 렌더 안 함) + 신규 `/api/search`(쿠키-only·B-변형 폴딩) + `candidates` pre-answer 상태 + 검색-우선 `runQuery`(0/1/≥2 분기)·`runByPdNo` + availability **pdNo-identity 버그 수정**. notice=Bible 정본 `검색 결과예요. 바코드를 스캔하면 더 정확해요.`(AI-low; `이걸 찾으시나요?` 미사용=confidence-washing 회피). 앱 결정·후속 = `open-questions §B29`. 커밋 `0706c1b`·`cc76346`·`896f4a8`·`e349668`.
 
 ### 🔴 런타임 차단 발견 (2026-07-23) — 프로덕션 아키텍처 결정
 daisomall anti-abuse가 **auth-protected 엔드포인트(selStrPkupStck·selIntPdStDispInfo)에서 Cloudflare Workers(workerd)의 TLS/HTTP 지문을 403 차단**한다. 우리 WebCrypto Bearer는 정확(node:crypto와 byte-identical, **node에서 200 수락**)하나 **workerd에서 403** — 쿠키·UA·Origin·`cf-*` 헤더 전부 배제(같은 IP). JA3=런타임 속성 → **프로덕션 CF Pages도 차단 공산 큼**. 영향: workerd에서 `/api/stores`(무인증) OK, `/api/availability`(인증) 502.
@@ -34,7 +35,7 @@ daisomall anti-abuse가 **auth-protected 엔드포인트(selStrPkupStck·selIntP
 
 1. **[게이트: owner ToS/robots 검토] 프로덕션 런타임 = 실 서빙** — ToS 통과 시 **gpu01 배포**(런북 `docs/deploy/gpu01-node-proxy.md`대로; C prep·서버·런북 완료). 앱을 "실제"로 만드는 1순위 토대. *(B 프로덕션 CF 확인은 skip 결정 — 필요 시 `wrangler login`+ToS로 일회용 프로브. 거의 확실히 403 예상.)*
 2. **[게이트: owner Bible 세션] 플로우 결정** — (a) **반대형 store-finder RFC**(`docs/notes/rfc-reverse-store-finder.md`, gated-extension lean; Anti-goal 2 충돌) 결정, (b) **상품 후보 disambiguation 방식**(AI 해석 레이어 vs 리터럴 후보+`직접 검색 결과 보기` 오버라이드)·카피 확정.
-3. **지연 기능층**: ~~GPS-근처 매장 실배선~~(✅ 2026-07-23 `18cda38`) · ~~최근 검색~~(✅ 2026-07-23 `18cda38`) · **남음** — AI 검색어 해석 레이어(fallback-first 1s·확신도 티어, **플로우 결정=item 2 게이트**) · 바코드 스캔 진입 · 재입고 구독(로그인 게이트) · 다국어 입력 별칭(A4).
+3. **지연 기능층**: ~~GPS-근처 매장 실배선~~(✅ `18cda38`) · ~~최근 검색~~(✅ `18cda38`) · ~~리터럴 다중후보 + 상품 이미지~~(✅ `e349668` — 갭① disambiguation의 **리터럴 레벨 완료**) · **남음** — AI 검색어 해석 레이어(fallback-first 1s·확신도 **자동 티어링**: High/Medium 전환·"이걸 찾으시나요?"·임계값; 갭①의 AI 부분, **`AI/availability-check.md` 계약·임계값=Bible Hypothesis/현장검증**) · 바코드 스캔 진입 · 재입고 구독(로그인 게이트) · 다국어 입력 별칭(A4) · candidate-quality 튜닝(§B29 M1/M2).
 4. **미해결 data-owner 항목**(심 뒤 격리): ~~`sleStsCd` 단종 `"9"`~~(✅ 관측) · ~~`selStrPkupStck` 빈 `data[]` 의미~~(✅ =매장 미취급) · **남음** — `sleStsCd` 미취급 `null`(행 부재로 표현되어 미관측) · `stck` 종류(진열 vs 픽업예약, 표본 편향으로 미해소).
 5. **UI(마지막 1마일)**: ① 상품 후보 프레젠테이션 + 후보/오버라이드 UX(카피=Bible), 프레젠테이션 폴리싱. **위 1~3이 굳은 뒤.**
 6. **배포 전**: PWA 설치 아이콘/자산(§B19, 미구현). *(오픈 릴레이/키 노출은 키가 공개 상수라 user 종결.)*
