@@ -70,6 +70,8 @@
 
 > **✅ 라이브 스모크 해소(2026-07-22, owner 승인 — 도시어 `store-api-observations.md §라이브 스모크 검증`)**: **B27 호스트정합**(fapi=auth/selStr/stck/disp · www=SearchGoods 전부 200) · **인증**(우리 Bearer 키 `"PRE_AUTH_ENC_KEY"` 공개상수로 selStrPkupStck 200 수락, 무-Bearer 403) · **selStr 좌표 optional**(무좌표 바디 200; km만 영향, 미반환이라 무관) · **selStr 상세 `data[]` 래핑** · **`sleStsCd:"1"`(정상)·`stck` 관측**·**지하 위치**(`stairNo:"-1"`) = 전부 라이브 확인, **프록시 무변경**. **잔여(심 뒤)**: `sleStsCd` 단종`"9"`/미취급`null` 미관측(해당 상품 필요)·`stck` 진열vs픽업 구분·빈 `data[]`·**ToS/robots(배포 전)**.
 
+> **🔴 런타임 차단 발견(2026-07-23, 로컬 `wrangler pages dev` vs Node dev-proxy 대조) — 아키텍처 결정 필요**: daisomall anti-abuse가 **auth-protected 엔드포인트(`selStrPkupStck`·`selIntPdStDispInfo`)에서 Cloudflare Workers(workerd)의 TLS/HTTP 지문을 403 차단**한다. 진단: 우리 WebCrypto Bearer는 node:crypto와 **바이트 완전 동일**하고 **node에서 200 수락**되나, **동일 로직이 workerd에서 403**; 쿠키·User-Agent·Origin/Referer·`cf-*` 헤더 전부 배제됨(같은 머신/IP). 지문(JA3)은 **런타임(workerd) 속성**이므로 로컬 miniflare와 프로덕션 CF Pages가 동일 → **프로덕션 CF Pages도 차단될 공산이 큼**. 영향: workerd에서 `/api/stores`(무인증)는 OK이나 `/api/availability`(인증)는 502. **(A) 로컬 테스트 수단 = `scripts/dev-proxy.mjs`(`npm run dev:live`)**: 진짜 `functions/`를 **Node 런타임**에서 실행(esbuild 번들, 재구현 아님) → node TLS 수락 → 전체 라이브 플로우 로컬 동작(availability 200 확인). **(B) 프로덕션 확정**: 일회용 CF 배포로 검증(또는 JA3 논리상 skip). **(C) 프로덕션 경로**: 인증 엔드포인트를 **Node 런타임 프록시**(k-skill gpu01 방식)로 — A가 이 런타임을 이미 검증. **공개 배포(B/C)는 ToS/robots 선결.**
+
 **추가 미해결/후속(전체-브랜치 최종 리뷰, 2026-07-22):**
 
 - **restock-무일자 카피(철학→Bible):** `mrkGdsYn:'Y'`인데 `lchDay:null`인 입고예정 행에서 `formatLchDay`가 이제 `''` 반환(→ NaN 누출 제거, 커밋 `a8da068`). **✅ 사용자 지시로 정직 해소(커밋 `21a210a`)**: 날짜 없으면 `'재입고 예정이지만 입고일은 아직 미정이에요.'`(날짜 날조 없음). Bible-owned 카피 string이므로 **정본 문구는 Bible ratification 대기**.

@@ -13,6 +13,9 @@ build/
 dev-dist/
 .vite/
 
+# Cloudflare wrangler local state (wrangler pages dev)
+.wrangler/
+
 # Env / secrets
 .env
 .env.*
