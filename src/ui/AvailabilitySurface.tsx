@@ -1,7 +1,10 @@
 // src/ui/AvailabilitySurface.tsx
 import { useEffect, useRef, useState } from 'react';
-import { createStoreDirectory, createStoreStockRepository } from '../adapters/composition';
-import { createBrowserGeolocation } from '../adapters/geolocation/browserGeolocation';
+import {
+  createGeolocation,
+  createStoreDirectory,
+  createStoreStockRepository,
+} from '../adapters/composition';
 import { type Scenario, mockAnswers } from '../adapters/mock/fixtures';
 import { createMockRepository } from '../adapters/mock/mockRepository';
 import { defaultPolicy } from '../domain/policy';
@@ -24,7 +27,7 @@ const PLACEHOLDER_STORE = { strCd: '0', strNm: '명동역점' };
 // Store directory for the D082 sheet: the composition root selects the live /api/stores adapter in prod
 // builds and the mock in dev/test. The browser geolocation stub returns [] until GPS-nearby is wired (A9).
 const storeDirectory = createStoreDirectory();
-const browserGeolocation = createBrowserGeolocation();
+const browserGeolocation = createGeolocation();
 
 // Dev-only scenario switch driving the mock pipeline for the Playwright sweep. NOT production routing —
 // Flow-1 entry/search/store-selection landed in Phase 5; this harness remains the E2E state sweep.

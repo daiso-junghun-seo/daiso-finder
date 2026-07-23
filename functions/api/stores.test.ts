@@ -48,3 +48,41 @@ test('an upstream failure → 502 upstream_unavailable', async () => {
   expect(res.status).toBe(502);
   expect(await res.json()).toEqual({ error: 'upstream_unavailable' });
 });
+
+test('nearby-mode: lat/lng present calls selStr with nearby body and maps km to a number', async () => {
+  globalThis.fetch = (async (_u: RequestInfo | URL, init?: RequestInit) => {
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      keyword: '',
+      srchYn: 'N',
+      geolocationAgrYn: 'Y',
+      curLttd: 37.5,
+      curLitd: 127.0,
+    });
+    return new Response(
+      JSON.stringify({
+        data: [{ strCd: '11043', strNm: '명동역점', km: '0.34' }],
+      }),
+      { status: 200 },
+    );
+  }) as typeof fetch;
+  const res = await onRequestPost(req({ lat: 37.5, lng: 127.0 }));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ stores: [{ strCd: '11043', strNm: '명동역점', km: 0.34 }] });
+});
+
+test('nearby-mode: no query and no lat/lng → empty list without calling upstream', async () => {
+  let called = false;
+  globalThis.fetch = (async () => {
+    called = true;
+    return new Response('{}', { status: 200 });
+  }) as typeof fetch;
+  expect(await (await onRequestPost(req({}))).json()).toEqual({ stores: [] });
+  expect(called).toBe(false);
+});
+
+test('nearby-mode: an upstream failure → 502 upstream_unavailable', async () => {
+  globalThis.fetch = (async () => new Response('', { status: 500 })) as typeof fetch;
+  const res = await onRequestPost(req({ lat: 37.5, lng: 127.0 }));
+  expect(res.status).toBe(502);
+  expect(await res.json()).toEqual({ error: 'upstream_unavailable' });
+});

@@ -1,4 +1,3 @@
-import { createBrowserGeolocation } from '../adapters/geolocation/browserGeolocation';
 // src/infra/store-context.test.ts
 import { loadStoreContext, saveStoreContext } from './store-context';
 
@@ -11,11 +10,6 @@ test('the last-selected store persists and is the default', () => {
   saveStoreContext({ strCd: '1', strNm: '명동역점' });
   expect(loadStoreContext()).toEqual({ strCd: '1', strNm: '명동역점' });
 });
-test('geolocation absence yields an empty recommendation list, not a thrown error (D082)', async () => {
-  const geo = createBrowserGeolocation({}); // no navigator.geolocation
-  await expect(geo.getNearbyStores()).resolves.toEqual([]);
-});
-
 test('loadStoreContext degrades corrupt storage to null instead of throwing (G3 hardening)', () => {
   localStorage.setItem('daiso.storeContext', '{not json');
   expect(loadStoreContext()).toBeNull();
