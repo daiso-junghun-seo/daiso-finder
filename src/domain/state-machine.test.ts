@@ -1,7 +1,7 @@
 // src/domain/state-machine.test.ts
 import { mockAnswers } from '../adapters/mock/fixtures';
 import { initialState, reduce } from './state-machine';
-import type { AvailabilityAnswer, Freshness } from './types';
+import type { AvailabilityAnswer, Freshness, ProductCandidate } from './types';
 
 const live: Freshness = { class: 'live', observedAt: 1000 };
 const loading = reduce(initialState, { type: 'SUBMIT', query: '밀폐용기' });
@@ -113,11 +113,28 @@ test('SELECT_CANDIDATE from an answer state → loading with the candidate query
     locations: [{ floor: '11', zone: '56' }],
     qtyUpperBound: 50,
   });
-  expect(reduce(success, { type: 'SELECT_CANDIDATE', query: '밀폐용기' })).toEqual({
+  expect(reduce(success, { type: 'SELECT_CANDIDATE', query: '밀폐용기', pdNo: '12345' })).toEqual({
     state: 'loading',
     query: '밀폐용기',
     slow: false,
   });
+});
+
+test('CANDIDATES → candidates state, capped at 3 with order preserved', () => {
+  const candidates: ProductCandidate[] = [
+    { pdNo: '1', name: '밀폐용기 A', price: 1000 },
+    { pdNo: '2', name: '밀폐용기 B', price: 2000 },
+    { pdNo: '3', name: '밀폐용기 C', price: 3000 },
+    { pdNo: '4', name: '밀폐용기 D', price: 4000 },
+    { pdNo: '5', name: '밀폐용기 E', price: 5000 },
+  ];
+  const next = reduce(loading, { type: 'CANDIDATES', query: '밀폐용기', candidates });
+  expect(next).toEqual({
+    state: 'candidates',
+    query: '밀폐용기',
+    candidates: candidates.slice(0, 3),
+  });
+  expect(next.state === 'candidates' && next.candidates).toHaveLength(3);
 });
 
 describe('query retention (B15)', () => {

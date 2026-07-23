@@ -145,6 +145,10 @@ export function announcementFor(
       return ui.slow ? [LOADING_CARD_COPY, LOADING_DELAY_LINE] : [LOADING_CARD_COPY];
     case 'empty':
       return [emptyBody(ui.query)];
+    case 'candidates':
+      // Unreachable: AnswerCard never renders candidates (pre-answer, surfaced elsewhere by a later
+      // task), so no announcement copy is needed here. Present only to keep this switch exhaustive.
+      return [];
     case 'error': {
       if (ui.variant === 'noCache') return [ERROR_NO_CACHE_BODY, RETRY_BUTTON];
       const facts = factsFor(ui.answer);

@@ -15,6 +15,8 @@ export function reduce(state: UiState, event: StoreEvent): UiState {
       return state.state === 'loading' ? { ...state, slow: true } : state;
     case 'NO_MATCH':
       return { state: 'empty', query: event.query, suggestions: event.suggestions.slice(0, 3) };
+    case 'CANDIDATES':
+      return { state: 'candidates', query: event.query, candidates: event.candidates.slice(0, 3) };
     case 'RESULT': {
       const query = state.state === 'loading' ? state.query : '';
       const { answer, freshness } = event;

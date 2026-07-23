@@ -10,18 +10,42 @@ export type AvailabilityAnswer =
   // qtyUpperBound = Number(qty), always the OBSERVED upper bound (data-contract §4: qty is a bound, not exact).
   // The domain always carries it; whether to surface "재고 N개 이하" is a PRESENTATION gate on policy.lowQtyCutoff
   // (Increment 1) — the provisional A3 cutoff stays out of the domain mapping and fixtures.
+  // imageUrl is optional: pure product identity, present on every kind when the vendor supplied one.
   | {
       kind: 'inStock';
       productName: string;
       price: Money;
       locations: StoreLocation[];
       qtyUpperBound: number;
+      imageUrl?: string;
     }
-  | { kind: 'temporarilyOut'; productName: string; price: Money; restockOfferable: boolean }
-  | { kind: 'discontinued'; productName: string; price: Money }
-  | { kind: 'notCarried'; productName: string }
-  | { kind: 'restockArriving'; productName: string; price: Money; lchDay: string }
-  | { kind: 'franchiseUndeterminable'; productName: string };
+  | {
+      kind: 'temporarilyOut';
+      productName: string;
+      price: Money;
+      restockOfferable: boolean;
+      imageUrl?: string;
+    }
+  | { kind: 'discontinued'; productName: string; price: Money; imageUrl?: string }
+  | { kind: 'notCarried'; productName: string; imageUrl?: string }
+  | {
+      kind: 'restockArriving';
+      productName: string;
+      price: Money;
+      lchDay: string;
+      imageUrl?: string;
+    }
+  | { kind: 'franchiseUndeterminable'; productName: string; imageUrl?: string };
+
+// A literal multi-candidate match surfaced before an answer exists (search returned several products for
+// the query). Not an AvailabilityAnswer kind — candidates are pre-answer; picking one re-queries for the
+// actual answer.
+export interface ProductCandidate {
+  pdNo: string;
+  name: string;
+  price: Money;
+  imageUrl?: string;
+}
 
 export interface StoreContext {
   strCd: string;
@@ -45,7 +69,10 @@ export type StoreEvent =
   | { type: 'NO_MATCH'; query: string; suggestions: string[] }
   | { type: 'FAILURE'; cache: CacheOutcome }
   | { type: 'SLOW' }
-  | { type: 'SELECT_CANDIDATE'; query: string }
+  | { type: 'CANDIDATES'; query: string; candidates: ProductCandidate[] }
+  // query = the display name of the selected candidate (B15: retained query for retry/loading copy).
+  // pdNo is not stashed on the loading UiState — the surface click handler consumes it directly (later task).
+  | { type: 'SELECT_CANDIDATE'; query: string; pdNo: string }
   | { type: 'DISMISS_AI' }
   | { type: 'CHANGE_STORE'; store: StoreContext };
 
@@ -54,6 +81,9 @@ export type UiState =
   | { state: 'default' }
   | { state: 'loading'; query: string; slow: boolean }
   | { state: 'empty'; query: string; suggestions: string[] }
+  // Pre-answer: search matched several products literally. Not a 7th AvailabilityAnswer kind — picking one
+  // dispatches SELECT_CANDIDATE, which re-queries for the real answer.
+  | { state: 'candidates'; query: string; candidates: ProductCandidate[] }
   | {
       state: 'error';
       variant: 'cached';

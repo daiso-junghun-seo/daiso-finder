@@ -70,6 +70,10 @@ function renderBody(
       );
     case 'empty':
       return <p className="text-body">{emptyBody(ui.query)}</p>;
+    case 'candidates':
+      // Unreachable: candidates is a pre-answer state that AvailabilitySurface renders separately
+      // (later task) — AnswerCard never receives it. Present only to keep this switch exhaustive.
+      return null;
     case 'error':
       return ui.variant === 'cached'
         ? renderErrorCached(ui.answer, ui.freshness.observedAt, nowMs, onRetry)
