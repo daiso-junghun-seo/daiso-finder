@@ -31,7 +31,14 @@ daisomall anti-abuse가 **auth-protected 엔드포인트(selStrPkupStck·selIntP
 
 **원칙(2026-07-23 owner 결정): 기능·데이터·플로우 토대를 굳힌 뒤 UI(마지막 1마일).** 이른 UI는 (a) AI 해석 레이어가 후보 disambiguation을 흡수, (b) 플로우 미확정(반대형 RFC) → rework 위험.
 
-**게이트별 우선순위:**
+### 🟢 지금 바로 착수 (게이트 무관 — 2026-07-24 owner 선택 = 언블록 슬라이스). **새 세션은 여기부터.**
+게이트(ToS·Bible)는 미결. 자율로 가능한 슬라이스, 추천 순서(UI-last 존중 — 기능/백엔드 먼저, 폴리싱 나중):
+1. **후보품질 튜닝(§B29 M1/M2)** — 작고 저위험, 방금 배송한 후보 기능 마무리. `/api/search`는 B-변형(`MASTER_PD_NO≠""`)을 폴딩하나 **`/api/availability` 0-후보 fall-through(`pickProductDoc(…,undefined)`=docs[0])는 안 함** → 일관성 위해 base 우선 선택 + `onlyOnlYn:"Y"` base 노이즈 필터 고려. 근거 = `open-questions §B29 M1/M2`, `functions/api/search.ts` foldCandidates·`functions/api/availability.ts` pickProductDoc.
+2. **바코드 스캔 진입** — Bible 무-타이핑 primary 경로(Interface §3 Interaction "Scan"; Experience 스캔 경로). 스캔→pdNo/정확상품→**기존 availability pdNo 경로 재사용**(이미 있음). **스코프 주의**: 카메라 API(iOS Safari 제약 §B9) + 바코드 디코드 — **외부 CDN 금지**라 번들 디코더 라이브러리 결정 필요(앱-소유 스택 결정 → open-questions §B 기록). 기능층이라 UI-last 부합.
+3. **UI 폴리싱(후보 리스트 + 사진 스타일)** — 방금 배송한 후보/사진은 기능·카피·a11y 완성이나 **CSS 최소(미스타일)**. `.candidate-list`·`.product-photo` 바운드 프레젠테이션 패스(카피 불변). UI-last상 1~2 뒤 또는 presentability 필요 시.
+4. **PWA 아이콘(§B19)** — 배포 전 자산, 배포가 게이트라 우선순위 낮음.
+
+**아래 게이트별 우선순위(1·2)는 owner court(ToS·Bible)** — 풀리면 그때 착수:
 
 1. **[게이트: owner ToS/robots 검토] 프로덕션 런타임 = 실 서빙** — ToS 통과 시 **gpu01 배포**(런북 `docs/deploy/gpu01-node-proxy.md`대로; C prep·서버·런북 완료). 앱을 "실제"로 만드는 1순위 토대. *(B 프로덕션 CF 확인은 skip 결정 — 필요 시 `wrangler login`+ToS로 일회용 프로브. 거의 확실히 403 예상.)*
 2. **[게이트: owner Bible 세션] 플로우 결정** — (a) **반대형 store-finder RFC**(`docs/notes/rfc-reverse-store-finder.md`, gated-extension lean; Anti-goal 2 충돌) 결정, (b) **상품 후보 disambiguation 방식**(AI 해석 레이어 vs 리터럴 후보+`직접 검색 결과 보기` 오버라이드)·카피 확정.
@@ -40,7 +47,7 @@ daisomall anti-abuse가 **auth-protected 엔드포인트(selStrPkupStck·selIntP
 5. **UI(마지막 1마일)**: ① 상품 후보 프레젠테이션 + 후보/오버라이드 UX(카피=Bible), 프레젠테이션 폴리싱. **위 1~3이 굳은 뒤.**
 6. **배포 전**: PWA 설치 아이콘/자산(§B19, 미구현). *(오픈 릴레이/키 노출은 키가 공개 상수라 user 종결.)*
 
-**재개 규칙**: 이 HANDOFF → 게이트 확인 → **첫 언블록된 순위부터**. 현재 대부분 **owner court**(ToS 검토·Bible 세션)라, 자율 진행은 게이트가 풀린 뒤 시작한다. 로컬 테스트는 언제든 `npm run dev:live`.
+**재개 규칙(새 세션)**: 이 HANDOFF → **🟢 "지금 바로 착수" 슬라이스의 추천 1번(후보품질 튜닝)부터**. 큰 수(배포·AI 티어링·반대형)는 owner court(ToS·Bible)라 게이트가 풀린 뒤. 병렬 서브에이전트로 최적화하며 진행 가능. 로컬 테스트는 언제든 `npm run dev:live`.
 
 **불변 원칙**: UI/도메인/reducer/query-runner/캐시 불변(헥사고날 심 교체만). 무-날조·정직 분리·신선도(D061)·읽기전용 준수. 키·토큰은 서버에만(커밋/클라 노출 금지). **런타임은 Node(workerd 차단)** — 클라 `/api/*` 계약은 런타임 무관하게 불변.
 
