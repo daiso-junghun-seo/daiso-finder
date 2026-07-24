@@ -68,3 +68,21 @@ export function absolutizeImageUrl(raw: unknown): string | null {
   if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
   return `${IMAGE_CDN_BASE}${raw.startsWith('/') ? '' : '/'}${raw}`;
 }
+
+// A SearchGoods doc is a "store-carryable base" when it is neither a bulk/online B-variant
+// (MASTER_PD_NO points at a base pdNo, folding onto that base — store-api-observations §라이브 스모크 III)
+// nor an online-only SKU (onlyOnlYn "Y" — store-api-observations §SearchGoods). Shared by /api/search
+// foldCandidates (exclusion) and /api/availability pickProductDoc (preference) so both endpoints agree
+// on "the base product for a keyword". Fail-open on absent/null: an unknown flag never over-excludes.
+//
+// Reversible Hypothesis-class de-noise (owner-approved 2026-07-24, open-questions §B29 M1/M2): the
+// onlyOnlYn ⇒ "store doesn't carry" reading rests on a hedged single observation (§SearchGoods,
+// onlyOnlYn:"Y"=온라인 전용/매장 미취급 후보) and is NOT cross-tabbed against selStrPkupStck stock rows
+// (§라이브 스모크 II may undercut it). So this only de-noises the catalog-level candidate list; per-store
+// carry is still decided honestly by selStrPkupStck (empty data[] ⇒ notCarried). Trivially revertible.
+export function isStoreCarryableBaseDoc(doc: {
+  MASTER_PD_NO?: unknown;
+  onlyOnlYn?: unknown;
+}): boolean {
+  return String(doc?.MASTER_PD_NO ?? '') === '' && String(doc?.onlyOnlYn ?? '') !== 'Y';
+}

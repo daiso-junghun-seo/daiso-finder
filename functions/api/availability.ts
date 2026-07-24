@@ -9,6 +9,7 @@ import {
   type UpstreamEnv,
   absolutizeImageUrl,
   badGateway,
+  isStoreCarryableBaseDoc,
   jsonResponse,
   searchGoodsUrl,
   upstreamConfig,
@@ -53,13 +54,18 @@ interface SearchDoc {
   exhPdNm?: unknown;
   pdPrc?: unknown;
   pdImgUrl?: unknown;
+  MASTER_PD_NO?: unknown;
+  onlyOnlYn?: unknown;
 }
 interface SearchGoodsPayload {
   resultSet?: { result?: Array<{ resultDocuments?: SearchDoc[] }> };
 }
 // pdNo-identity: when a specific pdNo is given (candidate re-query), product identity must come from
 // THAT doc, not docs[0] — otherwise picking candidate #3 would show #1's name/image with #3's stock.
-// No pdNo (or no match for the given pdNo) → docs[0], preserving the original keyword-only behavior.
+// No pdNo (or no match): prefer a store-carryable base doc — consistent with /api/search
+// foldCandidates so both endpoints agree on the base product for a keyword (open-questions §B29 M1) —
+// but fall back to docs[0] when none qualifies, NEVER null while docs exist (a keyword that matches
+// catalog docs must never fabricate NO_MATCH). null only when there are genuinely no docs at all.
 function pickProductDoc(p: SearchGoodsPayload, pdNo?: string): SearchDoc | null {
   const groups = p?.resultSet?.result ?? [];
   if (pdNo) {
@@ -68,11 +74,15 @@ function pickProductDoc(p: SearchGoodsPayload, pdNo?: string): SearchDoc | null 
       if (match) return match;
     }
   }
+  let firstDoc: SearchDoc | null = null;
   for (const g of groups) {
-    const docs = g?.resultDocuments ?? [];
-    if (docs.length > 0 && docs[0]) return docs[0];
+    for (const doc of g?.resultDocuments ?? []) {
+      if (!doc) continue;
+      if (firstDoc === null) firstDoc = doc;
+      if (isStoreCarryableBaseDoc(doc)) return doc;
+    }
   }
-  return null;
+  return firstDoc;
 }
 async function searchGoods(
   wwwBase: string,

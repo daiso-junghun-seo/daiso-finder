@@ -127,7 +127,7 @@ test('pdNo-identity: an explicit pdNo picks that doc for identity (not docs[0])'
   expect(body.data.imageUrl).toBe('https://cdn.daisomall.co.kr/file/PD/other.jpg');
 });
 
-test('pdNo-identity: an unmatched explicit pdNo falls back to docs[0] identity (existing behavior)', async () => {
+test('pdNo-identity: an unmatched explicit pdNo falls back to the keyword base-pick identity', async () => {
   route([
     ['/auth/request', authOk],
     ['SearchGoods', searchOk([PROD])],
@@ -150,11 +150,154 @@ test('pdNo-identity: an unmatched explicit pdNo falls back to docs[0] identity (
     req({ strCd: '10803', keyword: '밀폐용기', pdNo: 'no-such-pdno' }),
   );
   const body = (await res.json()) as { data: { pdNo: string; productName: string; price: number } };
-  // The requested (unmatched) pdNo still echoes through the pre-existing `body.pdNo ?? product.pdNo`
+  // An unmatched pdNo drops to the keyword base-pick (here the sole doc PROD, which is carryable);
+  // the requested (unmatched) pdNo still echoes through the pre-existing `body.pdNo ?? product.pdNo`
   // line (unchanged) — this test is only about which doc supplies productName/price identity.
   expect(body.data.pdNo).toBe('no-such-pdno');
   expect(body.data.productName).toBe('리빙 밀폐용기 1.2L');
   expect(body.data.price).toBe(2000);
+});
+
+test('base-priority: no pdNo prefers a store-carryable base over a leading online-only doc', async () => {
+  const ONLINE_ONLY = {
+    pdNo: '30001',
+    pdNm: '온라인전용 대용량 밀폐용기',
+    exhPdNm: '온라인전용 대용량 밀폐용기',
+    pdPrc: '9900',
+    pdImgUrl: '/file/PD/online.jpg',
+    onlyOnlYn: 'Y', // MASTER_PD_NO absent → base, but online-only → not store-carryable
+  };
+  route([
+    ['/auth/request', authOk],
+    ['SearchGoods', searchOk([ONLINE_ONLY, PROD])], // leading doc is non-carryable
+    ['/ms/msg/selStr', () => new Response(JSON.stringify({ directYn: 'Y' }), { status: 200 })],
+    [
+      '/pdo/selIntPdStDispInfo',
+      () =>
+        new Response(JSON.stringify({ data: [{ zoneNo: '56', stairNo: '11' }] }), { status: 200 }),
+    ],
+    [
+      '/pd/pdh/selStrPkupStck',
+      () =>
+        new Response(JSON.stringify({ data: [{ sleStsCd: '1', stck: '50' }] }), { status: 200 }),
+    ],
+  ]);
+  const res = await onRequestPost(req({ strCd: '10803', keyword: '밀폐용기' }));
+  const body = (await res.json()) as { data: { pdNo: string; productName: string; price: number } };
+  expect(body.data.pdNo).toBe('19987');
+  expect(body.data.productName).toBe('리빙 밀폐용기 1.2L');
+  expect(body.data.price).toBe(2000);
+});
+
+test('base-priority honesty: no carryable base among docs → still uses docs[0], never noMatch', async () => {
+  const VARIANT = {
+    pdNo: 'B202505',
+    pdNm: '대량 밀폐용기',
+    exhPdNm: '대량 밀폐용기',
+    pdPrc: '18000',
+    pdImgUrl: '/file/PD/bulk.jpg',
+    MASTER_PD_NO: '19987', // B-variant → not a base
+  };
+  const ONLINE_ONLY = {
+    pdNo: '30002',
+    pdNm: '온라인전용 밀폐용기',
+    exhPdNm: '온라인전용 밀폐용기',
+    pdPrc: '9900',
+    pdImgUrl: '/file/PD/online.jpg',
+    onlyOnlYn: 'Y',
+  };
+  route([
+    ['/auth/request', authOk],
+    ['SearchGoods', searchOk([VARIANT, ONLINE_ONLY])], // no store-carryable base at all
+    ['/ms/msg/selStr', () => new Response(JSON.stringify({ directYn: 'Y' }), { status: 200 })],
+    [
+      '/pdo/selIntPdStDispInfo',
+      () =>
+        new Response(JSON.stringify({ data: [{ zoneNo: '56', stairNo: '11' }] }), { status: 200 }),
+    ],
+    [
+      '/pd/pdh/selStrPkupStck',
+      () =>
+        new Response(JSON.stringify({ data: [{ sleStsCd: '1', stck: '50' }] }), { status: 200 }),
+    ],
+  ]);
+  const res = await onRequestPost(req({ strCd: '10803', keyword: '밀폐용기' }));
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as {
+    data?: { pdNo: string; productName: string };
+    noMatch?: boolean;
+  };
+  // Honesty invariant: a keyword that DOES match catalog docs must never fabricate NO_MATCH —
+  // when no carryable base exists, fall back to docs[0] (never null).
+  expect(body.noMatch).toBeUndefined();
+  expect(body.data?.pdNo).toBe('B202505');
+  expect(body.data?.productName).toBe('대량 밀폐용기');
+});
+
+const ONLINE_ONLY_DOC = {
+  pdNo: '30001',
+  pdNm: '온라인전용 대용량 밀폐용기',
+  exhPdNm: '온라인전용 대용량 밀폐용기',
+  pdPrc: '9900',
+  pdImgUrl: '/file/PD/online.jpg',
+  onlyOnlYn: 'Y',
+};
+const B_VARIANT_DOC = {
+  pdNo: 'B19987',
+  pdNm: '대량 밀폐용기',
+  exhPdNm: '대량 밀폐용기',
+  pdPrc: '18000',
+  pdImgUrl: '/file/PD/bulk.jpg',
+  MASTER_PD_NO: '19987',
+};
+// Multi-group SearchGoods payload (real responses span >1 resultSet.result group) — searchOk() only
+// ever builds a single group, so these two tests specifically exercise pickProductDoc's firstDoc
+// accumulator + carryable early-return ACROSS groups.
+const searchGroups =
+  (groups: unknown[][]): Handler =>
+  () =>
+    new Response(
+      JSON.stringify({ resultSet: { result: groups.map((docs) => ({ resultDocuments: docs })) } }),
+      { status: 200 },
+    );
+const locStck: Array<[string, Handler]> = [
+  ['/ms/msg/selStr', () => new Response(JSON.stringify({ directYn: 'Y' }), { status: 200 })],
+  [
+    '/pdo/selIntPdStDispInfo',
+    () =>
+      new Response(JSON.stringify({ data: [{ zoneNo: '56', stairNo: '11' }] }), { status: 200 }),
+  ],
+  [
+    '/pd/pdh/selStrPkupStck',
+    () => new Response(JSON.stringify({ data: [{ sleStsCd: '1', stck: '50' }] }), { status: 200 }),
+  ],
+];
+
+test('base-priority: prefers a store-carryable base found in a LATER result group', async () => {
+  route([
+    ['/auth/request', authOk],
+    ['SearchGoods', searchGroups([[ONLINE_ONLY_DOC, B_VARIANT_DOC], [PROD]])], // carryable only in group 1
+    ...locStck,
+  ]);
+  const res = await onRequestPost(req({ strCd: '10803', keyword: '밀폐용기' }));
+  const body = (await res.json()) as { data: { pdNo: string; productName: string } };
+  expect(body.data.pdNo).toBe('19987');
+  expect(body.data.productName).toBe('리빙 밀폐용기 1.2L');
+});
+
+test('base-priority honesty: no carryable across groups → first doc of the FIRST group (not later)', async () => {
+  route([
+    ['/auth/request', authOk],
+    // group 0 leads with the online-only doc; group 1 is the B-variant. No carryable anywhere.
+    ['SearchGoods', searchGroups([[ONLINE_ONLY_DOC], [B_VARIANT_DOC]])],
+    ...locStck,
+  ]);
+  const res = await onRequestPost(req({ strCd: '10803', keyword: '밀폐용기' }));
+  const body = (await res.json()) as { data?: { pdNo: string }; noMatch?: boolean };
+  expect(body.noMatch).toBeUndefined();
+  // firstDoc must be captured from group 0 and survive the group boundary — a per-group-scoped
+  // accumulator would wrongly return group 1's 'B19987'.
+  expect(body.data?.pdNo).toBe('30001');
 });
 
 test('franchise with no display zone: stock NOT fetched (stck null), locations empty', async () => {
