@@ -91,6 +91,47 @@ test('folds out B-variant docs whose MASTER_PD_NO is non-empty, keeping only the
   ]);
 });
 
+test('folds out online-only docs (onlyOnlYn "Y"), keeping only store-carryable base docs', async () => {
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        resultSet: {
+          result: [
+            {
+              resultDocuments: [
+                {
+                  pdNo: '19987',
+                  exhPdNm: '리빙 밀폐용기 1.2L',
+                  pdPrc: '2000',
+                  pdImgUrl: '/file/PD/x.jpg',
+                  onlyOnlYn: 'N',
+                },
+                {
+                  pdNo: '20001',
+                  exhPdNm: '온라인전용 대용량 밀폐용기',
+                  pdPrc: '9900',
+                  pdImgUrl: '/file/PD/y.jpg',
+                  onlyOnlYn: 'Y',
+                },
+              ],
+            },
+          ],
+        },
+      }),
+      { status: 200 },
+    )) as typeof fetch;
+  const res = await onRequestPost(req({ keyword: '밀폐용기' }));
+  const body = (await res.json()) as { candidates: Array<{ pdNo: string }> };
+  expect(body.candidates).toEqual([
+    {
+      pdNo: '19987',
+      name: '리빙 밀폐용기 1.2L',
+      price: 2000,
+      imageUrl: 'https://cdn.daisomall.co.kr/file/PD/x.jpg',
+    },
+  ]);
+});
+
 test('flattens all result groups, dedups by pdNo (first wins), and caps at 10', async () => {
   const docs = Array.from({ length: 12 }, (_, i) => ({
     pdNo: String(1000 + i),
@@ -117,6 +158,36 @@ test('flattens all result groups, dedups by pdNo (first wins), and caps at 10', 
   expect(body.candidates[1]).toEqual({ pdNo: '1001', name: '상품1', price: 1001, imageUrl: null });
   // dedup: pdNo 1001 must not appear twice
   expect(body.candidates.filter((c) => c.pdNo === '1001')).toHaveLength(1);
+});
+
+test('online-only docs are skipped before the 10-cap (they consume no candidate slot)', async () => {
+  const carryable = Array.from({ length: 12 }, (_, i) => ({
+    pdNo: String(2000 + i),
+    exhPdNm: `상품${i}`,
+    pdPrc: '1000',
+    pdImgUrl: null,
+  }));
+  const online = Array.from({ length: 3 }, (_, i) => ({
+    pdNo: `ONL${i}`,
+    exhPdNm: `온라인${i}`,
+    pdPrc: '9900',
+    pdImgUrl: null,
+    onlyOnlYn: 'Y',
+  }));
+  // Interleave online-only docs among the carryable ones — if they consumed cap slots the survivors
+  // would be truncated early and/or include ONL*.
+  const docs = [online[0], ...carryable.slice(0, 6), online[1], ...carryable.slice(6), online[2]];
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ resultSet: { result: [{ resultDocuments: docs }] } }), {
+      status: 200,
+    })) as typeof fetch;
+  const res = await onRequestPost(req({ keyword: 'x' }));
+  const body = (await res.json()) as { candidates: Array<{ pdNo: string }> };
+  expect(body.candidates).toHaveLength(10);
+  expect(body.candidates.some((c) => c.pdNo.startsWith('ONL'))).toBe(false);
+  // Survivors = the first 10 carryable in upstream order (online-only skipped, not counted).
+  expect(body.candidates[0].pdNo).toBe('2000');
+  expect(body.candidates[9].pdNo).toBe('2009');
 });
 
 test('skips docs with an empty pdNo or empty name', async () => {

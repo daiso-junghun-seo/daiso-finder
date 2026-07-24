@@ -5,6 +5,7 @@ import {
   type UpstreamEnv,
   absolutizeImageUrl,
   badGateway,
+  isStoreCarryableBaseDoc,
   jsonResponse,
   searchGoodsUrl,
   upstreamConfig,
@@ -17,6 +18,7 @@ interface SearchDoc {
   pdPrc?: unknown;
   pdImgUrl?: unknown;
   MASTER_PD_NO?: unknown;
+  onlyOnlYn?: unknown;
 }
 interface SearchGoodsPayload {
   resultSet?: { result?: Array<{ resultDocuments?: SearchDoc[] }> };
@@ -35,7 +37,7 @@ function foldCandidates(payload: SearchGoodsPayload): Candidate[] {
   const seen = new Set<string>();
   for (const g of payload?.resultSet?.result ?? []) {
     for (const doc of g?.resultDocuments ?? []) {
-      if (String(doc?.MASTER_PD_NO ?? '') !== '') continue; // fold: bulk/online variant of a base
+      if (!isStoreCarryableBaseDoc(doc)) continue; // fold B-variants + drop online-only (see _lib)
       const pdNo = String(doc?.pdNo ?? '');
       if (!pdNo) continue;
       const name = String(doc?.exhPdNm ?? doc?.pdNm ?? '');
