@@ -7,7 +7,15 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "ignore": ["dist", "dev-dist", "coverage", "playwright-report", "test-results"]
+    "ignore": [
+      "dist",
+      "dev-dist",
+      "coverage",
+      "playwright-report",
+      "test-results",
+      "src/index.css",
+      "src/components/ui/**"
+    ]
   },
   "formatter": {
     "enabled": true,

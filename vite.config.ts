@@ -1,8 +1,15 @@
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // `@/*` → ./src, mirroring the tsconfig `paths` so `@/…` imports resolve at build/test time too.
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
   plugins: [
     react(),
     VitePWA({
