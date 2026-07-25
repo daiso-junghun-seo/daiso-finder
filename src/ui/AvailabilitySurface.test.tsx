@@ -533,6 +533,43 @@ describe('barcode scan entry', () => {
     });
   });
 
+  // Teeth for the run TOKEN specifically. The test above is superseded by a DIFFERENT query, so
+  // isCurrentRun's query mismatch alone would drop the late outcome — it passes even with the token
+  // check deleted. Here both runs carry the SAME decoded value and the SAME store (a shopper rescanning
+  // the same barcode), so isCurrentRun cannot tell them apart: only the monotonic token can. Mirrors the
+  // same-keyword token tests runQuery and runByPdNo already have (F6).
+  test('a rescan of the same barcode: the LATER run wins even when the earlier lands first (token)', async () => {
+    let resolveFirst: (event: StoreEvent) => void = () => {};
+    const firstRunner = () =>
+      new Promise<StoreEvent>((resolve) => {
+        resolveFirst = resolve;
+      });
+    let resolveSecond: (event: StoreEvent) => void = () => {};
+    const secondRunner = () =>
+      new Promise<StoreEvent>((resolve) => {
+        resolveSecond = resolve;
+      });
+    const dispatch = useAvailabilityStore.getState().dispatch;
+    const runFirst = runByScan(storeA, '19987', dispatch, firstRunner);
+    const runSecond = runByScan(storeA, '19987', dispatch, secondRunner);
+    // The EARLIER scan resolves FIRST, as a no-match. It is superseded, so it must be dropped, not land.
+    resolveFirst({ type: 'NO_MATCH', query: '19987', suggestions: [] });
+    await runFirst;
+    expect(useAvailabilityStore.getState().ui).toMatchObject({
+      state: 'loading',
+      query: '19987',
+      origin: 'scan',
+    });
+    // The later scan resolves second and wins.
+    resolveSecond({
+      type: 'RESULT',
+      answer: mockAnswers.inStock,
+      freshness: { class: 'live', observedAt: Date.now() },
+    });
+    await runSecond;
+    expect(useAvailabilityStore.getState().ui).toMatchObject({ state: 'success', query: '19987' });
+  });
+
   test('a scanned barcode is not recorded as a recent search', async () => {
     const before = useAvailabilityStore.getState().recentSearches;
     const runner: QueryOutcomeRunner = async () => ({
@@ -550,11 +587,30 @@ describe('barcode scan entry', () => {
     await user.click(screen.getByRole('button', { name: SCAN_BUTTON_LABEL }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toBeInTheDocument();
-    // The overlay mounts OUTSIDE .surface-content, as a sibling of the sheet: GlassSurface sets
-    // transform: translateZ(0), which would become the containing block for the overlay's
-    // position: fixed and stop it being full-screen.
+    // The overlay mounts OUTSIDE .surface-content, as a sibling of the sheet. That container carries
+    // `inert` while a modal is open, so an overlay nested inside it would render itself inert; and
+    // stacking here is pure DOM order (no z-index anywhere in src/styles/**), so it must come last.
     expect(container.querySelector('.surface-content')).not.toContainElement(dialog);
     // ...and the background is inert while it is open, exactly as for the store sheet (F4).
+    expect(container.querySelector('.surface-content')).toHaveAttribute('inert');
+  });
+
+  // The same placement holds in the answer-card branch — the load-bearing one: it is the state a
+  // shopper rescans from, and it is a separate `return` with its own copy of the modal mount.
+  test('the scanner mounts outside the inert background in the answer-card branch too', async () => {
+    const user = userEvent.setup();
+    useAvailabilityStore.setState({
+      ui: {
+        state: 'success',
+        query: '19987',
+        answer: mockAnswers.inStock,
+        freshness: { class: 'live', observedAt: Date.now() },
+      },
+    });
+    const { container } = render(<AvailabilitySurface />);
+    await user.click(screen.getByRole('button', { name: SCAN_BUTTON_LABEL }));
+    const dialog = await screen.findByRole('dialog');
+    expect(container.querySelector('.surface-content')).not.toContainElement(dialog);
     expect(container.querySelector('.surface-content')).toHaveAttribute('inert');
   });
 
@@ -580,6 +636,11 @@ describe('barcode scan entry', () => {
     });
     expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // The answer copy alone would not catch a handler that dropped or mangled the decoded value — assert
+    // the resulting state retains that exact value. (It carries no `origin`: the reducer threads
+    // provenance only into `empty`, the one state with scan-specific copy; runByScan's own empty+origin
+    // case is asserted in the first test of this block.)
+    expect(useAvailabilityStore.getState().ui).toMatchObject({ state: 'success', query: '19987' });
     // The barcode never enters the recent-search list (a digit string has no recall value).
     expect(useAvailabilityStore.getState().recentSearches).toEqual(recentBefore);
   });

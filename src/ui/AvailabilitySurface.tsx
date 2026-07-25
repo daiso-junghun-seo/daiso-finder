@@ -340,10 +340,11 @@ export function AvailabilitySurface() {
     </GlassSurface>
   );
 
-  // The viewfinder is a modal sibling of the sheet, NOT a child of .surface-content: GlassSurface sets
-  // transform: translateZ(0), and a transformed ancestor becomes the containing block for position:
-  // fixed — nested inside it the overlay would stop being full-screen. Stacking here is pure DOM order
-  // (there is no z-index in src/styles/**), so it must be rendered last in every branch.
+  // The viewfinder is a modal sibling of the sheet, NOT a child of .surface-content, for two reasons:
+  // (a) .surface-content carries `inert` while a modal is open (see backgroundInert below), so an
+  // overlay nested inside it would make ITSELF inert — unreachable by keyboard and hidden from AT;
+  // (b) stacking in this codebase is pure DOM order (there is no z-index anywhere in src/styles/**),
+  // so the overlay must be rendered LAST in every branch to sit above the rest of the surface.
   const scannerModal = scannerOpen && (
     <>
       <div className="sheet-scrim" aria-hidden="true" />
