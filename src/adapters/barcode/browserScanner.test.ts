@@ -70,17 +70,48 @@ test('falls back to the bundled decoder when no native detector exists', async (
   expect(track.stopped).toBe(true);
 });
 
-test('an unloadable fallback decoder reports unsupported', async () => {
-  const track = fakeTrack();
+test('an unloadable fallback decoder reports unsupported without ever opening the camera', async () => {
+  let getUserMediaCalls = 0;
   const scanner = createBrowserScanner({
-    mediaDevices: { getUserMedia: async () => fakeStream(track) },
+    mediaDevices: {
+      getUserMedia: async () => {
+        getUserMediaCalls += 1;
+        return fakeStream(fakeTrack());
+      },
+    },
     createNativeDetector: () => null,
     loadFallbackDecoder: async () => null,
   });
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
     kind: 'unsupported',
   });
-  expect(track.stopped).toBe(true);
+  // Decoder-before-camera: with no way to decode, the camera light must never come on at all.
+  expect(getUserMediaCalls).toBe(0);
+});
+
+// The iOS Safari path, and the reason the decoder is resolved BEFORE the camera. The ~415 kB @zxing
+// chunk can take seconds on a cold cache; a shopper who closes the overlay during it aborts a scan that
+// has not yet touched getUserMedia. Under a camera-first ordering this run would leave the camera on
+// until the import settled — here there is no camera to leave on, and the abort is heard immediately
+// instead of only after the chunk lands.
+test('closing the overlay while the decoder is still loading cancels and never starts the camera', async () => {
+  const controller = new AbortController();
+  let getUserMediaCalls = 0;
+  const scanner = createBrowserScanner({
+    mediaDevices: {
+      getUserMedia: async () => {
+        getUserMediaCalls += 1;
+        return fakeStream(fakeTrack());
+      },
+    },
+    createNativeDetector: () => null,
+    loadFallbackDecoder: () => new Promise(() => {}), // import in flight, never settles
+  });
+  const pending = scanner.scan(fakeTarget(), controller.signal);
+  await Promise.resolve(); // let scan() reach the await on the import
+  controller.abort();
+  await expect(pending).resolves.toEqual({ kind: 'cancelled' });
+  expect(getUserMediaCalls).toBe(0);
 });
 
 test('abort cancels an in-progress native scan and always stops the camera', async () => {
@@ -220,20 +251,57 @@ test('a fallback decoder rejection reports failed and stops the camera', async (
   expect(track.stopped).toBe(true);
 });
 
-test('a signal already aborted by the time scanWithNative starts still resolves cancelled', async () => {
+test('a successful fallback decode still releases the decoder', async () => {
   const track = fakeTrack();
-  const controller = new AbortController();
-  // scan() checks signal.aborted once before this factory call (createNative()) and once again inside
-  // scanWithNative's Promise executor, with no suspension point between them. Aborting from inside the
-  // factory is the only way to make scanWithNative observe signal.aborted === true on entry through the
-  // public scan() API — aborting from getUserMedia instead is caught by scan()'s own earlier guard
-  // before scanWithNative is ever reached (verified empirically; that approach does not reproduce this).
+  let cancelCalls = 0;
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
-    createNativeDetector: () => {
-      controller.abort();
-      return { detect: async () => [] };
+    createNativeDetector: () => null,
+    loadFallbackDecoder: async () => ({
+      decode: async () => '1031166',
+      cancel: () => {
+        cancelCalls += 1;
+      },
+    }),
+  });
+  await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
+    kind: 'decoded',
+    value: '1031166',
+  });
+  // Success is a teardown too: without this the zxing reader keeps its listeners on a video element the
+  // overlay is about to unmount.
+  expect(cancelCalls).toBe(1);
+});
+
+test('an empty fallback decode is failed, never a decoded empty value', async () => {
+  const track = fakeTrack();
+  const scanner = createBrowserScanner({
+    mediaDevices: { getUserMedia: async () => fakeStream(track) },
+    createNativeDetector: () => null,
+    loadFallbackDecoder: async () => ({ decode: async () => '', cancel: () => {} }),
+  });
+  // The native path already skips empty results; an empty string handed upward would run availability
+  // for nothing at all. Mirror it here rather than fabricating a query.
+  await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
+    kind: 'failed',
+  });
+  expect(track.stopped).toBe(true);
+});
+
+test('an abort landing while the camera is being acquired still stops it', async () => {
+  const track = fakeTrack();
+  const controller = new AbortController();
+  // The shopper closes the overlay while getUserMedia is still pending (permission prompt / camera
+  // warm-up). The camera is handed over AFTER the abort, so the only thing standing between this and a
+  // camera that outlives the overlay is scan()'s post-acquisition aborted guard plus its finally.
+  const scanner = createBrowserScanner({
+    mediaDevices: {
+      getUserMedia: async () => {
+        controller.abort();
+        return fakeStream(track);
+      },
     },
+    createNativeDetector: () => ({ detect: async () => [] }),
     pollIntervalMs: 1,
   });
   await expect(scanner.scan(fakeTarget(), controller.signal)).resolves.toEqual({

@@ -34,24 +34,44 @@ test('a decoded value is handed up exactly once', async () => {
   await waitFor(() => expect(decoded).toEqual(['19987']));
 });
 
+// The visible notice and the a11y live region carry the same sentence (the surface's own idiom), so
+// every "is it on screen" assertion below scopes to the paragraph.
+const noticeParagraph = { selector: 'p' } as const;
+
 test('a permission denial shows the honest fallback copy and stays open', async () => {
   const scanner: ScannerPort = { scan: async () => ({ kind: 'permissionDenied' }) };
   render(<ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />);
-  expect(await screen.findByText(SCAN_PERMISSION_DENIED)).toBeInTheDocument();
+  expect(await screen.findByText(SCAN_PERMISSION_DENIED, noticeParagraph)).toBeInTheDocument();
   expect(screen.getByRole('dialog', { name: SCAN_BUTTON_LABEL })).toBeInTheDocument();
 });
 
 test('an unsupported browser says so without a technical term', async () => {
   const scanner: ScannerPort = { scan: async () => ({ kind: 'unsupported' }) };
   render(<ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />);
-  expect(await screen.findByText(SCAN_UNSUPPORTED)).toBeInTheDocument();
+  expect(await screen.findByText(SCAN_UNSUPPORTED, noticeParagraph)).toBeInTheDocument();
 });
 
 test('a decode failure shows the honest fallback copy and stays open', async () => {
   const scanner: ScannerPort = { scan: async () => ({ kind: 'failed' }) };
   render(<ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />);
-  expect(await screen.findByText(SCAN_FAILED)).toBeInTheDocument();
+  expect(await screen.findByText(SCAN_FAILED, noticeParagraph)).toBeInTheDocument();
   expect(screen.getByRole('dialog', { name: SCAN_BUTTON_LABEL })).toBeInTheDocument();
+});
+
+// Focus never leaves 닫기 when an outcome lands, so a notice that is only rendered is silence for a
+// shopper using a screen reader — the sentence has to reach a live region to be spoken at all.
+test.each([
+  ['failed', SCAN_FAILED],
+  ['permissionDenied', SCAN_PERMISSION_DENIED],
+  ['unsupported', SCAN_UNSUPPORTED],
+] as const)('the %s notice is announced, not merely rendered', async (kind, copy) => {
+  const scanner: ScannerPort = { scan: async () => ({ kind }) as ScanOutcome };
+  render(<ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />);
+  const live = screen.getByRole('status');
+  expect(live).toHaveAttribute('aria-live', 'polite');
+  // The region is mounted with the dialog and only its TEXT changes — a region inserted at the same
+  // moment as its content is announced unreliably.
+  await waitFor(() => expect(live).toHaveTextContent(copy));
 });
 
 test('a cancelled scan leaves no notice behind, unlike every other terminal outcome', async () => {

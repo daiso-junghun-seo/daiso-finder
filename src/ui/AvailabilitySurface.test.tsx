@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { mockAnswers } from '../adapters/mock/fixtures';
-import type { ScannerPort } from '../domain/ports';
+import type { ProductSearchPort, ScannerPort } from '../domain/ports';
 import type { ProductCandidate, StoreEvent } from '../domain/types';
 import {
   AvailabilitySurface,
@@ -42,6 +42,10 @@ const scanControl = vi.hoisted(() => ({
   decode: undefined as ((value: string) => void) | undefined,
 }));
 
+// Records every ProductSearchPort call the surface's production pipeline makes, delegating to the real
+// mock search so no other test's behaviour changes. Used to prove the scan path never searches at all.
+const searchControl = vi.hoisted(() => ({ calls: [] as string[] }));
+
 vi.mock('../adapters/composition', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../adapters/composition')>();
   const createScanner = (): ScannerPort => ({
@@ -51,7 +55,16 @@ vi.mock('../adapters/composition', async (importOriginal) => {
         signal.addEventListener('abort', () => resolve({ kind: 'cancelled' }));
       }),
   });
-  return { ...actual, createScanner };
+  const createProductSearch = (): ProductSearchPort => {
+    const real = actual.createProductSearch();
+    return {
+      search: (keyword) => {
+        searchControl.calls.push(keyword);
+        return real.search(keyword);
+      },
+    };
+  };
+  return { ...actual, createScanner, createProductSearch };
 });
 
 beforeEach(() => {
@@ -501,6 +514,7 @@ describe('barcode scan entry', () => {
 
   beforeEach(() => {
     scanControl.decode = undefined; // armed again by the next overlay mount
+    searchControl.calls = [];
   });
 
   test('runByScan queries availability by the decoded value as both keyword and pdNo', async () => {
@@ -512,6 +526,40 @@ describe('barcode scan entry', () => {
     await runByScan(storeA, '19987', useAvailabilityStore.getState().dispatch, runner);
     expect(calls).toEqual([{ keyword: '19987', pdNo: '19987' }]);
     expect(useAvailabilityStore.getState().ui).toMatchObject({ state: 'empty', origin: 'scan' });
+  });
+
+  // A decoded barcode is already an exact identifier. Routing it through /api/search would add a round
+  // trip AND risk the store-carryable filter dropping the exact match — the decision that the scan path
+  // skips the search entirely (spec §3.3). Nothing else in the suite would notice it regressing to the
+  // search-first pipeline, because the mock search happens to return [] for a digit string.
+  test('a scan never calls ProductSearchPort — the decoded value goes straight to availability', async () => {
+    const user = userEvent.setup();
+    render(<AvailabilitySurface />);
+    await user.click(screen.getByRole('button', { name: SCAN_BUTTON_LABEL }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    await act(async () => {
+      scanControl.decode?.('19987');
+    });
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    expect(searchControl.calls).toEqual([]);
+  });
+
+  // Verbatim pass-through, proved with a value no normalisation could leave intact: a stray
+  // value.replace(/\D/g, '') (or a trim/uppercase) keeps every numeric fixture in this block green.
+  test('a non-numeric decoded value reaches the runner unchanged, as both keyword and pdNo', async () => {
+    const calls: Array<{ keyword: string; pdNo?: string }> = [];
+    const runner: QueryOutcomeRunner = async (_store, keyword, pdNo) => {
+      calls.push({ keyword, pdNo });
+      return { type: 'NO_MATCH', query: keyword, suggestions: [] };
+    };
+    await runByScan(storeA, 'CODE39-AB1', useAvailabilityStore.getState().dispatch, runner);
+    expect(calls).toEqual([{ keyword: 'CODE39-AB1', pdNo: 'CODE39-AB1' }]);
+    // ...and the surface retains it verbatim too (the Empty body quotes the scanned value back).
+    expect(useAvailabilityStore.getState().ui).toMatchObject({
+      state: 'empty',
+      query: 'CODE39-AB1',
+      origin: 'scan',
+    });
   });
 
   test('a scan outcome that lands after a newer submit is dropped', async () => {

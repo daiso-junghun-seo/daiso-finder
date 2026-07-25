@@ -199,7 +199,11 @@ export const RESULTS_NOTICE = '검색 결과예요. 바코드를 스캔하면 �
 export const SCAN_PERMISSION_DENIED = '카메라를 사용할 수 없어요. 상품명으로 검색해 보세요.';
 export const SCAN_UNSUPPORTED =
   '이 브라우저에서는 바코드 스캔을 쓸 수 없어요. 상품명으로 검색해 보세요.';
-export const SCAN_FAILED = '바코드를 읽지 못했어요. 상품명으로 검색해 보세요.';
+// `failed` covers BOTH a decoder error and a camera we could not acquire (busy device, no camera,
+// unknown getUserMedia rejection), so this line must not claim the barcode was read and rejected —
+// that would be a fabricated diagnosis in the acquisition case. '지금은' also keeps it transient:
+// every one of those causes may well work on the next try.
+export const SCAN_FAILED = '지금은 스캔할 수 없어요. 상품명으로 검색해 보세요.';
 // Shown while the camera STAYS OPEN after a slow decode (Bible Engineering §5: decode failure keeps
 // the camera open and hints) — never a dead end, never an error frame.
 export const SCAN_HINT = '바코드가 잘 안 읽히면 상품명으로 검색해 보세요.';

@@ -6,6 +6,7 @@
 // only adds a hint (Bible Engineering §5).
 import { useEffect, useRef, useState } from 'react';
 import type { ScanOutcome, ScannerPort } from '../../domain/ports';
+import { LiveRegion } from '../a11y/LiveRegion';
 import {
   SCAN_BUTTON_LABEL,
   SCAN_FAILED,
@@ -123,6 +124,12 @@ export function ScannerOverlay({
         ) : (
           hinting && <p className="text-caption">{SCAN_HINT}</p>
         )}
+        {/* Focus stays on 닫기 for the whole overlay, so an outcome notice that is only rendered is
+            never spoken. The surface's idiom applies here too: visible copy plus a live region that
+            echoes it. Mounted with the dialog and left in place (message '') so that when an outcome
+            lands only the TEXT changes — a live region inserted together with its content is announced
+            unreliably. */}
+        <LiveRegion message={notice ?? ''} />
       </section>
     </GlassSurface>
   );

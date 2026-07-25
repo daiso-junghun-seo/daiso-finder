@@ -1,7 +1,9 @@
 // src/adapters/barcode/browserScanner.ts
 // Camera + barcode decode behind ScannerPort. Mirrors browserGeolocation's discipline: every capability
-// is injected (never read off a global inside), and no path throws — failures surface as ScanOutcome
-// variants. Decode-only: no image recognition (Bible, Engineering/in-store-navigation §dependencies).
+// is INJECTABLE via ScannerDeps and defaults to the corresponding global (navigator.mediaDevices,
+// globalThis.BarcodeDetector, the bundled @zxing import) read once at construction, so tests substitute
+// all three without touching globals; and no path throws — failures surface as ScanOutcome variants.
+// Decode-only: no image recognition (Bible, Engineering/in-store-navigation §dependencies).
 import type { ScanOutcome, ScanTarget, ScannerPort } from '../../domain/ports';
 
 // 1D retail symbologies only. QR/DataMatrix stay out: a product query has no defined QR payload, and
@@ -49,6 +51,23 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
     async scan(target, signal) {
       if (!media?.getUserMedia) return { kind: 'unsupported' };
       if (signal.aborted) return { kind: 'cancelled' };
+      // DECODER FIRST, CAMERA SECOND. Deciding native-vs-fallback — including the fallback's dynamic
+      // import of the ~415 kB @zxing chunk, which on a cold iOS Safari cache can take seconds — before
+      // touching getUserMedia buys two guarantees the reverse order cannot: (a) a device with no way to
+      // decode never has its camera switched on at all, and (b) a shopper who closes the overlay while
+      // that import is in flight aborts a run that owns no camera, so nothing can outlive the overlay.
+      let native: NativeDetector | null;
+      let fallback: FallbackDecoder | null = null;
+      try {
+        native = createNative();
+        // The import itself is not cancellable, but the WAIT for it is: untilAbort settles the moment
+        // the signal fires instead of parking until the chunk lands.
+        if (!native) fallback = await untilAbort(loadFallback(), signal);
+      } catch {
+        return { kind: 'failed' };
+      }
+      if (signal.aborted) return { kind: 'cancelled' }; // checked before `unsupported`: an abort is not a capability fact
+      if (!native && !fallback) return { kind: 'unsupported' };
       let stream: MediaStream;
       try {
         stream = await media.getUserMedia({ video: { facingMode: 'environment' } });
@@ -65,11 +84,9 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
       };
       try {
         if (signal.aborted) return { kind: 'cancelled' };
-        const native = createNative();
         if (native) return await scanWithNative(native, stream, target, signal, pollMs);
-        const fallback = await loadFallback();
-        if (!fallback) return { kind: 'unsupported' };
-        return await scanWithFallback(fallback, stream, target, signal);
+        // Narrowed by the `!native && !fallback` guard above — reaching here means fallback is set.
+        return await scanWithFallback(fallback as FallbackDecoder, stream, target, signal);
       } catch {
         return { kind: 'failed' };
       } finally {
@@ -78,6 +95,26 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
       }
     },
   };
+}
+
+// Resolves as soon as EITHER `work` settles or the signal aborts, whichever comes first. On abort it
+// yields null and the caller reads signal.aborted to tell that apart from "loaded nothing"; a rejection
+// still rejects, so a broken loader stays a `failed`, not a fabricated `unsupported`.
+function untilAbort<T>(work: Promise<T>, signal: AbortSignal): Promise<T | null> {
+  return new Promise<T | null>((resolve, reject) => {
+    const onAbort = () => resolve(null);
+    signal.addEventListener('abort', onAbort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (err) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(err); // a no-op if the abort already settled this promise
+      },
+    );
+  });
 }
 
 function isPermissionDenial(err: unknown): boolean {
@@ -159,15 +196,27 @@ async function scanWithFallback(
   signal: AbortSignal,
 ): Promise<ScanOutcome> {
   if (signal.aborted) return { kind: 'cancelled' };
-  const onAbort = () => decoder.cancel();
-  signal.addEventListener('abort', onAbort);
+  // Released exactly once, on every exit path including success: without it the zxing reader keeps its
+  // listeners bound to a <video> the overlay is about to unmount. Idempotent so the abort path (which
+  // cancels to interrupt the pending decode) and the finally below cannot double-reset the reader.
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    decoder.cancel();
+  };
+  signal.addEventListener('abort', release);
   try {
     const value = await decoder.decode(stream, target.video);
-    return signal.aborted ? { kind: 'cancelled' } : { kind: 'decoded', value };
+    if (signal.aborted) return { kind: 'cancelled' };
+    // An empty decode is not a value: the native path already skips empty results, and handing '' up
+    // would run availability for nothing at all.
+    return value ? { kind: 'decoded', value } : { kind: 'failed' };
   } catch {
     return signal.aborted ? { kind: 'cancelled' } : { kind: 'failed' };
   } finally {
-    signal.removeEventListener('abort', onAbort);
+    signal.removeEventListener('abort', release);
+    release();
   }
 }
 

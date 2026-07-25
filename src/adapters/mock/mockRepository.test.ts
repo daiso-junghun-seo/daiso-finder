@@ -57,6 +57,21 @@ describe('createKeywordMockRepository', () => {
     );
   });
 
+  // The pdNo branch exists so a DEV/E2E scan of the BASE fixture's barcode reaches a real answer card.
+  // It must stay that narrow: mockAnswers.inStock names '리빙 밀폐용기 1.2L' (pdNo 19987), so answering
+  // it for 19988/19989 would show a shopper an answer card for a DIFFERENT product than the one tapped.
+  test('only the base candidate pdNo answers; other candidate pdNos go Empty, never the wrong product', async () => {
+    const repo = createKeywordMockRepository();
+    await expect(repo.query(store, { keyword: '19987', pdNo: '19987' })).resolves.toBe(
+      mockAnswers.inStock,
+    );
+    for (const pdNo of ['19988', '19989']) {
+      await expect(repo.query(store, { keyword: pdNo, pdNo })).rejects.toBeInstanceOf(
+        NoCatalogMatchError,
+      );
+    }
+  });
+
   test('anything else throws NoCatalogMatchError (→ Empty)', async () => {
     const repo = createKeywordMockRepository();
     await expect(repo.query(store, { keyword: '락앤락같은통' })).rejects.toBeInstanceOf(

@@ -30,7 +30,9 @@ export function createKeywordMockRepository(): StoreStockRepository {
       if (Object.hasOwn(mockAnswers, keyword)) return mockAnswers[keyword as Scenario];
       // A scanned barcode arrives as keyword=pdNo=<decoded value> (spec §3.3): match the mock catalog
       // by pdNo so the DEV/E2E scan flow reaches a real answer card instead of always going Empty.
-      if (term.pdNo && mockCandidates.some((c) => c.pdNo === term.pdNo)) return mockAnswers.inStock;
+      // ONLY the base candidate, whose name/pdNo mockAnswers.inStock actually describes — matching any
+      // candidate would answer a tap on 19988/19989 with an answer card naming a different product.
+      if (term.pdNo && term.pdNo === mockCandidates[0]?.pdNo) return mockAnswers.inStock;
       if (keyword && mockProductName.includes(keyword)) return mockAnswers.inStock;
       throw new NoCatalogMatchError([]);
     },

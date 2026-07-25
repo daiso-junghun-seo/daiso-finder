@@ -154,11 +154,14 @@ export interface ScannerPort {
 // 앱 초안 — Bible 침묵 구간. 비준 시 Bible 문자열로 교체.
 export const SCAN_PERMISSION_DENIED = '카메라를 사용할 수 없어요. 상품명으로 검색해 보세요.';
 export const SCAN_UNSUPPORTED = '이 브라우저에서는 바코드 스캔을 쓸 수 없어요. 상품명으로 검색해 보세요.';
+export const SCAN_FAILED = '지금은 스캔할 수 없어요. 상품명으로 검색해 보세요.';
 export const SCAN_HINT = '바코드가 잘 안 읽히면 상품명으로 검색해 보세요.';
 export function scanEmptyBody(value: string): string {
   return `'${value}' 바코드로 등록된 상품을 찾지 못했어요. 상품명으로 검색해 보세요.`;
 }
 ```
+
+> **`SCAN_FAILED` 문구 정정(2026-07-26, 최종 리뷰 반영)**: 초안은 `'바코드를 읽지 못했어요. …'`였으나, 이 상수는 디코더 오류뿐 아니라 **카메라 획득 실패**(§5 표의 `NotReadableError`·`NotFoundError` 등)에서도 뜬다. 카메라를 열지도 못한 상황에서 "바코드를 읽지 못했다"고 말하면 **하지 않은 판독을 날조**한다(Anti-goal 3). 두 원인 모두에 정직한 `'지금은 스캔할 수 없어요. …'`로 교체하고, `지금은`으로 **일시성**을 유지한다(§5 정직성 정정과 같은 논리). 나머지 3종은 초안 그대로 — 여전히 Bible 비준 대기(B30-4).
 
 재사용(신규 아님): `SCAN_BUTTON_LABEL`(버튼·다이얼로그 제목), `STORE_SELECT_CLOSE`(`닫기`).
 

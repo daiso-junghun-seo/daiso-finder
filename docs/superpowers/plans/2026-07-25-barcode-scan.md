@@ -596,7 +596,7 @@ Append to `src/ui/copy.test.ts`:
 test('scan copy drafts are transcribed exactly (app-owned, pending Bible ratification)', () => {
   expect(SCAN_PERMISSION_DENIED).toBe('카메라를 사용할 수 없어요. 상품명으로 검색해 보세요.');
   expect(SCAN_UNSUPPORTED).toBe('이 브라우저에서는 바코드 스캔을 쓸 수 없어요. 상품명으로 검색해 보세요.');
-  expect(SCAN_FAILED).toBe('바코드를 읽지 못했어요. 상품명으로 검색해 보세요.');
+  expect(SCAN_FAILED).toBe('지금은 스캔할 수 없어요. 상품명으로 검색해 보세요.');
   expect(SCAN_HINT).toBe('바코드가 잘 안 읽히면 상품명으로 검색해 보세요.');
   expect(scanEmptyBody('19987')).toBe(
     "'19987' 바코드로 등록된 상품을 찾지 못했어요. 상품명으로 검색해 보세요.",
@@ -702,7 +702,7 @@ Append to `src/ui/copy.ts`:
 // terms), and every line ends with a concrete next step (Anti-goal 5). Replace verbatim on ratification.
 export const SCAN_PERMISSION_DENIED = '카메라를 사용할 수 없어요. 상품명으로 검색해 보세요.';
 export const SCAN_UNSUPPORTED = '이 브라우저에서는 바코드 스캔을 쓸 수 없어요. 상품명으로 검색해 보세요.';
-export const SCAN_FAILED = '바코드를 읽지 못했어요. 상품명으로 검색해 보세요.';
+export const SCAN_FAILED = '지금은 스캔할 수 없어요. 상품명으로 검색해 보세요.';
 // Shown while the camera STAYS OPEN after a slow decode (Bible Engineering §5: decode failure keeps
 // the camera open and hints) — never a dead end, never an error frame.
 export const SCAN_HINT = '바코드가 잘 안 읽히면 상품명으로 검색해 보세요.';
