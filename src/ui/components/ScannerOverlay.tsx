@@ -109,11 +109,11 @@ export function ScannerOverlay({
         </div>
         {/* Decorative preview: the camera image carries no information a screen reader can use — every
             state is stated in text below. */}
+        {/* biome-ignore lint/a11y/noAriaHiddenOnFocusable: <video> without controls is not focusable */}
         <video
           ref={videoRef}
           className="scanner-overlay__video"
           aria-hidden="true"
-          tabIndex={-1}
           playsInline
           muted
           autoPlay
