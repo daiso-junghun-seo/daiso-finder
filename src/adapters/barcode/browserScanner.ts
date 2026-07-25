@@ -127,11 +127,11 @@ function scanWithNative(
     // Registered before attach() — nothing between here and the interval below can suspend, so an abort
     // can never land while this run is unable to hear it (Finding 4: a hung play() must not be a gap).
     signal.addEventListener('abort', onAbort);
-    if (signal.aborted) {
-      finish({ kind: 'cancelled' });
-      return;
-    }
-    attach(target.video, stream);
+    // The timer is created here, with nothing in between, so `timer` is always initialised before any
+    // path can reach finish(): the already-aborted guard below would otherwise call clearInterval() on a
+    // handle still in its temporal dead zone, turning an honest `cancelled` into a `failed`. Starting the
+    // interval one statement early is free — its first tick cannot run until this executor returns, by
+    // which point attach() has already bound the stream.
     const timer = setInterval(() => {
       detector
         .detect(target.video)
@@ -144,6 +144,11 @@ function scanWithNative(
           // failure and the overlay shows a hint instead (Engineering §5).
         });
     }, pollMs);
+    if (signal.aborted) {
+      finish({ kind: 'cancelled' });
+      return;
+    }
+    attach(target.video, stream);
   });
 }
 

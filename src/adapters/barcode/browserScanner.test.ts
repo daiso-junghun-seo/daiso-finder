@@ -220,6 +220,28 @@ test('a fallback decoder rejection reports failed and stops the camera', async (
   expect(track.stopped).toBe(true);
 });
 
+test('a signal already aborted by the time scanWithNative starts still resolves cancelled', async () => {
+  const track = fakeTrack();
+  const controller = new AbortController();
+  // scan() checks signal.aborted once before this factory call (createNative()) and once again inside
+  // scanWithNative's Promise executor, with no suspension point between them. Aborting from inside the
+  // factory is the only way to make scanWithNative observe signal.aborted === true on entry through the
+  // public scan() API — aborting from getUserMedia instead is caught by scan()'s own earlier guard
+  // before scanWithNative is ever reached (verified empirically; that approach does not reproduce this).
+  const scanner = createBrowserScanner({
+    mediaDevices: { getUserMedia: async () => fakeStream(track) },
+    createNativeDetector: () => {
+      controller.abort();
+      return { detect: async () => [] };
+    },
+    pollIntervalMs: 1,
+  });
+  await expect(scanner.scan(fakeTarget(), controller.signal)).resolves.toEqual({
+    kind: 'cancelled',
+  });
+  expect(track.stopped).toBe(true);
+});
+
 test('a getUserMedia failure other than permission denial reports failed, not unsupported', async () => {
   const scanner = createBrowserScanner({
     mediaDevices: {
