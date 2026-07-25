@@ -53,9 +53,12 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
       try {
         stream = await media.getUserMedia({ video: { facingMode: 'environment' } });
       } catch (err) {
-        // A denial is the shopper's choice, not an error state to dramatize; anything else (no camera,
-        // hardware busy) is reported as unsupported so no technical term reaches the copy layer.
-        return { kind: isPermissionDenial(err) ? 'permissionDenied' : 'unsupported' };
+        // A denial is the shopper's choice, not an error state to dramatize. `unsupported` asserts a
+        // permanent capability fact about this device — it's reserved for "there is no getUserMedia API
+        // at all" and "the fallback decoder could not be loaded". Any other getUserMedia rejection here
+        // (camera busy, no device, unknown) is transient — the camera may well work on retry — so it is
+        // `failed`, never `unsupported`, to avoid fabricating a fact this device doesn't actually have.
+        return { kind: isPermissionDenial(err) ? 'permissionDenied' : 'failed' };
       }
       const stopCamera = () => {
         for (const track of stream.getTracks()) track.stop();
@@ -94,23 +97,23 @@ function defaultNativeDetector(): NativeDetector | null {
   }
 }
 
-async function attach(video: HTMLVideoElement, stream: MediaStream): Promise<void> {
+// Fire-and-forget: sets the stream and kicks off playback without awaiting it. A play() that never
+// settles (a real-device stall) must not block the caller — frames still flow into detect() even before
+// play() resolves, and an unresolved play() must never delay the abort listener below from registering.
+function attach(video: HTMLVideoElement, stream: MediaStream): void {
   video.srcObject = stream;
-  try {
-    await video.play();
-  } catch {
+  video.play().catch(() => {
     // An autoplay rejection is not fatal: frames still flow and detect() can read them.
-  }
+  });
 }
 
-async function scanWithNative(
+function scanWithNative(
   detector: NativeDetector,
   stream: MediaStream,
   target: ScanTarget,
   signal: AbortSignal,
   pollMs: number,
 ): Promise<ScanOutcome> {
-  await attach(target.video, stream);
   return new Promise<ScanOutcome>((resolve) => {
     let settled = false;
     const finish = (outcome: ScanOutcome) => {
@@ -121,7 +124,14 @@ async function scanWithNative(
       resolve(outcome);
     };
     const onAbort = () => finish({ kind: 'cancelled' });
+    // Registered before attach() — nothing between here and the interval below can suspend, so an abort
+    // can never land while this run is unable to hear it (Finding 4: a hung play() must not be a gap).
     signal.addEventListener('abort', onAbort);
+    if (signal.aborted) {
+      finish({ kind: 'cancelled' });
+      return;
+    }
+    attach(target.video, stream);
     const timer = setInterval(() => {
       detector
         .detect(target.video)
@@ -134,7 +144,6 @@ async function scanWithNative(
           // failure and the overlay shows a hint instead (Engineering §5).
         });
     }, pollMs);
-    if (signal.aborted) finish({ kind: 'cancelled' });
   });
 }
 
