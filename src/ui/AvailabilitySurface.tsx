@@ -1,8 +1,9 @@
 // src/ui/AvailabilitySurface.tsx
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createGeolocation,
   createProductSearch,
+  createScanner,
   createStoreDirectory,
   createStoreStockRepository,
 } from '../adapters/composition';
@@ -17,6 +18,7 @@ import { AnswerCard } from './AnswerCard';
 import { LiveRegion } from './a11y/LiveRegion';
 import { CandidateList } from './components/CandidateList';
 import { GlassSurface } from './components/GlassSurface';
+import { ScannerOverlay } from './components/ScannerOverlay';
 import { StoreContextLine } from './components/StoreContextLine';
 import { StoreSelectionSheet } from './components/StoreSelectionSheet';
 import {
@@ -40,6 +42,10 @@ const browserGeolocation = createGeolocation();
 // Literal product search for the search-first candidate flow: the composition root selects the live
 // /api/search adapter in prod, the mock (3 fixture candidates on "밀폐용기") in dev/test.
 const productSearch = createProductSearch();
+// Barcode scanner for the 바코드 스캔 entry: the composition root selects the real camera adapter in
+// prod, the no-camera mock in dev/test. Module scope keeps its identity stable across renders — the
+// overlay's scan effect depends on it, so a per-render instance would restart the camera.
+const scanner = createScanner();
 
 // Dev-only scenario switch driving the mock pipeline for the Playwright sweep. NOT production routing —
 // Flow-1 entry/search/store-selection landed in Phase 5; this harness remains the E2E state sweep.
@@ -205,6 +211,31 @@ export async function runByPdNo(
   dispatch(event);
 }
 
+// Scan pipeline: a decoded barcode is already an exact identifier, so it skips the literal candidate
+// search entirely (a candidate list would be noise, /api/search's store-carryable filter could drop the
+// exact match, and it saves a round trip). The decoded value goes in verbatim as BOTH keyword (the
+// server requires one) and pdNo (B29 pdNo-identity) — no EAN→pdNo guessing anywhere (spec §0 D3).
+// The barcode is deliberately NOT recorded as a recent search: a digit string has no recall value.
+export async function runByScan(
+  store: StoreContext,
+  value: string,
+  dispatch: (event: StoreEvent) => void,
+  runner: QueryOutcomeRunner = liveQueryRunner,
+) {
+  const token = ++latestRunToken;
+  dispatch({ type: 'SUBMIT', query: value, origin: 'scan' }); // → loading(query=value, origin=scan)
+  let event: StoreEvent;
+  try {
+    event = await runner(store, value, value);
+  } catch {
+    event = { type: 'FAILURE', cache: { kind: 'noCache' } };
+  }
+  if (token !== latestRunToken) return;
+  if (!isCurrentRun(useAvailabilityStore.getState(), { keyword: value, strCd: store.strCd }))
+    return;
+  dispatch(event);
+}
+
 export function AvailabilitySurface() {
   const ui = useAvailabilityStore((s) => s.ui);
   const dispatch = useAvailabilityStore((s) => s.dispatch);
@@ -215,10 +246,15 @@ export function AvailabilitySurface() {
   const selectStore = useAvailabilityStore((s) => s.selectStore);
   const recentSearches = useAvailabilityStore((s) => s.recentSearches);
   const recordSearch = useAvailabilityStore((s) => s.recordSearch);
+  const scannerOpen = useAvailabilityStore((s) => s.scannerOpen);
+  const openScanner = useAvailabilityStore((s) => s.openScanner);
+  const closeScanner = useAvailabilityStore((s) => s.closeScanner);
   const [input, setInput] = useState('');
   const changeStoreRef = useRef<HTMLButtonElement>(null);
   const answerCardRef = useRef<HTMLDivElement>(null);
   const wasSheetOpen = useRef(sheetOpen);
+  const scanButtonRef = useRef<HTMLButtonElement>(null);
+  const wasScannerOpen = useRef(scannerOpen);
 
   useEffect(() => {
     // The ?scenario= harness drives the Playwright state sweep against the MOCK pipeline. It must never
@@ -236,6 +272,24 @@ export function AvailabilitySurface() {
     if (wasSheetOpen.current && !sheetOpen) changeStoreRef.current?.focus();
     wasSheetOpen.current = sheetOpen;
   }, [sheetOpen]);
+
+  // Closing the scanner (닫기 / Escape / a decode) returns focus to its opener — never <body>.
+  useEffect(() => {
+    if (wasScannerOpen.current && !scannerOpen) scanButtonRef.current?.focus();
+    wasScannerOpen.current = scannerOpen;
+  }, [scannerOpen]);
+
+  // Memoised on purpose: ScannerOverlay's scan effect has deps [scanner, onDecoded], so a fresh inline
+  // arrow on every parent render would abort the in-flight scan and restart the camera each time the
+  // surface re-renders. Its deps are all stable (zustand actions and the selected store).
+  const handleDecoded = useCallback(
+    (value: string) => {
+      closeScanner(); // the camera stops on unmount; the answer takes the surface from here
+      if (!store) return; // unreachable: the scan button only exists once a store is chosen (D082)
+      void runByScan(store, value, dispatch);
+    },
+    [store, dispatch, closeScanner],
+  );
 
   const sheet = (
     <StoreSelectionSheet
@@ -273,16 +327,33 @@ export function AvailabilitySurface() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
         />
-        <button type="button" aria-label={SCAN_BUTTON_LABEL} className="text-label">
+        <button
+          ref={scanButtonRef}
+          type="button"
+          aria-label={SCAN_BUTTON_LABEL}
+          className="text-label"
+          onClick={openScanner}
+        >
           {SCAN_BUTTON_LABEL}
         </button>
       </form>
     </GlassSurface>
   );
 
-  // While the modal sheet is open the background is inert (aria-modal made real): unreachable by
-  // keyboard and hidden from AT. First run renders the sheet alone, so no container exists to mark.
-  const backgroundInert = sheetOpen ? '' : undefined;
+  // The viewfinder is a modal sibling of the sheet, NOT a child of .surface-content: GlassSurface sets
+  // transform: translateZ(0), and a transformed ancestor becomes the containing block for position:
+  // fixed — nested inside it the overlay would stop being full-screen. Stacking here is pure DOM order
+  // (there is no z-index in src/styles/**), so it must be rendered last in every branch.
+  const scannerModal = scannerOpen && (
+    <>
+      <div className="sheet-scrim" aria-hidden="true" />
+      <ScannerOverlay scanner={scanner} onDecoded={handleDecoded} onClose={closeScanner} />
+    </>
+  );
+
+  // While a modal (sheet or scanner) is open the background is inert (aria-modal made real): unreachable
+  // by keyboard and hidden from AT. First run renders the sheet alone, so no container exists to mark.
+  const backgroundInert = sheetOpen || scannerOpen ? '' : undefined;
 
   if (ui.state === 'default') {
     return (
@@ -326,6 +397,7 @@ export function AvailabilitySurface() {
             {sheet}
           </>
         )}
+        {scannerModal}
       </main>
     );
   }
@@ -357,6 +429,7 @@ export function AvailabilitySurface() {
             {sheet}
           </>
         )}
+        {scannerModal}
       </main>
     );
   }
@@ -395,6 +468,7 @@ export function AvailabilitySurface() {
           {sheet}
         </>
       )}
+      {scannerModal}
     </main>
   );
 }

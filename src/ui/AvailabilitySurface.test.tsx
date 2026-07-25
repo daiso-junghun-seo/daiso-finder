@@ -1,10 +1,18 @@
 import 'fake-indexeddb/auto';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { mockAnswers } from '../adapters/mock/fixtures';
+import type { ScannerPort } from '../domain/ports';
 import type { ProductCandidate, StoreEvent } from '../domain/types';
-import { AvailabilitySurface, isCurrentRun, runByPdNo, runQuery } from './AvailabilitySurface';
-import { RECENT_SEARCHES_LABEL, RESULTS_NOTICE, emptyBody } from './copy';
+import {
+  AvailabilitySurface,
+  type QueryOutcomeRunner,
+  isCurrentRun,
+  runByPdNo,
+  runByScan,
+  runQuery,
+} from './AvailabilitySurface';
+import { RECENT_SEARCHES_LABEL, RESULTS_NOTICE, SCAN_BUTTON_LABEL, emptyBody } from './copy';
 import { useAvailabilityStore } from './store';
 
 // A search step that finds no literal candidates — forces runQuery straight to the availability path
@@ -25,12 +33,34 @@ vi.mock('../infra/query-cache', async (importOriginal) => {
   return { ...actual, createQueryRunner };
 });
 
+// Scan-timing harness. The DEV/test scanner (createMockScanner) decodes the instant it is asked, so the
+// overlay would open and close inside the very click that opened it — no assertion could ever observe
+// the dialog, and no test could separate "opened" from "decoded". These tests own the decode moment at
+// the composition seam instead (same vi.hoisted control the retry runner above uses): the scan stays
+// pending until the test decodes, and an abort (overlay unmount) resolves it as cancelled.
+const scanControl = vi.hoisted(() => ({
+  decode: undefined as ((value: string) => void) | undefined,
+}));
+
+vi.mock('../adapters/composition', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../adapters/composition')>();
+  const createScanner = (): ScannerPort => ({
+    scan: (_target, signal) =>
+      new Promise((resolve) => {
+        scanControl.decode = (value) => resolve({ kind: 'decoded', value });
+        signal.addEventListener('abort', () => resolve({ kind: 'cancelled' }));
+      }),
+  });
+  return { ...actual, createScanner };
+});
+
 beforeEach(() => {
   localStorage.clear();
   useAvailabilityStore.setState({
     ui: { state: 'default' },
     store: { strCd: '001', strNm: '명동역점' },
     sheetOpen: false,
+    scannerOpen: false,
   });
 });
 
@@ -463,5 +493,94 @@ describe('recent searches', () => {
     await userEvent.click(screen.getByRole('button', { name: '밀폐용기' }));
     await userEvent.click(await screen.findByRole('button', { name: /리빙 밀폐용기 1\.2L/ }));
     expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+  });
+});
+
+describe('barcode scan entry', () => {
+  const storeA = { strCd: '001', strNm: '명동역점' };
+
+  beforeEach(() => {
+    scanControl.decode = undefined; // armed again by the next overlay mount
+  });
+
+  test('runByScan queries availability by the decoded value as both keyword and pdNo', async () => {
+    const calls: Array<{ keyword: string; pdNo?: string }> = [];
+    const runner: QueryOutcomeRunner = async (_store, keyword, pdNo) => {
+      calls.push({ keyword, pdNo });
+      return { type: 'NO_MATCH', query: keyword, suggestions: [] };
+    };
+    await runByScan(storeA, '19987', useAvailabilityStore.getState().dispatch, runner);
+    expect(calls).toEqual([{ keyword: '19987', pdNo: '19987' }]);
+    expect(useAvailabilityStore.getState().ui).toMatchObject({ state: 'empty', origin: 'scan' });
+  });
+
+  test('a scan outcome that lands after a newer submit is dropped', async () => {
+    const dispatch = useAvailabilityStore.getState().dispatch;
+    let release: (() => void) | undefined;
+    const slow: QueryOutcomeRunner = async () => {
+      await new Promise<void>((r) => {
+        release = r;
+      });
+      return { type: 'NO_MATCH', query: '19987', suggestions: [] };
+    };
+    const pending = runByScan(storeA, '19987', dispatch, slow);
+    dispatch({ type: 'SUBMIT', query: '밀폐용기' }); // newer typed run supersedes the scan
+    release?.();
+    await pending;
+    expect(useAvailabilityStore.getState().ui).toMatchObject({
+      state: 'loading',
+      query: '밀폐용기',
+    });
+  });
+
+  test('a scanned barcode is not recorded as a recent search', async () => {
+    const before = useAvailabilityStore.getState().recentSearches;
+    const runner: QueryOutcomeRunner = async () => ({
+      type: 'NO_MATCH',
+      query: '19987',
+      suggestions: [],
+    });
+    await runByScan(storeA, '19987', useAvailabilityStore.getState().dispatch, runner);
+    expect(useAvailabilityStore.getState().recentSearches).toEqual(before);
+  });
+
+  test('tapping 바코드 스캔 opens the scanner dialog', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<AvailabilitySurface />);
+    await user.click(screen.getByRole('button', { name: SCAN_BUTTON_LABEL }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    // The overlay mounts OUTSIDE .surface-content, as a sibling of the sheet: GlassSurface sets
+    // transform: translateZ(0), which would become the containing block for the overlay's
+    // position: fixed and stop it being full-screen.
+    expect(container.querySelector('.surface-content')).not.toContainElement(dialog);
+    // ...and the background is inert while it is open, exactly as for the store sheet (F4).
+    expect(container.querySelector('.surface-content')).toHaveAttribute('inert');
+  });
+
+  test('closing the scanner returns focus to the scan button', async () => {
+    const user = userEvent.setup();
+    render(<AvailabilitySurface />);
+    const scanButton = screen.getByRole('button', { name: SCAN_BUTTON_LABEL });
+    await user.click(scanButton);
+    await user.click(await screen.findByRole('button', { name: '닫기' }));
+    await waitFor(() => expect(scanButton).toHaveFocus());
+  });
+
+  // End to end through the surface: the decoded value closes the viewfinder and runs availability for
+  // that value (mock repo → inStock), without ever passing through the typed search bar.
+  test('a decode closes the scanner and answers for the decoded value', async () => {
+    const user = userEvent.setup();
+    const recentBefore = useAvailabilityStore.getState().recentSearches;
+    render(<AvailabilitySurface />);
+    await user.click(screen.getByRole('button', { name: SCAN_BUTTON_LABEL }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    await act(async () => {
+      scanControl.decode?.('19987');
+    });
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // The barcode never enters the recent-search list (a digit string has no recall value).
+    expect(useAvailabilityStore.getState().recentSearches).toEqual(recentBefore);
   });
 });
