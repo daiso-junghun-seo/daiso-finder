@@ -55,6 +55,20 @@ test.describe('with a persisted store context', () => {
     await page.getByRole('button', { name: '을지로점' }).click();
     await expect(page.getByText('다이소 을지로점')).toBeVisible();
   });
+
+  // The DEV composition wires the mock ScannerPort (no camera), which resolves the mock catalog's base
+  // pdNo (19987) — the keyword-mock repo matches it to the inStock fixture, so the scan lands directly
+  // on the Success card without any candidate list (an exact identifier skips the search-first path).
+  test('scanning a barcode answers with the availability card', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: '바코드 스캔' }).click();
+    // The mock scanner (no camera) resolves its decode almost immediately, so the dialog can already be
+    // gone by the time this assertion runs — assert the answer card the decode lands on, not the
+    // overlay's continued presence (the overlay unmounts as soon as a decode lands). The status text
+    // renders in both the visible AnswerCard and the hidden a11y LiveRegion (same pattern as the
+    // 밀폐용기 candidate test above) — .first() avoids the strict-mode multiple-match.
+    await expect(page.getByText('이 매장에 있어요').first()).toBeVisible();
+  });
 });
 
 test('first run leads with the store-selection sheet; choosing a store lands on Default', async ({
