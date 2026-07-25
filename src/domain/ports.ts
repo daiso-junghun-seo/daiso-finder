@@ -28,3 +28,21 @@ export interface StoreDirectoryPort {
 export interface ProductSearchPort {
   search(keyword: string): Promise<ProductCandidate[]>;
 }
+
+// Barcode scan entry (Interface §3, entry path 2). The adapter owns the camera and the decoder; the
+// port speaks only outcomes and NEVER throws — every failure must reach the overlay as a variant so the
+// flow can end with a concrete next step (Anti-goal 5). Aborting the signal stops the camera.
+export type ScanOutcome =
+  | { kind: 'decoded'; value: string }
+  | { kind: 'permissionDenied' }
+  | { kind: 'unsupported' }
+  | { kind: 'cancelled' }
+  | { kind: 'failed' };
+
+export interface ScanTarget {
+  video: HTMLVideoElement;
+}
+
+export interface ScannerPort {
+  scan(target: ScanTarget, signal: AbortSignal): Promise<ScanOutcome>;
+}

@@ -1,10 +1,12 @@
 import {
   createGeolocation,
   createProductSearch,
+  createScanner,
   createStoreDirectory,
   createStoreStockRepository,
 } from './composition';
 import { mockAnswers } from './mock/fixtures';
+import { MOCK_SCAN_VALUE } from './mock/scanner';
 
 test('DEV/test build wires the keyword mock repository', async () => {
   const repo = createStoreStockRepository();
@@ -127,4 +129,66 @@ test('PROD build wires the live /api/stores nearby-fetch behind geolocation', as
     vi.unstubAllEnvs();
     geo.restore();
   }
+});
+
+test('DEV/test build wires the mock scanner without touching the camera', async () => {
+  let cameraAsked = false;
+  const nav = navigator as unknown as {
+    mediaDevices?: { getUserMedia: () => Promise<MediaStream> };
+  };
+  const original = nav.mediaDevices;
+  nav.mediaDevices = {
+    getUserMedia: async () => {
+      cameraAsked = true;
+      return {} as MediaStream;
+    },
+  };
+  try {
+    const outcome = await createScanner().scan(
+      { video: {} as HTMLVideoElement },
+      new AbortController().signal,
+    );
+    expect(outcome).toEqual({ kind: 'decoded', value: MOCK_SCAN_VALUE });
+    expect(cameraAsked).toBe(false);
+  } finally {
+    nav.mediaDevices = original;
+  }
+});
+
+test('PROD build wires the browser scanner (camera requested, no mock value)', async () => {
+  vi.stubEnv('PROD', true);
+  let cameraAsked = false;
+  const nav = navigator as unknown as {
+    mediaDevices?: { getUserMedia: () => Promise<MediaStream> };
+  };
+  const original = nav.mediaDevices;
+  nav.mediaDevices = {
+    getUserMedia: async () => {
+      cameraAsked = true;
+      const err = new Error('denied');
+      err.name = 'NotAllowedError';
+      throw err;
+    },
+  };
+  try {
+    const outcome = await createScanner().scan(
+      { video: {} as HTMLVideoElement },
+      new AbortController().signal,
+    );
+    expect(cameraAsked).toBe(true);
+    expect(outcome).toEqual({ kind: 'permissionDenied' });
+  } finally {
+    nav.mediaDevices = original;
+    vi.unstubAllEnvs();
+  }
+});
+
+test('the keyword mock repository answers a scanned pdNo', async () => {
+  const repo = createStoreStockRepository();
+  expect(
+    await repo.query(
+      { strCd: '1', strNm: 'x' },
+      { keyword: MOCK_SCAN_VALUE, pdNo: MOCK_SCAN_VALUE },
+    ),
+  ).toEqual(mockAnswers.inStock);
 });

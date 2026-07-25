@@ -14,7 +14,12 @@
     "lint": "biome check .",
     "e2e": "playwright test"
   },
-  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1", "zustand": "^4.5.5" },
+  "dependencies": {
+    "@zxing/library": "^0.21.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.5"
+  },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@playwright/test": "^1.47.0",

@@ -2,6 +2,7 @@ import { NoCatalogMatchError } from '../../domain/errors';
 // src/adapters/mock/mockRepository.ts
 import type { StoreStockRepository } from '../../domain/ports';
 import { type Scenario, mockAnswers, mockProductName } from './fixtures';
+import { mockCandidates } from './productSearch';
 
 export function createMockRepository(
   scenario: Scenario,
@@ -27,6 +28,9 @@ export function createKeywordMockRepository(): StoreStockRepository {
       // Own keys only: `in` would match prototype-chain keys (__proto__, toString, …) and hand
       // non-answer objects to the UI/cache.
       if (Object.hasOwn(mockAnswers, keyword)) return mockAnswers[keyword as Scenario];
+      // A scanned barcode arrives as keyword=pdNo=<decoded value> (spec §3.3): match the mock catalog
+      // by pdNo so the DEV/E2E scan flow reaches a real answer card instead of always going Empty.
+      if (term.pdNo && mockCandidates.some((c) => c.pdNo === term.pdNo)) return mockAnswers.inStock;
       if (keyword && mockProductName.includes(keyword)) return mockAnswers.inStock;
       throw new NoCatalogMatchError([]);
     },

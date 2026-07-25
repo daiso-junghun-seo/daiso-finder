@@ -3,15 +3,18 @@
 import type {
   GeolocationPort,
   ProductSearchPort,
+  ScannerPort,
   StoreDirectoryPort,
   StoreStockRepository,
 } from '../domain/ports';
+import { createBrowserScanner } from './barcode/browserScanner';
 import { createDaisoProductSearch } from './daisomall/productSearchRepository';
 import { createDaisoNearbyFetch, createDaisoStoreDirectory } from './daisomall/storeDirectory';
 import { createDaisoStoreStockRepository } from './daisomall/storeStockRepository';
 import { createBrowserGeolocation } from './geolocation/browserGeolocation';
 import { createKeywordMockRepository } from './mock/mockRepository';
 import { createMockProductSearch } from './mock/productSearch';
+import { createMockScanner } from './mock/scanner';
 import { createMockStoreDirectory, mockStores } from './mock/storeDirectory';
 
 export function createStoreStockRepository(): StoreStockRepository {
@@ -29,4 +32,8 @@ export function createGeolocation(): GeolocationPort {
 
 export function createProductSearch(): ProductSearchPort {
   return import.meta.env.PROD ? createDaisoProductSearch() : createMockProductSearch();
+}
+
+export function createScanner(): ScannerPort {
+  return import.meta.env.PROD ? createBrowserScanner() : createMockScanner();
 }
