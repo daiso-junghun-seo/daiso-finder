@@ -43,7 +43,11 @@
       }
     },
     {
-      "include": ["src/ui/a11y/LiveRegion.tsx", "src/ui/components/StoreSelectionSheet.tsx"],
+      "include": [
+        "src/ui/a11y/LiveRegion.tsx",
+        "src/ui/components/StoreSelectionSheet.tsx",
+        "src/ui/components/ScannerOverlay.tsx"
+      ],
       "linter": {
         "rules": {
           "a11y": {
