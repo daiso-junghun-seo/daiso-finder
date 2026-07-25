@@ -68,6 +68,7 @@ daisomall anti-abuse가 **auth-protected 엔드포인트(selStrPkupStck·selIntP
 - 실행 원장: [`.superpowers/sdd/progress.md`](../.superpowers/sdd/progress.md) — 커밋·리뷰·결정 이력.
 - 실 API 계약·라이브 스모크: [`docs/notes/store-api-observations.md`](notes/store-api-observations.md).
 - 앱 결정·미해결·후속: [`docs/notes/open-questions.md`](notes/open-questions.md) (§B 앱 소유, §A Bible, §C 출시-후).
+- 바코드 스캔 최종 리뷰 비차단 잔여 5건(2026-07-26): [`docs/notes/open-questions.md` §B30](notes/open-questions.md).
 - 런타임 결정: [`docs/superpowers/specs/2026-07-23-runtime-resolution.md`](superpowers/specs/2026-07-23-runtime-resolution.md) + 배포 런북 [`docs/deploy/gpu01-node-proxy.md`](deploy/gpu01-node-proxy.md).
 - 반대형 RFC(Bible 계류): [`docs/notes/rfc-reverse-store-finder.md`](notes/rfc-reverse-store-finder.md).
 - Flow 1 스펙(앱-레벨): [`docs/superpowers/specs/2026-07-22-flow1-live-data-design.md`](superpowers/specs/2026-07-22-flow1-live-data-design.md). 제품 정본은 Bible: `../product-bible/06_Product/daiso-companion/{Experience,Interface,Engineering,AI}/availability-check.md`.
