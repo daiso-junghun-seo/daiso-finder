@@ -137,6 +137,30 @@ test('CANDIDATES → candidates state, capped at 3 with order preserved', () => 
   expect(next.state === 'candidates' && next.candidates).toHaveLength(3);
 });
 
+test('a scan submit carries its provenance into loading and on to empty', () => {
+  const loading = reduce(initialState, { type: 'SUBMIT', query: '19987', origin: 'scan' });
+  expect(loading).toEqual({ state: 'loading', query: '19987', slow: false, origin: 'scan' });
+  const empty = reduce(loading, { type: 'NO_MATCH', query: '19987', suggestions: [] });
+  expect(empty).toEqual({ state: 'empty', query: '19987', suggestions: [], origin: 'scan' });
+});
+
+test('a typed submit has no provenance and reaches a provenance-free empty', () => {
+  const loading = reduce(initialState, { type: 'SUBMIT', query: '밀폐용기' });
+  expect(loading).toEqual({ state: 'loading', query: '밀폐용기', slow: false, origin: undefined });
+  const empty = reduce(loading, { type: 'NO_MATCH', query: '밀폐용기', suggestions: [] });
+  expect(empty).toMatchObject({ state: 'empty', query: '밀폐용기', origin: undefined });
+});
+
+test('provenance does not survive a candidate selection (the shopper picked a product, not a code)', () => {
+  const scanLoading = reduce(initialState, { type: 'SUBMIT', query: '19987', origin: 'scan' });
+  const picked = reduce(scanLoading, {
+    type: 'SELECT_CANDIDATE',
+    query: '리빙 밀폐용기 1.2L',
+    pdNo: '19987',
+  });
+  expect(picked).toEqual({ state: 'loading', query: '리빙 밀폐용기 1.2L', slow: false });
+});
+
 describe('query retention (B15)', () => {
   const loading = reduce(initialState, { type: 'SUBMIT', query: '밀폐용기' });
 

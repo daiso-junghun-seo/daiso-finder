@@ -144,7 +144,7 @@ export function announcementFor(
     case 'loading':
       return ui.slow ? [LOADING_CARD_COPY, LOADING_DELAY_LINE] : [LOADING_CARD_COPY];
     case 'empty':
-      return [emptyBody(ui.query)];
+      return [ui.origin === 'scan' ? scanEmptyBody(ui.query) : emptyBody(ui.query)];
     case 'candidates':
       // Unreachable: AnswerCard never renders candidates (pre-answer, surfaced elsewhere by a later
       // task), so no announcement copy is needed here. Present only to keep this switch exhaustive.
@@ -189,3 +189,21 @@ export const RECENT_SEARCHES_LABEL = '최근 검색';
 // Interface §copy-table (AI low / literal results notice). This fallback-first feature has no AI
 // confidence model, so the literal-results framing (not the "이걸 찾으시나요?" AI-suggestion tier) applies.
 export const RESULTS_NOTICE = '검색 결과예요. 바코드를 스캔하면 더 정확해요.';
+
+// ── Barcode scan (spec 2026-07-25-barcode-scan-design §6) ────────────────────────────────────────
+// APP-OWNED DRAFTS, PENDING BIBLE RATIFICATION. The Bible defines the scan BUTTON and the typed Empty
+// but is silent on every scan failure state (permission, decode, unsupported) and on the Empty a
+// scan produces — its typed Empty tells the shopper to scan, which contradicts itself after a scan.
+// Drafted to the Korean UX rules: result language only (no 권한이 없습니다-style blame, no technical
+// terms), and every line ends with a concrete next step (Anti-goal 5). Replace verbatim on ratification.
+export const SCAN_PERMISSION_DENIED = '카메라를 사용할 수 없어요. 상품명으로 검색해 보세요.';
+export const SCAN_UNSUPPORTED =
+  '이 브라우저에서는 바코드 스캔을 쓸 수 없어요. 상품명으로 검색해 보세요.';
+export const SCAN_FAILED = '바코드를 읽지 못했어요. 상품명으로 검색해 보세요.';
+// Shown while the camera STAYS OPEN after a slow decode (Bible Engineering §5: decode failure keeps
+// the camera open and hints) — never a dead end, never an error frame.
+export const SCAN_HINT = '바코드가 잘 안 읽히면 상품명으로 검색해 보세요.';
+
+export function scanEmptyBody(value: string): string {
+  return `'${value}' 바코드로 등록된 상품을 찾지 못했어요. 상품명으로 검색해 보세요.`;
+}

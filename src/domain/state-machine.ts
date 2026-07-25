@@ -7,14 +7,22 @@ export const initialState: UiState = { state: 'default' };
 export function reduce(state: UiState, event: StoreEvent): UiState {
   switch (event.type) {
     case 'SUBMIT':
+      return { state: 'loading', query: event.query, slow: false, origin: event.origin };
     case 'SELECT_CANDIDATE':
+      // A candidate tap is a product choice, not a scanned code — provenance ends here.
       return { state: 'loading', query: event.query, slow: false };
     case 'CHANGE_STORE':
       return { state: 'default' };
     case 'SLOW':
       return state.state === 'loading' ? { ...state, slow: true } : state;
     case 'NO_MATCH':
-      return { state: 'empty', query: event.query, suggestions: event.suggestions.slice(0, 3) };
+      return {
+        state: 'empty',
+        query: event.query,
+        suggestions: event.suggestions.slice(0, 3),
+        // Same threading shape RESULT/FAILURE use for query: only a loading state carries provenance.
+        origin: state.state === 'loading' ? state.origin : undefined,
+      };
     case 'CANDIDATES':
       return { state: 'candidates', query: event.query, candidates: event.candidates.slice(0, 3) };
     case 'RESULT': {

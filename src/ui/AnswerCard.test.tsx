@@ -31,6 +31,7 @@ import {
   partialLocationMissingConfirmed,
   partialStaleCacheBody,
   restockBody,
+  scanEmptyBody,
 } from './copy';
 
 const NOW = new Date(2026, 6, 15, 9, 0).getTime();
@@ -68,6 +69,18 @@ test('empty renders the Bible body with the query quoted', () => {
     />,
   );
   expect(screen.getByText(emptyBody('락앤락같은통'))).toBeInTheDocument();
+});
+
+test('a scan-origin empty card tells the shopper to search by name instead of scanning again', () => {
+  render(
+    <AnswerCard
+      ui={{ state: 'empty', query: '19987', suggestions: [], origin: 'scan' }}
+      policy={defaultPolicy}
+      nowMs={0}
+    />,
+  );
+  expect(screen.getByText(scanEmptyBody('19987'))).toBeInTheDocument();
+  expect(screen.queryByText(emptyBody('19987'))).not.toBeInTheDocument();
 });
 
 test('error/noCache renders the no-cache body and the retry button', () => {

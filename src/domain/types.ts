@@ -63,8 +63,13 @@ export type CacheOutcome =
   | { kind: 'beyondThreshold'; answer: AvailabilityAnswer; freshness: Freshness }
   | { kind: 'noCache' };
 
+// Query provenance (app-owned, spec §4). Scan entry needs its own honest Empty copy: the Bible's typed
+// Empty tells the shopper to scan, which is self-contradictory for someone who just scanned. Provenance
+// selects COPY ONLY — it never participates in availability judgement or the meaning of the 6 states.
+export type QueryOrigin = 'scan';
+
 export type StoreEvent =
-  | { type: 'SUBMIT'; query: string }
+  | { type: 'SUBMIT'; query: string; origin?: QueryOrigin }
   | { type: 'RESULT'; answer: AvailabilityAnswer; freshness: Freshness }
   | { type: 'NO_MATCH'; query: string; suggestions: string[] }
   | { type: 'FAILURE'; cache: CacheOutcome }
@@ -79,8 +84,8 @@ export type StoreEvent =
 // Every non-default state retains the submitted query (B15): retry/re-search re-dispatches SUBMIT with it.
 export type UiState =
   | { state: 'default' }
-  | { state: 'loading'; query: string; slow: boolean }
-  | { state: 'empty'; query: string; suggestions: string[] }
+  | { state: 'loading'; query: string; slow: boolean; origin?: QueryOrigin }
+  | { state: 'empty'; query: string; suggestions: string[]; origin?: QueryOrigin }
   // Pre-answer: search matched several products literally. Not a 7th AvailabilityAnswer kind — picking one
   // dispatches SELECT_CANDIDATE, which re-queries for the real answer.
   | { state: 'candidates'; query: string; candidates: ProductCandidate[] }

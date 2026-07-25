@@ -14,6 +14,10 @@ import {
   PARTIAL_STALE_CACHE_CTA,
   RETRY_BUTTON,
   SCAN_BUTTON_LABEL,
+  SCAN_FAILED,
+  SCAN_HINT,
+  SCAN_PERMISSION_DENIED,
+  SCAN_UNSUPPORTED,
   SEARCH_PLACEHOLDER,
   STORE_CHANGE_BUTTON,
   STORE_SELECT_CLOSE,
@@ -42,6 +46,7 @@ import {
   partialStaleCacheBody,
   priceLocationLine,
   restockBody,
+  scanEmptyBody,
   storeLine,
 } from './copy';
 
@@ -242,4 +247,39 @@ test('store-selection copy reproduces the Bible Store select rows verbatim (Inte
 
 test('nearbyStoreRowLabel parameterizes the Bible example row (명동역점 · 120m)', () => {
   expect(nearbyStoreRowLabel('명동역점', 120)).toBe('명동역점 · 120m');
+});
+
+test('scan copy drafts are transcribed exactly (app-owned, pending Bible ratification)', () => {
+  expect(SCAN_PERMISSION_DENIED).toBe('카메라를 사용할 수 없어요. 상품명으로 검색해 보세요.');
+  expect(SCAN_UNSUPPORTED).toBe(
+    '이 브라우저에서는 바코드 스캔을 쓸 수 없어요. 상품명으로 검색해 보세요.',
+  );
+  expect(SCAN_FAILED).toBe('바코드를 읽지 못했어요. 상품명으로 검색해 보세요.');
+  expect(SCAN_HINT).toBe('바코드가 잘 안 읽히면 상품명으로 검색해 보세요.');
+  expect(scanEmptyBody('19987')).toBe(
+    "'19987' 바코드로 등록된 상품을 찾지 못했어요. 상품명으로 검색해 보세요.",
+  );
+});
+
+test('every scan copy line ends with a concrete next step and blames nobody', () => {
+  for (const line of [
+    SCAN_PERMISSION_DENIED,
+    SCAN_UNSUPPORTED,
+    SCAN_FAILED,
+    SCAN_HINT,
+    scanEmptyBody('1'),
+  ]) {
+    expect(line).toContain('상품명으로 검색');
+    expect(line).not.toContain('권한');
+    expect(line).not.toContain('실패');
+  }
+});
+
+test('a scan-origin empty announces the scan copy, not the typed copy', () => {
+  const announced = announcementFor(
+    { state: 'empty', query: '19987', suggestions: [], origin: 'scan' },
+    defaultPolicy,
+    0,
+  );
+  expect(announced).toEqual([scanEmptyBody('19987')]);
 });

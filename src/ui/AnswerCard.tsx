@@ -26,6 +26,7 @@ import {
   partialLocationMissingConfirmed,
   partialStaleCacheBody,
   priceLocationLine,
+  scanEmptyBody,
 } from './copy';
 import { formatLocation, formatPrice, formatRelativeTimeKo } from './format';
 
@@ -70,7 +71,11 @@ function renderBody(
         </div>
       );
     case 'empty':
-      return <p className="text-body">{emptyBody(ui.query)}</p>;
+      return (
+        <p className="text-body">
+          {ui.origin === 'scan' ? scanEmptyBody(ui.query) : emptyBody(ui.query)}
+        </p>
+      );
     case 'candidates':
       // Unreachable: candidates is a pre-answer state that AvailabilitySurface renders separately
       // (later task) — AnswerCard never receives it. Present only to keep this switch exhaustive.
