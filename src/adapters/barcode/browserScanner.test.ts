@@ -45,7 +45,8 @@ test('the bundled fallback pulls the DataMatrix reader itself, not another zxing
   // above: (a) a package upgrade moves the deep path — loadBundledDecoder's catch would turn that into
   // `unsupported` on every iOS device, no error anywhere; (b) someone swaps the import for another
   // valid zxing reader, say BrowserMultiFormatReader, which decodes 1D again and hands back the
-  // packaging's EAN as if it were a pdNo. An identity check against the barrel's exports catches both.
+  // packaging's EAN as if it were a pdNo. The assertions below catch both: (a) makes this very await
+  // reject, and (b) changes both the wrapper's name and the core reader it wires.
   const Reader = await importBundledDatamatrixReader();
   const reader = new Reader();
   expect(Reader.name).toBe('BrowserDatamatrixCodeReader');
@@ -53,9 +54,13 @@ test('the bundled fallback pulls the DataMatrix reader itself, not another zxing
   // proves little on its own — what decides which symbologies get decoded is the core Reader the
   // wrapper constructs itself and keeps in `.reader`. BrowserDatamatrixCodeReader wires a
   // DataMatrixReader; BrowserMultiFormatReader would wire a MultiFormatReader and read 1D again.
-  // (Identity via `toBe` against the '@zxing/library' barrel is not usable here: the barrel resolves to
-  // the package's CJS build while the loader deep-imports the ESM one, so the two classes are distinct
-  // objects and every such comparison would pass vacuously.)
+  // Constructor NAMES, not `toBe` identity against the '@zxing/library' barrel. Measured under this
+  // repo's Vitest setup (2026-07-26): the bare specifier resolves to the package's CJS build — the
+  // barrel's export is `===` the one from cjs/index.js and NOT `===` the one from esm/index.js — while
+  // the loader deep-imports the ESM build, so the two are separate class objects (cross-`instanceof`
+  // is false too). A POSITIVE `expect(Reader).toBe(barrel.BrowserDatamatrixCodeReader)` would
+  // therefore FAIL on perfectly correct code; it is the NEGATIVE `not.toBe` that would pass vacuously,
+  // proving nothing. Names survive that split, which is why names are what these assert.
   expect((reader as unknown as { reader: object }).reader.constructor.name).toBe(
     'DataMatrixReader',
   );

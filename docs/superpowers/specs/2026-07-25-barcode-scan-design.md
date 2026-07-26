@@ -154,6 +154,7 @@ export interface ScannerPort {
 
 ```ts
 // 앱 초안 — Bible 침묵 구간. 비준 시 Bible 문자열로 교체.
+export const SCAN_AIM_GUIDE = '상품의 정사각형 코드를 화면 안에 맞춰 주세요.';
 export const SCAN_PERMISSION_DENIED = '카메라를 사용할 수 없어요. 상품명으로 검색해 보세요.';
 export const SCAN_UNSUPPORTED = '이 브라우저에서는 바코드 스캔을 쓸 수 없어요. 상품명으로 검색해 보세요.';
 export const SCAN_FAILED = '지금은 스캔할 수 없어요. 상품명으로 검색해 보세요.';
@@ -162,6 +163,8 @@ export function scanEmptyBody(value: string): string {
   return `'${value}' 바코드로 등록된 상품을 찾지 못했어요. 상품명으로 검색해 보세요.`;
 }
 ```
+
+> **`SCAN_AIM_GUIDE` 추가(2026-07-26, DataMatrix 전용 정정과 함께 — §B30-8)**: DataMatrix 전용 디코딩(§B30-2) 탓에 포장의 1D 바코드를 겨눈 쇼퍼는 `SCAN_HINT`가 뜰 때까지 아무 피드백도 받지 못하므로, 뷰파인더가 열리는 순간부터 어느 코드를 겨눠야 하는지 알린다(`정사각형`은 모양이지 심볼로지명이 아니다 — 기술용어 금지 규칙 준수). 나머지와 같이 **Bible 비준 대기**.
 
 > **`SCAN_FAILED` 문구 정정(2026-07-26, 최종 리뷰 반영)**: 초안은 `'바코드를 읽지 못했어요. …'`였으나, 이 상수는 디코더 오류뿐 아니라 **카메라 획득 실패**(§5 표의 `NotReadableError`·`NotFoundError` 등)에서도 뜬다. 카메라를 열지도 못한 상황에서 "바코드를 읽지 못했다"고 말하면 **하지 않은 판독을 날조**한다(Anti-goal 3). 두 원인 모두에 정직한 `'지금은 스캔할 수 없어요. …'`로 교체하고, `지금은`으로 **일시성**을 유지한다(§5 정직성 정정과 같은 논리). 나머지 3종은 초안 그대로 — 여전히 Bible 비준 대기(B30-4).
 

@@ -196,7 +196,7 @@ export const RESULTS_NOTICE = '검색 결과예요. 바코드를 스캔하면 �
 // scan produces — its typed Empty tells the shopper to scan, which contradicts itself after a scan.
 // Drafted to the Korean UX rules: result language only (no 권한이 없습니다-style blame, no technical
 // terms), and every line ends with a concrete next step (Anti-goal 5). Replace verbatim on ratification.
-// Shown from the moment the viewfinder opens (spec fix/barcode-datamatrix): DataMatrix-only decoding
+// Shown from the moment the viewfinder opens (spec 2026-07-25-barcode-scan-design §6): DataMatrix-only decoding
 // (B30-2) means a shopper who aims at the package's striped 1D code gets ten seconds of silence before
 // SCAN_HINT appears — nothing else on screen tells them which code to aim at. "정사각형 코드" names the
 // SHAPE, deliberately not the symbology ("DataMatrix" is a technical term the Korean UX rules forbid).
