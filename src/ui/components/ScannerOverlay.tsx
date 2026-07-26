@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ScanOutcome, ScannerPort } from '../../domain/ports';
 import { LiveRegion } from '../a11y/LiveRegion';
 import {
+  SCAN_AIM_GUIDE,
   SCAN_BUTTON_LABEL,
   SCAN_FAILED,
   SCAN_HINT,
@@ -18,6 +19,7 @@ import {
 import { GlassSurface } from './GlassSurface';
 
 const DEFAULT_HINT_DELAY_MS = 10_000;
+const AIM_GUIDE_ID = 'scanner-aim-guide';
 
 function noticeFor(outcome: ScanOutcome | null): string | null {
   if (!outcome) return null;
@@ -99,7 +101,12 @@ export function ScannerOverlay({
 
   return (
     <GlassSurface className="scanner-overlay">
-      <section role="dialog" aria-modal="true" aria-labelledby="scanner-title">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="scanner-title"
+        aria-describedby={notice ? undefined : AIM_GUIDE_ID}
+      >
         <div className="scanner-overlay__header">
           <h2 id="scanner-title" className="text-heading">
             {SCAN_BUTTON_LABEL}
@@ -122,7 +129,16 @@ export function ScannerOverlay({
         {notice ? (
           <p className="text-body">{notice}</p>
         ) : (
-          hinting && <p className="text-caption">{SCAN_HINT}</p>
+          <>
+            {/* Visible from mount, for the whole time scanning is in progress: DataMatrix-only
+                decoding (B30-2) makes aiming at the package's 1D code a silent dead end otherwise.
+                Wired as the dialog's accessible description (aria-describedby above) because focus
+                stays on 닫기 for the whole overlay — a bare paragraph would never be announced. */}
+            <p id={AIM_GUIDE_ID} className="text-body">
+              {SCAN_AIM_GUIDE}
+            </p>
+            {hinting && <p className="text-caption">{SCAN_HINT}</p>}
+          </>
         )}
         {/* Focus stays on 닫기 for the whole overlay, so an outcome notice that is only rendered is
             never spoken. The surface's idiom applies here too: visible copy plus a live region that

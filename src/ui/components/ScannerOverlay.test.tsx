@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ScanOutcome, ScannerPort } from '../../domain/ports';
 import {
+  SCAN_AIM_GUIDE,
   SCAN_BUTTON_LABEL,
   SCAN_FAILED,
   SCAN_HINT,
@@ -38,6 +39,26 @@ test('a decoded value is handed up exactly once', async () => {
 // every "is it on screen" assertion below scopes to the paragraph.
 const noticeParagraph = { selector: 'p' } as const;
 
+test('the aiming guide is visible immediately on mount, while scanning is in progress', () => {
+  render(<ScannerOverlay scanner={never} onDecoded={() => {}} onClose={() => {}} />);
+  // No waitFor: the scan never resolves, so this must already be on screen on the first render —
+  // not something that only appears once an outcome (or the 10s hint) lands.
+  expect(screen.getByText(SCAN_AIM_GUIDE)).toBeInTheDocument();
+});
+
+test("the dialog's accessible description resolves to the aiming guide", () => {
+  render(<ScannerOverlay scanner={never} onDecoded={() => {}} onClose={() => {}} />);
+  // Focus lands on 닫기 for the whole overlay (see focus test above), so a bare paragraph would
+  // never be read aloud — the guide must be wired as the dialog's accessible description instead.
+  expect(
+    screen.getByRole('dialog', { name: SCAN_BUTTON_LABEL, description: SCAN_AIM_GUIDE }),
+  ).toBeInTheDocument();
+  const dialog = screen.getByRole('dialog', { name: SCAN_BUTTON_LABEL });
+  const describedBy = dialog.getAttribute('aria-describedby');
+  expect(describedBy).toBeTruthy();
+  expect(document.getElementById(describedBy as string)).toHaveTextContent(SCAN_AIM_GUIDE);
+});
+
 test('a permission denial shows the honest fallback copy and stays open', async () => {
   const scanner: ScannerPort = { scan: async () => ({ kind: 'permissionDenied' }) };
   render(<ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />);
@@ -56,6 +77,16 @@ test('a decode failure shows the honest fallback copy and stays open', async () 
   render(<ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />);
   expect(await screen.findByText(SCAN_FAILED, noticeParagraph)).toBeInTheDocument();
   expect(screen.getByRole('dialog', { name: SCAN_BUTTON_LABEL })).toBeInTheDocument();
+});
+
+test('the aiming guide gives way to the notice on a failure outcome', async () => {
+  const scanner: ScannerPort = { scan: async () => ({ kind: 'failed' }) };
+  render(<ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />);
+  // Present at first, before the outcome lands...
+  expect(screen.getByText(SCAN_AIM_GUIDE)).toBeInTheDocument();
+  expect(await screen.findByText(SCAN_FAILED, noticeParagraph)).toBeInTheDocument();
+  // ...and gone once the notice takes its place — the guide is no longer relevant once we know why.
+  expect(screen.queryByText(SCAN_AIM_GUIDE)).not.toBeInTheDocument();
 });
 
 // Focus never leaves 닫기 when an outcome lands, so a notice that is only rendered is silence for a
@@ -85,8 +116,11 @@ test('a cancelled scan leaves no notice behind, unlike every other terminal outc
   expect(screen.queryByText(SCAN_PERMISSION_DENIED)).not.toBeInTheDocument();
   expect(screen.queryByText(SCAN_UNSUPPORTED)).not.toBeInTheDocument();
   expect(screen.queryByText(SCAN_HINT)).not.toBeInTheDocument();
-  // Belt-and-braces: no paragraph of any kind, not just the four known copies above.
-  expect(dialog.querySelectorAll('p')).toHaveLength(0);
+  // Belt-and-braces: no NOTICE paragraph of any kind, not just the four known copies above — the
+  // only paragraph left standing is the aiming guide, which stays up whenever there is no outcome
+  // notice (a cancelled scan included: it never sets one).
+  expect(dialog.querySelectorAll('p')).toHaveLength(1);
+  expect(screen.getByText(SCAN_AIM_GUIDE)).toBeInTheDocument();
 });
 
 test('a slow decode keeps the camera open and only adds a hint', async () => {

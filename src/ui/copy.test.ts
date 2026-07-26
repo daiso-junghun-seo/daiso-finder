@@ -13,6 +13,7 @@ import {
   PARTIAL_NO_LOCATION_NOTE,
   PARTIAL_STALE_CACHE_CTA,
   RETRY_BUTTON,
+  SCAN_AIM_GUIDE,
   SCAN_BUTTON_LABEL,
   SCAN_FAILED,
   SCAN_HINT,
@@ -250,6 +251,7 @@ test('nearbyStoreRowLabel parameterizes the Bible example row (명동역점 · 1
 });
 
 test('scan copy drafts are transcribed exactly (app-owned, pending Bible ratification)', () => {
+  expect(SCAN_AIM_GUIDE).toBe('상품의 정사각형 코드를 화면 안에 맞춰 주세요.');
   expect(SCAN_PERMISSION_DENIED).toBe('카메라를 사용할 수 없어요. 상품명으로 검색해 보세요.');
   expect(SCAN_UNSUPPORTED).toBe(
     '이 브라우저에서는 바코드 스캔을 쓸 수 없어요. 상품명으로 검색해 보세요.',
