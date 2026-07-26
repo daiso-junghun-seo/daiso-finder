@@ -19,7 +19,7 @@
 
 **비목표(이번 슬라이스 밖)**:
 - AI 확신도 티어링·이미지 인식·"이거 맞나요?" 카메라 판별 — Bible이 **금지**(`Experience/in-store-navigation.md:219`, `Engineering/in-store-navigation.md:140`). 카메라는 **바코드 디코드 전용**.
-- 매대 라벨(shelf label) OCR — Bible이 스캔 대상으로 언급하나 디코딩 규격 미정의. 이번 슬라이스는 **1D 상품 바코드만**.
+- 매대 라벨(shelf label) OCR — Bible이 스캔 대상으로 언급하나 디코딩 규격 미정의. 이번 슬라이스는 **상품 포장 바코드만**(정정 2026-07-26 — DataMatrix 전용, §3.2).
 - UI 폴리싱(슬라이스 3) — 오버레이는 기능·a11y 완성, CSS는 최소.
 - 실기기 필드 검증(§B9) — 물리 카메라 없음.
 
@@ -103,11 +103,13 @@ export interface ScannerPort {
 
 ### 3.2 디코더 전략
 
-1. `'BarcodeDetector' in globalThis` → 네이티브 사용(Android Chrome). `detect(video)` 폴링 200ms.
-2. 없으면 `await import('@zxing/library')` — **동적 import로 지연 청크 분리**(초기 PWA 번들 불변, 외부 CDN 아님). iOS Safari 경로.
+1. `'BarcodeDetector' in globalThis`이고 `await BarcodeDetector.getSupportedFormats()`가 `data_matrix`를 포함할 때만 → 네이티브 사용(주로 Android Chrome), `detect(video)` 폴링 200ms. 이 확인 없이 네이티브를 그냥 쓰면 DataMatrix 미지원 플랫폼에서 `detect()`가 영원히 아무것도 찾지 못한 채 카메라만 켜진 상태로 멈춘다(무음 행) — 그래서 지원 프로브가 필수다.
+2. 네이티브가 없거나 `data_matrix`를 지원하지 않으면 → `await import('@zxing/library/esm/browser/BrowserDatamatrixCodeReader')`(**딥 임포트**로 지연 청크 분리, 초기 PWA 번들 불변, 외부 CDN 아님). `@zxing/library`는 `sideEffects` 미선언이라 배럴 임포트로는 트리셰이킹이 안 돼, 전용 리더를 딥 경로로 직접 끌어와야 다른 zxing 디코더가 청크에 섞이지 않는다. iOS Safari 등 대부분의 경로.
 3. 둘 다 불가 → `{kind:'unsupported'}`.
 
-**심볼로지**: `ean_13`, `ean_8`, `upc_a`, `upc_e`, `code_128`, `code_39`, `itf`. QR/DataMatrix 제외(D082 혼동 회피 + 스코프).
+**심볼로지**: `data_matrix` 전용(`SCAN_FORMATS = ['data_matrix']`).
+
+> **정정(2026-07-26)**: 최초 결정(1D 상품 바코드 7종 — `ean_13`·`ean_8`·`upc_a`·`upc_e`·`code_128`·`code_39`·`itf`, QR/DataMatrix 제외)은 **data-owner가 포장 심볼로지를 확인해주기 전**의 결정이었다. data-owner 확인(§B30-7, `open-questions.md`): DAISO 상품 포장은 2D DataMatrix를 쓰고 페이로드가 `pdNo` 그 자체다. 같은 포장의 1D 바코드는 `pdNo`가 아닌 별개 번호(EAN/UPC)라, 그것을 디코드하면 **엉뚱한 상품으로 조회**된다 — 배타성(1D 전종·QR 제외)은 스코프 축소가 아니라 정확성 요구다.
 
 ### 3.3 조회 경로 — 신규 백엔드 없음
 
@@ -194,7 +196,7 @@ export function scanEmptyBody(value: string): string {
 
 ## 10. 잔여 리스크 (기록만, 이번 슬라이스에서 해소 불가)
 
-- **R1(중) → ✅ 2026-07-26 해소(data-owner 확인: 물리 바코드 = `pdNo`)**: 스캔 값이 곧 `pdNo`이므로 D3의 verbatim 조회가 그대로 올바른 경로다(코드 변경 없음). 근거는 data-owner 진술이며 우리 관측이 아니다 — 계약에 바코드 필드가 없어 기계 검증은 불가(아래 프로브). **남는 검증은 값 매핑이 아니라 실기기 디코드**(§B9): 심볼로지가 켜둔 7종 안인지, 디코드 문자열에 선행 0·체크디짓 잉여가 붙지 않는지. 어긋나면 정직한 Empty로 끝나며 교정은 어댑터 심 뒤에서만.
+- **R1(중) → ✅ 2026-07-26 해소(data-owner 확인: 물리 바코드 = `pdNo`)**: 스캔 값이 곧 `pdNo`이므로 D3의 verbatim 조회가 그대로 올바른 경로다(코드 변경 없음). 근거는 data-owner 진술이며 우리 관측이 아니다 — 계약에 바코드 필드가 없어 기계 검증은 불가(아래 프로브). **남는 검증은 심볼로지 커버리지가 아니라 실기기 디코드 품질**(§B9): DataMatrix 전용 정정(§3.2, 2026-07-26) 이후 심볼로지 자체는 더 이상 변수가 아니다 — 남는 것은 매장 조명·포커스 조건에서 작고 조밀한 DataMatrix를 카메라가 실제로 읽어내는지다. 어긋나면 정직한 Empty로 끝나며 교정은 어댑터 심 뒤에서만.
   - **읽기전용 프로브 근거(2026-07-25, 5요청 GET·무인증·무쓰기)**: SearchGoods 응답 doc **74필드 전수 확인 결과 바코드성 필드 0건**(`barCd·ean·jan·upc·gtin·stdPdNo` 전부 부재, 12~14자리 숫자 값도 0건). 요청 파라미터에도 바코드 자리 없음. 하위 재고·위치 엔드포인트의 **유일한 상품 키는 `pdNo`**. → "응답에서 EAN을 얻어 대조"하는 **역방향 검증 경로가 계약에 존재하지 않는다.**
   - 같은 프로브에서 `searchTerm=19987`·`1031166`(알려진 pdNo) → **정확 매칭 doc 반환 확인**(오너 전제가 맞을 경우 경로 성립). 임의 생성 13자리(`8801234567890`) → 0 doc·에러 없음 = **정직한 무매칭 형상**(단, 실제 다이소 상품 바코드가 아니므로 "EAN 미색인"의 증거는 **아님**).
   - **갭을 닫는 최소 행동(owner 1행동)**: 실제 매장 상품 포장의 바코드 숫자 1개 → 1요청으로 색인 여부·자릿수 판정 가능. 그 전까지 스캔 값 해석은 **어댑터 심 뒤 격리**(CLAUDE.md §3 data-owner 경험적 사실).
