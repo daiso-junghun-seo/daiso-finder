@@ -1,5 +1,5 @@
 import type { ScanTarget } from '../../domain/ports';
-import { createBrowserScanner } from './browserScanner';
+import { SCAN_FORMATS, createBrowserScanner } from './browserScanner';
 
 function fakeTrack() {
   return {
@@ -18,11 +18,172 @@ function fakeTarget(): ScanTarget {
   return { video };
 }
 
+// The tests below exercise the DEFAULT native-detector resolution (createNativeDetector left out of the
+// deps), which reads globalThis.BarcodeDetector — so each one installs a stub and afterEach removes it.
+function installNativeBarcodeDetector(ctor: unknown): void {
+  (globalThis as { BarcodeDetector?: unknown }).BarcodeDetector = ctor;
+}
+afterEach(() => {
+  // Assigned rather than deleted (biome noDelete); the adapter treats a falsy ctor as "no native
+  // detector", which is exactly the absent-BarcodeDetector platform the other tests assume.
+  (globalThis as { BarcodeDetector?: unknown }).BarcodeDetector = undefined;
+});
+
+test('only DataMatrix is scanned', () => {
+  // DAISO packaging carries a DataMatrix whose payload is exactly the pdNo. A 1D barcode on the same
+  // package encodes a different number entirely, so decoding one would query the wrong product.
+  expect(SCAN_FORMATS).toEqual(['data_matrix']);
+});
+
+test('the bundled DataMatrix reader is importable at the path the fallback loads', async () => {
+  // loadBundledDecoder deep-imports one module instead of the @zxing barrel (the package declares no
+  // sideEffects, so the barrel drags every 1D/2D decoder into the lazy chunk: 415.76 kB vs 91.96 kB).
+  // That path is a private one, so a package upgrade could move it — and the loader's catch would turn
+  // the break into a silent `unsupported` on every iOS device. Fail here instead.
+  const mod = await import('@zxing/library/esm/browser/BrowserDatamatrixCodeReader');
+  const reader = new mod.BrowserDatamatrixCodeReader();
+  expect(typeof reader.decodeOnceFromStream).toBe('function');
+  expect(typeof reader.reset).toBe('function');
+});
+
+test('a native detector that cannot read DataMatrix is not used — the bundled decoder is', async () => {
+  const track = fakeTrack();
+  let constructed = 0;
+  class OneDimensionalOnlyDetector {
+    static getSupportedFormats = async () => ['ean_13', 'code_128', 'qr_code'];
+    constructor() {
+      constructed += 1;
+    }
+    async detect() {
+      return [{ rawValue: '8801234567890' }]; // the 1D code on the packaging — NOT the pdNo
+    }
+  }
+  installNativeBarcodeDetector(OneDimensionalOnlyDetector);
+  const scanner = createBrowserScanner({
+    mediaDevices: { getUserMedia: async () => fakeStream(track) },
+    loadFallbackDecoder: async () => ({ decode: async () => '1031166', cancel: () => {} }),
+    pollIntervalMs: 1,
+  });
+  await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
+    kind: 'decoded',
+    value: '1031166',
+  });
+  // Building it anyway would hang the overlay on a detector whose detect() can never fire for
+  // DataMatrix — or, worse, hand back the packaging's 1D number as if it were the pdNo.
+  expect(constructed).toBe(0);
+  expect(track.stopped).toBe(true);
+});
+
+test('a native detector that supports DataMatrix is used, asked for data_matrix and nothing else', async () => {
+  const track = fakeTrack();
+  let requestedFormats: string[] | undefined;
+  class DataMatrixCapableDetector {
+    static getSupportedFormats = async () => ['ean_13', 'data_matrix', 'qr_code'];
+    constructor(options: { formats: string[] }) {
+      requestedFormats = options.formats;
+    }
+    async detect() {
+      return [{ rawValue: '1031166' }];
+    }
+  }
+  installNativeBarcodeDetector(DataMatrixCapableDetector);
+  const scanner = createBrowserScanner({
+    mediaDevices: { getUserMedia: async () => fakeStream(track) },
+    loadFallbackDecoder: async () => {
+      throw new Error('the bundled chunk must not be loaded when the platform can decode');
+    },
+    pollIntervalMs: 1,
+  });
+  await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
+    kind: 'decoded',
+    value: '1031166',
+  });
+  expect(requestedFormats).toEqual(['data_matrix']);
+  expect(track.stopped).toBe(true);
+});
+
+test('a native detector whose support query rejects falls back instead of throwing', async () => {
+  const track = fakeTrack();
+  class BrokenDetector {
+    static getSupportedFormats = async (): Promise<string[]> => {
+      throw new Error('support query blew up');
+    };
+    async detect() {
+      return [];
+    }
+  }
+  installNativeBarcodeDetector(BrokenDetector);
+  const scanner = createBrowserScanner({
+    mediaDevices: { getUserMedia: async () => fakeStream(track) },
+    loadFallbackDecoder: async () => ({ decode: async () => '1031166', cancel: () => {} }),
+  });
+  // Unknown support is not usable support: the port never throws, it degrades to the bundled decoder.
+  await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
+    kind: 'decoded',
+    value: '1031166',
+  });
+  expect(track.stopped).toBe(true);
+});
+
+test('no DataMatrix support and no bundled decoder is unsupported, camera never opened', async () => {
+  let getUserMediaCalls = 0;
+  class OneDimensionalOnlyDetector {
+    static getSupportedFormats = async () => ['ean_13'];
+    async detect() {
+      return [];
+    }
+  }
+  installNativeBarcodeDetector(OneDimensionalOnlyDetector);
+  const scanner = createBrowserScanner({
+    mediaDevices: {
+      getUserMedia: async () => {
+        getUserMediaCalls += 1;
+        return fakeStream(fakeTrack());
+      },
+    },
+    loadFallbackDecoder: async () => null,
+  });
+  await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
+    kind: 'unsupported',
+  });
+  // A detector that exists but cannot read DataMatrix is no decoder at all — so the camera light must
+  // never come on, exactly as when BarcodeDetector is absent entirely.
+  expect(getUserMediaCalls).toBe(0);
+});
+
+test('closing the overlay during the native support check cancels, with no camera and no chunk load', async () => {
+  const controller = new AbortController();
+  let getUserMediaCalls = 0;
+  let fallbackLoads = 0;
+  const scanner = createBrowserScanner({
+    mediaDevices: {
+      getUserMedia: async () => {
+        getUserMediaCalls += 1;
+        return fakeStream(fakeTrack());
+      },
+    },
+    // getSupportedFormats() is async and can hang on a slow device — the wait for it must be as
+    // abortable as the wait for the bundled chunk below.
+    createNativeDetector: () => new Promise(() => {}),
+    loadFallbackDecoder: async () => {
+      fallbackLoads += 1;
+      return { decode: async () => '1031166', cancel: () => {} };
+    },
+  });
+  const pending = scanner.scan(fakeTarget(), controller.signal);
+  await Promise.resolve(); // let scan() reach the await on the support check
+  controller.abort();
+  await expect(pending).resolves.toEqual({ kind: 'cancelled' });
+  expect(getUserMediaCalls).toBe(0);
+  // An already-abandoned run must not go on to pull the lazy decoder chunk either.
+  expect(fallbackLoads).toBe(0);
+});
+
 test('decodes with the native detector and stops the camera', async () => {
   const track = fakeTrack();
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
-    createNativeDetector: () => ({ detect: async () => [{ rawValue: '19987' }] }),
+    createNativeDetector: async () => ({ detect: async () => [{ rawValue: '19987' }] }),
     pollIntervalMs: 1,
   });
   const outcome = await scanner.scan(fakeTarget(), new AbortController().signal);
@@ -39,7 +200,7 @@ test('a permission denial is an outcome, never a throw', async () => {
         throw err;
       },
     },
-    createNativeDetector: () => null,
+    createNativeDetector: async () => null,
   });
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
     kind: 'permissionDenied',
@@ -49,7 +210,7 @@ test('a permission denial is an outcome, never a throw', async () => {
 test('no camera API at all reports unsupported', async () => {
   const scanner = createBrowserScanner({
     mediaDevices: undefined,
-    createNativeDetector: () => null,
+    createNativeDetector: async () => null,
   });
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
     kind: 'unsupported',
@@ -60,7 +221,7 @@ test('falls back to the bundled decoder when no native detector exists', async (
   const track = fakeTrack();
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
-    createNativeDetector: () => null,
+    createNativeDetector: async () => null,
     loadFallbackDecoder: async () => ({ decode: async () => '1031166', cancel: () => {} }),
   });
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
@@ -79,7 +240,7 @@ test('an unloadable fallback decoder reports unsupported without ever opening th
         return fakeStream(fakeTrack());
       },
     },
-    createNativeDetector: () => null,
+    createNativeDetector: async () => null,
     loadFallbackDecoder: async () => null,
   });
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
@@ -89,7 +250,7 @@ test('an unloadable fallback decoder reports unsupported without ever opening th
   expect(getUserMediaCalls).toBe(0);
 });
 
-// The iOS Safari path, and the reason the decoder is resolved BEFORE the camera. The ~415 kB @zxing
+// The iOS Safari path, and the reason the decoder is resolved BEFORE the camera. The ~92 kB @zxing
 // chunk can take seconds on a cold cache; a shopper who closes the overlay during it aborts a scan that
 // has not yet touched getUserMedia. Under a camera-first ordering this run would leave the camera on
 // until the import settled — here there is no camera to leave on, and the abort is heard immediately
@@ -104,7 +265,7 @@ test('closing the overlay while the decoder is still loading cancels and never s
         return fakeStream(fakeTrack());
       },
     },
-    createNativeDetector: () => null,
+    createNativeDetector: async () => null,
     loadFallbackDecoder: () => new Promise(() => {}), // import in flight, never settles
   });
   const pending = scanner.scan(fakeTarget(), controller.signal);
@@ -128,7 +289,7 @@ test('abort cancels an in-progress native scan and always stops the camera', asy
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => getUserMediaPromise },
     // never decodes — the camera stays open until abort (Bible: decode failure keeps the camera open)
-    createNativeDetector: () => ({
+    createNativeDetector: async () => ({
       detect: async () => {
         resolveFirstDetect();
         return [];
@@ -160,7 +321,7 @@ test('abort cancels the scan even when video.play() never settles (a real-device
   } as unknown as HTMLVideoElement;
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
-    createNativeDetector: () => ({
+    createNativeDetector: async () => ({
       detect: async () => {
         resolveFirstDetect();
         return [];
@@ -181,7 +342,7 @@ test('a transient detect() failure keeps scanning instead of failing the run', a
   let calls = 0;
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
-    createNativeDetector: () => ({
+    createNativeDetector: async () => ({
       detect: async () => {
         calls += 1;
         if (calls === 1) throw new Error('frame not ready');
@@ -210,7 +371,7 @@ test('abort cancels an in-progress fallback scan via decoder.cancel() and stops 
   });
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
-    createNativeDetector: () => null,
+    createNativeDetector: async () => null,
     loadFallbackDecoder: async () => ({
       decode: async () => {
         resolveDecodeStarted();
@@ -237,7 +398,7 @@ test('a fallback decoder rejection reports failed and stops the camera', async (
   const track = fakeTrack();
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
-    createNativeDetector: () => null,
+    createNativeDetector: async () => null,
     loadFallbackDecoder: async () => ({
       decode: async () => {
         throw new Error('decode error');
@@ -256,7 +417,7 @@ test('a successful fallback decode still releases the decoder', async () => {
   let cancelCalls = 0;
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
-    createNativeDetector: () => null,
+    createNativeDetector: async () => null,
     loadFallbackDecoder: async () => ({
       decode: async () => '1031166',
       cancel: () => {
@@ -277,7 +438,7 @@ test('an empty fallback decode is failed, never a decoded empty value', async ()
   const track = fakeTrack();
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
-    createNativeDetector: () => null,
+    createNativeDetector: async () => null,
     loadFallbackDecoder: async () => ({ decode: async () => '', cancel: () => {} }),
   });
   // The native path already skips empty results; an empty string handed upward would run availability
@@ -301,7 +462,7 @@ test('an abort landing while the camera is being acquired still stops it', async
         return fakeStream(track);
       },
     },
-    createNativeDetector: () => ({ detect: async () => [] }),
+    createNativeDetector: async () => ({ detect: async () => [] }),
     pollIntervalMs: 1,
   });
   await expect(scanner.scan(fakeTarget(), controller.signal)).resolves.toEqual({
@@ -319,7 +480,7 @@ test('a getUserMedia failure other than permission denial reports failed, not un
         throw err;
       },
     },
-    createNativeDetector: () => null,
+    createNativeDetector: async () => null,
   });
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
     kind: 'failed',

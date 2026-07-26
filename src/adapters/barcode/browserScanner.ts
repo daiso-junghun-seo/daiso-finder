@@ -6,17 +6,13 @@
 // Decode-only: no image recognition (Bible, Engineering/in-store-navigation §dependencies).
 import type { ScanOutcome, ScanTarget, ScannerPort } from '../../domain/ports';
 
-// 1D retail symbologies only. QR/DataMatrix stay out: a product query has no defined QR payload, and
-// D082 already removed QR as an entry mechanism — decoding one would invite a fabricated mapping.
-export const SCAN_FORMATS = [
-  'ean_13',
-  'ean_8',
-  'upc_a',
-  'upc_e',
-  'code_128',
-  'code_39',
-  'itf',
-] as const;
+// DataMatrix ONLY — and the exclusivity is correctness, not scope. DAISO packaging carries a 2D
+// DataMatrix whose payload is exactly the 품번 (pdNo) and nothing else, so it is the one symbology that
+// answers "which product is this". The 1D barcode printed on the same package encodes a DIFFERENT
+// number (a retail EAN/UPC), and nothing maps it to a pdNo: decoding it would silently query the wrong
+// product or return an honest-looking Empty for a code the catalogue never had. Reading fewer
+// symbologies is therefore the safer scanner, not the weaker one.
+export const SCAN_FORMATS = ['data_matrix'] as const;
 
 export interface NativeDetector {
   detect(source: HTMLVideoElement): Promise<Array<{ rawValue: string }>>;
@@ -31,7 +27,9 @@ export interface FallbackDecoder {
 
 export interface ScannerDeps {
   mediaDevices?: Pick<MediaDevices, 'getUserMedia'> | undefined;
-  createNativeDetector?: () => NativeDetector | null;
+  // Async because the platform's DataMatrix support can only be learned from the asynchronous static
+  // BarcodeDetector.getSupportedFormats() — see defaultNativeDetector.
+  createNativeDetector?: () => Promise<NativeDetector | null>;
   loadFallbackDecoder?: () => Promise<FallbackDecoder | null>;
   pollIntervalMs?: number;
 }
@@ -51,18 +49,20 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
     async scan(target, signal) {
       if (!media?.getUserMedia) return { kind: 'unsupported' };
       if (signal.aborted) return { kind: 'cancelled' };
-      // DECODER FIRST, CAMERA SECOND. Deciding native-vs-fallback — including the fallback's dynamic
-      // import of the ~415 kB @zxing chunk, which on a cold iOS Safari cache can take seconds — before
-      // touching getUserMedia buys two guarantees the reverse order cannot: (a) a device with no way to
-      // decode never has its camera switched on at all, and (b) a shopper who closes the overlay while
-      // that import is in flight aborts a run that owns no camera, so nothing can outlive the overlay.
-      let native: NativeDetector | null;
+      // DECODER FIRST, CAMERA SECOND. Deciding native-vs-fallback — the platform's async DataMatrix
+      // support query, and then the fallback's dynamic import of the ~92 kB @zxing chunk, which on a
+      // cold iOS Safari cache can take seconds — before touching getUserMedia buys two guarantees the
+      // reverse order cannot: (a) a device with no way to decode never has its camera switched on at
+      // all, and (b) a shopper who closes the overlay while either is in flight aborts a run that owns
+      // no camera, so nothing can outlive the overlay.
+      let native: NativeDetector | null = null;
       let fallback: FallbackDecoder | null = null;
       try {
-        native = createNative();
-        // The import itself is not cancellable, but the WAIT for it is: untilAbort settles the moment
-        // the signal fires instead of parking until the chunk lands.
-        if (!native) fallback = await untilAbort(loadFallback(), signal);
+        // Neither wait is cancellable in itself, but the WAIT for each is: untilAbort settles the moment
+        // the signal fires instead of parking until the support query answers or the chunk lands.
+        native = await untilAbort(createNative(), signal);
+        // An already-aborted run must not go on to pull the lazy decoder chunk it will never use.
+        if (!signal.aborted && !native) fallback = await untilAbort(loadFallback(), signal);
       } catch {
         return { kind: 'failed' };
       }
@@ -74,7 +74,8 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
       } catch (err) {
         // A denial is the shopper's choice, not an error state to dramatize. `unsupported` asserts a
         // permanent capability fact about this device — it's reserved for "there is no getUserMedia API
-        // at all" and "the fallback decoder could not be loaded". Any other getUserMedia rejection here
+        // at all" and "no usable decoder" (no DataMatrix-capable native detector AND no bundled
+        // fallback), both settled above before the camera. Any other getUserMedia rejection here
         // (camera busy, no device, unknown) is transient — the camera may well work on retry — so it is
         // `failed`, never `unsupported`, to avoid fabricating a fact this device doesn't actually have.
         return { kind: isPermissionDenial(err) ? 'permissionDenied' : 'failed' };
@@ -122,15 +123,28 @@ function isPermissionDenial(err: unknown): boolean {
   return name === 'NotAllowedError' || name === 'SecurityError';
 }
 
-function defaultNativeDetector(): NativeDetector | null {
+// A BarcodeDetector that EXISTS is not a BarcodeDetector that can read DataMatrix — support is per
+// platform and, on several, 2D formats are absent. Constructing one blindly is the worst failure mode
+// available here: detect() would simply never fire, so the camera would stay on and the overlay would
+// wait forever with no error to classify and no fallback ever tried. So ask first, via the asynchronous
+// static getSupportedFormats(), and treat anything short of an explicit data_matrix — an older
+// implementation without the static, a rejected query, a list that omits it — as no native detector at
+// all, which routes the run to the bundled DataMatrix reader instead. Never throws.
+async function defaultNativeDetector(): Promise<NativeDetector | null> {
   const ctor = (
-    globalThis as { BarcodeDetector?: new (o: { formats: string[] }) => NativeDetector }
+    globalThis as {
+      BarcodeDetector?: (new (o: { formats: string[] }) => NativeDetector) & {
+        getSupportedFormats?: () => Promise<string[]>;
+      };
+    }
   ).BarcodeDetector;
   if (!ctor) return null;
   try {
+    const supported = await ctor.getSupportedFormats?.();
+    if (!supported?.includes('data_matrix')) return null;
     return new ctor({ formats: [...SCAN_FORMATS] });
   } catch {
-    return null; // constructed with an unsupported format list → treat as no native detector
+    return null; // unknown support, or a constructor that rejected the format list
   }
 }
 
@@ -224,20 +238,13 @@ async function scanWithFallback(
 // BarcodeDetector (iOS Safari) whose shopper actually opened the scanner. Bundled — never a CDN.
 async function loadBundledDecoder(): Promise<FallbackDecoder | null> {
   try {
-    const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = await import(
-      '@zxing/library'
+    // The dedicated DataMatrix reader, not BrowserMultiFormatReader narrowed by a POSSIBLE_FORMATS
+    // hint: the multi-format reader links every 1D and 2D decoder into the chunk whatever the hints
+    // say, while this one carries the single decoder we actually need.
+    const { BrowserDatamatrixCodeReader } = await import(
+      '@zxing/library/esm/browser/BrowserDatamatrixCodeReader'
     );
-    const hints = new Map<number, unknown>();
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-      BarcodeFormat.EAN_13,
-      BarcodeFormat.EAN_8,
-      BarcodeFormat.UPC_A,
-      BarcodeFormat.UPC_E,
-      BarcodeFormat.CODE_128,
-      BarcodeFormat.CODE_39,
-      BarcodeFormat.ITF,
-    ]);
-    const reader = new BrowserMultiFormatReader(hints as never);
+    const reader = new BrowserDatamatrixCodeReader();
     return {
       decode: async (stream, video) => (await reader.decodeOnceFromStream(stream, video)).getText(),
       cancel: () => reader.reset(),
