@@ -1,5 +1,9 @@
 import type { ScanTarget } from '../../domain/ports';
-import { SCAN_FORMATS, createBrowserScanner } from './browserScanner';
+import {
+  SCAN_FORMATS,
+  createBrowserScanner,
+  importBundledDatamatrixReader,
+} from './browserScanner';
 
 function fakeTrack() {
   return {
@@ -35,13 +39,26 @@ test('only DataMatrix is scanned', () => {
   expect(SCAN_FORMATS).toEqual(['data_matrix']);
 });
 
-test('the bundled DataMatrix reader is importable at the path the fallback loads', async () => {
-  // loadBundledDecoder deep-imports one module instead of the @zxing barrel (the package declares no
-  // sideEffects, so the barrel drags every 1D/2D decoder into the lazy chunk: 415.76 kB vs 91.96 kB).
-  // That path is a private one, so a package upgrade could move it — and the loader's catch would turn
-  // the break into a silent `unsupported` on every iOS device. Fail here instead.
-  const mod = await import('@zxing/library/esm/browser/BrowserDatamatrixCodeReader');
-  const reader = new mod.BrowserDatamatrixCodeReader();
+test('the bundled fallback pulls the DataMatrix reader itself, not another zxing reader', async () => {
+  // This calls the PRODUCTION import site rather than repeating its module path, so there is exactly
+  // one place the path is written. Two ways this could break silently, both fatal to the guarantee
+  // above: (a) a package upgrade moves the deep path — loadBundledDecoder's catch would turn that into
+  // `unsupported` on every iOS device, no error anywhere; (b) someone swaps the import for another
+  // valid zxing reader, say BrowserMultiFormatReader, which decodes 1D again and hands back the
+  // packaging's EAN as if it were a pdNo. An identity check against the barrel's exports catches both.
+  const Reader = await importBundledDatamatrixReader();
+  const reader = new Reader();
+  expect(Reader.name).toBe('BrowserDatamatrixCodeReader');
+  // The decisive one. Every Browser*CodeReader shares the same wrapper API, so the wrapper's own name
+  // proves little on its own — what decides which symbologies get decoded is the core Reader the
+  // wrapper constructs itself and keeps in `.reader`. BrowserDatamatrixCodeReader wires a
+  // DataMatrixReader; BrowserMultiFormatReader would wire a MultiFormatReader and read 1D again.
+  // (Identity via `toBe` against the '@zxing/library' barrel is not usable here: the barrel resolves to
+  // the package's CJS build while the loader deep-imports the ESM one, so the two classes are distinct
+  // objects and every such comparison would pass vacuously.)
+  expect((reader as unknown as { reader: object }).reader.constructor.name).toBe(
+    'DataMatrixReader',
+  );
   expect(typeof reader.decodeOnceFromStream).toBe('function');
   expect(typeof reader.reset).toBe('function');
 });

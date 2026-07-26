@@ -1,8 +1,16 @@
 // src/adapters/barcode/browserScanner.ts
 // Camera + barcode decode behind ScannerPort. Mirrors browserGeolocation's discipline: every capability
 // is INJECTABLE via ScannerDeps and defaults to the corresponding global (navigator.mediaDevices,
-// globalThis.BarcodeDetector, the bundled @zxing import) read once at construction, so tests substitute
-// all three without touching globals; and no path throws — failures surface as ScanOutcome variants.
+// globalThis.BarcodeDetector, the bundled @zxing import), so tests substitute all three without
+// touching globals; and no path throws — failures surface as ScanOutcome variants.
+//
+// The three defaults resolve at DIFFERENT times, deliberately. navigator.mediaDevices is read once, at
+// construction. globalThis.BarcodeDetector is read — and its DataMatrix support re-queried — on EVERY
+// scan, because that answer is not a constant: Chrome on Android answers from the Play Services barcode
+// module, which can install mid-session, so a first scan's "no data_matrix" can legitimately become
+// "yes" minutes later. Caching the first answer would pin such a device to the ~92 kB zxing fallback for
+// the rest of the session; the query is cheap, so it is repeated rather than memoised. Do not "optimise"
+// it into a module-level cache.
 // Decode-only: no image recognition (Bible, Engineering/in-store-navigation §dependencies).
 import type { ScanOutcome, ScanTarget, ScannerPort } from '../../domain/ports';
 
@@ -234,16 +242,30 @@ async function scanWithFallback(
   }
 }
 
+// THE ONLY PLACE THE BUNDLED READER IS NAMED. Exported so the test asserts what this very call hands
+// back instead of repeating the path and proving nothing about production — a swap to another valid
+// zxing reader (BrowserMultiFormatReader decodes 1D again) or a path moved by a package upgrade would
+// otherwise both pass a duplicated guard, the first reintroducing wrong-product decodes and the second
+// hiding inside loadBundledDecoder's catch as a silent `unsupported` on every iOS device.
+//
+// The dedicated reader, not BrowserMultiFormatReader narrowed by a POSSIBLE_FORMATS hint: the
+// multi-format reader links every 1D and 2D decoder into the chunk whatever the hints say. Deep path,
+// not the '@zxing/library' barrel: the package declares no `sideEffects`, so nothing in the barrel can
+// be tree-shaken and the lazy chunk stays 415.76 kB instead of 91.96 kB. Rollup needs a literal here,
+// which is why this is a shared FUNCTION and not a shared path constant.
+export async function importBundledDatamatrixReader() {
+  const { BrowserDatamatrixCodeReader } = await import(
+    '@zxing/library/esm/browser/BrowserDatamatrixCodeReader'
+  );
+  return BrowserDatamatrixCodeReader;
+}
+
 // Dynamic import: @zxing stays out of the initial PWA chunk and loads only on a device with no native
-// BarcodeDetector (iOS Safari) whose shopper actually opened the scanner. Bundled — never a CDN.
+// DataMatrix-capable BarcodeDetector (iOS Safari) whose shopper actually opened the scanner. Bundled —
+// never a CDN.
 async function loadBundledDecoder(): Promise<FallbackDecoder | null> {
   try {
-    // The dedicated DataMatrix reader, not BrowserMultiFormatReader narrowed by a POSSIBLE_FORMATS
-    // hint: the multi-format reader links every 1D and 2D decoder into the chunk whatever the hints
-    // say, while this one carries the single decoder we actually need.
-    const { BrowserDatamatrixCodeReader } = await import(
-      '@zxing/library/esm/browser/BrowserDatamatrixCodeReader'
-    );
+    const BrowserDatamatrixCodeReader = await importBundledDatamatrixReader();
     const reader = new BrowserDatamatrixCodeReader();
     return {
       decode: async (stream, video) => (await reader.decodeOnceFromStream(stream, video)).getText(),
