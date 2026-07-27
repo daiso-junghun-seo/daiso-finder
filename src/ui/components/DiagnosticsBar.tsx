@@ -40,12 +40,17 @@ export default function DiagnosticsBar() {
   const scanning = snapshot.scanner.startedAt !== null && snapshot.scanner.outcome === null;
 
   // Elapsed time is derived from a clock, not from a publish, so nothing would repaint it on its own.
-  // Ticking only while a scan is live or the panel is open keeps an idle page free of timers.
+  // Tick ONLY while a scan is live — the one moment the counter is the point. Ticking while merely
+  // expanded would rewrite the textarea's value twice a second (경과 and 캐시 나이 both move with
+  // Date.now()), and React writing node.value resets the caret and drops the user's selection. On plain
+  // http there is no clipboard API, so selecting that text by hand IS the copy path; a report that will
+  // not hold still defeats the fallback it exists to be. When a scan ends, the bus publish re-renders
+  // once with a fresh now and the report then holds still. Idle pages stay timer-free as a side effect.
   useEffect(() => {
-    if (!scanning && !expanded) return;
+    if (!scanning) return;
     const timer = setInterval(() => forceTick((n) => n + 1), TICK_MS);
     return () => clearInterval(timer);
-  }, [scanning, expanded]);
+  }, [scanning]);
 
   const now = Date.now();
   const report = buildReport(collectEnvironment(), snapshot, appFacts(ui, store, now), now);
