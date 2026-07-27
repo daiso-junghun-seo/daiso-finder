@@ -87,3 +87,30 @@ test('every publish is a no-op while disabled', () => {
   publishNetwork({ path: '/api/x', status: 200, ms: 1 });
   expect(getSnapshot()).toBe(before);
 });
+
+// A failing React component or diagnostics UI callback must never break the bus or prevent
+// other subscribers from being notified. Subscriber errors are swallowed so the app can survive
+// a misbehaving panel component, and the publish must complete normally.
+test('a throwing subscriber does not prevent other subscribers from being notified', () => {
+  let secondCalls = 0;
+  const unsubscribe1 = subscribe(() => {
+    throw new Error('subscriber 1 fails');
+  });
+  const unsubscribe2 = subscribe(() => {
+    secondCalls += 1;
+  });
+
+  // This must not throw, even though the first subscriber throws.
+  expect(() => {
+    publishScanner({ decoderPath: 'native' });
+  }).not.toThrow();
+
+  // The second subscriber must still have been notified.
+  expect(secondCalls).toBe(1);
+
+  // The snapshot must reflect the published change.
+  expect(getSnapshot().scanner.decoderPath).toBe('native');
+
+  unsubscribe1();
+  unsubscribe2();
+});

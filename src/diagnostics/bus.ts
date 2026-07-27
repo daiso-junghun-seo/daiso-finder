@@ -60,7 +60,14 @@ const listeners = new Set<() => void>();
 // reference-stable between publishes, which useSyncExternalStore requires.
 function commit(next: DiagnosticsSnapshot): void {
   snapshot = next;
-  for (const listener of [...listeners]) listener();
+  for (const listener of [...listeners]) {
+    try {
+      listener();
+    } catch {
+      // Swallow subscriber errors. A failing React component or UI callback must never break
+      // the bus or prevent other subscribers from being notified.
+    }
+  }
 }
 
 export function beginScannerRun(startedAt: number): void {
