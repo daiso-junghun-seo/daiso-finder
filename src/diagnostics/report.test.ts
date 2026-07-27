@@ -1,4 +1,8 @@
+const flag = vi.hoisted(() => ({ enabled: true }));
+vi.mock('./enabled', () => ({ isDiagnosticsEnabled: () => flag.enabled }));
+
 import type { DiagnosticsSnapshot } from './bus';
+import { getSnapshot, publishNetwork, resetDiagnostics } from './bus';
 import {
   type AppFacts,
   type EnvironmentFacts,
@@ -31,6 +35,11 @@ const app: AppFacts = {
   candidateCount: null,
   freshnessAgeMs: 4200,
 };
+
+beforeEach(() => {
+  flag.enabled = true;
+  resetDiagnostics();
+});
 
 function snapshotWith(scanner: Partial<DiagnosticsSnapshot['scanner']>): DiagnosticsSnapshot {
   return {
@@ -108,13 +117,16 @@ test('the report carries environment, app state and network lines', () => {
   expect(report).toContain('200');
 });
 
-// The report is copied and pasted into notes; a leaked query string would carry a search term.
-test('the report contains no query string from a network path', () => {
-  const withQuery: DiagnosticsSnapshot = {
-    ...snapshotWith({}),
-    network: [{ path: '/api/search', status: 200, ms: 10 }],
-  };
-  expect(buildReport(env, withQuery, app, 2000)).not.toContain('?');
+// The report is copied and pasted into notes; a leaked query string would carry sensitive data.
+// The bus strips query strings at the single choke point (publishNetwork), so the report built
+// from its snapshot must never carry a query string or any secrets from it.
+test('query strings published to the bus are stripped before reaching the report', () => {
+  publishNetwork({ path: '/api/search?token=xyz-secret-789', status: 200, ms: 10 });
+  const snapshot = getSnapshot();
+  const report = buildReport(env, { ...snapshotWith({}), network: snapshot.network }, app, 2000);
+  expect(report).toContain('/api/search');
+  expect(report).not.toContain('?');
+  expect(report).not.toContain('xyz-secret-789');
 });
 
 test('collectEnvironment reads the live globals without throwing', () => {
