@@ -569,6 +569,40 @@ describe('diagnostics instrumentation', () => {
     expect(s.track).toMatchObject({ width: 640, height: 480 });
   });
 
+  // decoderReadyMs is published on both decoder exits but pinned by nothing else, so this is the only
+  // guard on its arithmetic: that the elapsed time is measured from BEFORE the decoder resolution — the
+  // resolution's own cost is the whole point of the number, so it has to fall inside it — and that the
+  // subtraction is not inverted. The injected clock advances a fixed 5ms per read, which makes the
+  // published duration an exact number rather than a range.
+  //
+  // now() is read four times on this path, in this order:
+  //   1.  5  scan()'s beginScannerRun(now())  -> startedAt
+  //   2. 10  runScan's `const decoderStart = now()`
+  //   3. 15  the fallback loader below, standing in for time actually spent resolving the decoder
+  //   4. 20  the success-side publishScanner({ decoderPath, decoderReadyMs })
+  // so decoderReadyMs is 20 - 10 = 10. Capturing decoderStart on the far side of the await would
+  // report 5 (reading 3 excluded), and an inverted subtraction would report -10.
+  test('decoderReadyMs measures from before the decoder resolution and is not inverted', async () => {
+    let t = 0;
+    const now = () => {
+      t += 5;
+      return t;
+    };
+    const scanner = createBrowserScanner({
+      mediaDevices: { getUserMedia: async () => fakeStream({ width: 640, height: 480 }) },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => {
+        now(); // resolving the decoder is not free — this tick must land inside decoderReadyMs
+        return { decode: async () => '19987', cancel: () => {} };
+      },
+      now,
+    });
+    await scanner.scan(fakeTarget(), new AbortController().signal);
+    const s = getSnapshot().scanner;
+    expect(s.decoderReadyMs).toBe(10);
+    expect(s.startedAt).toBe(5);
+  });
+
   test('a camera rejection publishes the error name only', async () => {
     const err = new Error('user said no, and this message must not be published');
     err.name = 'NotAllowedError';
