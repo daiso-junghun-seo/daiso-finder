@@ -84,3 +84,15 @@ test('first run leads with the store-selection sheet; choosing a store lands on 
   ).toBeVisible();
   await expect(page.getByText('다이소 명동역점')).toBeVisible();
 });
+
+test.describe('diagnostics panel', () => {
+  test('?debug=1 shows the diagnostics bar', async ({ page }) => {
+    await page.goto('/?debug=1');
+    await expect(page.locator('.diagnostics-bar')).toBeVisible();
+  });
+
+  test('without the parameter the bar is not in the DOM at all', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('.diagnostics-bar')).toHaveCount(0);
+  });
+});
