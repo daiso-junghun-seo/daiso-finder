@@ -1,4 +1,9 @@
+const flag = vi.hoisted(() => ({ enabled: true }));
+vi.mock('../diagnostics/enabled', () => ({ isDiagnosticsEnabled: () => flag.enabled }));
+
+import { getSnapshot, resetDiagnostics } from '../diagnostics/bus';
 import {
+  createDiagnosticFetch,
   createGeolocation,
   createProductSearch,
   createScanner,
@@ -191,4 +196,60 @@ test('the keyword mock repository answers a scanned pdNo', async () => {
       { keyword: MOCK_SCAN_VALUE, pdNo: MOCK_SCAN_VALUE },
     ),
   ).toEqual(mockAnswers.inStock);
+});
+
+describe('diagnostic fetch', () => {
+  beforeEach(() => {
+    flag.enabled = true;
+    resetDiagnostics();
+  });
+
+  const init = { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' };
+
+  test('publishes path, status and duration and returns the response untouched', async () => {
+    const original = globalThis.fetch;
+    const response = new Response('{}', { status: 200 });
+    globalThis.fetch = (async () => response) as typeof fetch;
+    let t = 1000;
+    try {
+      const result = await createDiagnosticFetch(() => {
+        t += 25;
+        return t;
+      })('/api/availability', init);
+      expect(result).toBe(response); // identity: instrumentation must not wrap or clone
+      expect(getSnapshot().network[0]).toEqual({ path: '/api/availability', status: 200, ms: 25 });
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  test('publishes an error entry and re-throws the original error', async () => {
+    const original = globalThis.fetch;
+    const boom = new Error('offline');
+    globalThis.fetch = (async () => {
+      throw boom;
+    }) as typeof fetch;
+    try {
+      await expect(createDiagnosticFetch(() => 0)('/api/stores', init)).rejects.toBe(boom);
+      expect(getSnapshot().network[0]?.status).toBe('error');
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  test('the PROD availability adapter routes through the instrumented fetch', async () => {
+    vi.stubEnv('PROD', true);
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ noMatch: true }), { status: 200 })) as typeof fetch;
+    try {
+      await createStoreStockRepository()
+        .query({ strCd: '1', strNm: 'x' }, { keyword: 'x' })
+        .catch(() => {});
+      expect(getSnapshot().network.some((e) => e.path === '/api/availability')).toBe(true);
+    } finally {
+      globalThis.fetch = original;
+      vi.unstubAllEnvs();
+    }
+  });
 });
