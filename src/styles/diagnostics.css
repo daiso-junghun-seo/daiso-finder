@@ -11,6 +11,24 @@
   background: rgba(17, 17, 17, 0.92);
 }
 
+/* The bar is fixed at bottom: 0 and .search-bar-surface is sticky at bottom: 0, so both want the same
+   strip of viewport — an opaque bar would sit on the 상품 검색 input and the 스캔 button. Every reading
+   this panel exists to collect is produced only by tapping 스캔, so occluding that button defeats the
+   instrument. Reserve the strip for the app instead of moving the bar (docking it to top: 0 would
+   collide with the sticky store-context line instead).
+
+   48px: the collapsed bar measures 32px (Playwright, 1280×720 and 390×844 — .diagnostics-bar__summary
+   is min-height: 32px and the UA gives buttons border-box, so the 6px padding is inside it). The
+   remaining 16px is clearance so the 스캔 button is tappable rather than merely uncovered.
+
+   box-sizing: border-box keeps main's total height at 100dvh — with the default content-box the
+   min-height would still be 100dvh and the padding would add a 48px scroll to every ?debug=1 page.
+   The class is set only while DiagnosticsBar is mounted, i.e. only under ?debug=1 (§B31-9). */
+body.has-diagnostics main {
+  box-sizing: border-box;
+  padding-bottom: 48px;
+}
+
 .diagnostics-bar__summary {
   display: block;
   width: 100%;
@@ -40,6 +58,10 @@
 
 .diagnostics-bar__report {
   width: 100%;
+  /* No global border-box reset exists in this codebase, and the UA leaves textareas content-box, so
+     width: 100% plus the 1px border and the UA's 2px padding measured 376px inside the body's 370px
+     content box — the 10px right gutter was eaten down to 4px. */
+  box-sizing: border-box;
   height: 40vh;
   background: #0d0d0d;
   color: inherit;

@@ -1,5 +1,7 @@
 // The ?debug=1 diagnostics bar. Development/test instrumentation, NOT a shopper surface: it is reachable
-// only by URL parameter, it never alters app behaviour, and it is not downloaded when the flag is off.
+// only by URL parameter, it never alters app behaviour, and with the flag off this module is never
+// imported, parsed or executed. (Its chunk IS still precached by the service worker — see
+// open-questions.md §B31-7 — so "never downloaded" would be false.)
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { getSnapshot, subscribe } from '../../diagnostics/bus';
 import {
@@ -38,6 +40,16 @@ export default function DiagnosticsBar() {
   const [, forceTick] = useState(0);
 
   const scanning = snapshot.scanner.startedAt !== null && snapshot.scanner.outcome === null;
+
+  // The bar is fixed at the viewport bottom, directly over the sticky search/scan bar. Reserve that
+  // strip on the app surface (diagnostics.css `body.has-diagnostics`) for exactly as long as the panel
+  // is mounted, so the panel cannot cover the 스캔 button every one of its scanner readings requires.
+  // Mount-scoped, so the app's layout is untouched whenever the panel is off (§B31-9). classList
+  // add/remove is idempotent, so StrictMode's double mount is harmless.
+  useEffect(() => {
+    document.body.classList.add('has-diagnostics');
+    return () => document.body.classList.remove('has-diagnostics');
+  }, []);
 
   // Elapsed time is derived from a clock, not from a publish, so nothing would repaint it on its own.
   // Tick ONLY while a scan is live — the one moment the counter is the point. Ticking while merely
