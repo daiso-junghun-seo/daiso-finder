@@ -45,7 +45,7 @@
 ### 2.2 핵심 규율
 
 1. **비활성 시 완전한 no-op.** `publishScanner`/`publishNetwork`는 첫 줄에서 `if (!enabled) return`. 적재도 구독자 통지도 없다. 일반 쇼퍼에게 메모리·CPU 비용 0.
-2. **패널은 lazy 청크.** `main.tsx`에서 `lazy(() => import(...))`. 미활성 시 그 `import()`가 아예 발화하지 않으므로 모듈이 **import·파싱·실행되지 않는다** — 일반 쇼퍼의 런타임 비용은 0이다. **다만 바이트가 안 내려오는 것은 아니다**: `vite.config.ts:19`의 `workbox.globPatterns`가 emit된 자산을 전부 프리캐시 매니페스트로 쓸어담으므로 **PWA 설치 시점에 청크는 내려간다**(2026-07-27 실측 — `dist/sw.js`에 `assets/DiagnosticsBar-*.js`·`assets/DiagnosticsBar-*.css` 등재, 합계 4.00 kB raw / 약 2.18 kB gzip). zxing 폴백과 **동일한 규율**이라는 말은 정확하나, 그 규율의 내용은 "안 내려온다"가 아니라 **"프리캐시된다"** 이다(HANDOFF 배포 게이트 항목). 이 프리캐시를 `globIgnores`로 빼지 않기로 한 근거는 §B31-7.
+2. **패널은 lazy 청크.** `main.tsx`에서 `lazy(() => import(...))`. 미활성 시 그 `import()`가 아예 발화하지 않으므로 모듈이 **import·파싱·실행되지 않는다** — 일반 쇼퍼의 런타임 비용은 0이다. **다만 바이트가 안 내려오는 것은 아니다**: `vite.config.ts:19`의 `workbox.globPatterns`가 emit된 자산을 전부 프리캐시 매니페스트로 쓸어담으므로 **PWA 설치 시점에 청크는 내려간다**(2026-07-27 실측 — `dist/sw.js`에 `assets/DiagnosticsBar-*.js`·`assets/DiagnosticsBar-*.css` 등재, 합계 4.21 kB raw / 약 2.27 kB gzip). zxing 폴백과 **동일한 규율**이라는 말은 정확하나, 그 규율의 내용은 "안 내려온다"가 아니라 **"프리캐시된다"** 이다(HANDOFF 배포 게이트 항목). 이 프리캐시를 `globIgnores`로 빼지 않기로 한 근거는 §B31-7.
 3. **앱 상태는 버스를 타지 않는다.** Zustand에 정본이 있는 값을 버스로 복제하면 두 진실이 생긴다. 패널이 `useAvailabilityStore`를 직접 구독한다.
 4. **버스는 읽기 전용 관측이다.** 진단 코드가 앱 동작을 바꾸지 않는다 — 판정·상태 전이·네트워크 요청 내용에 어떤 영향도 주지 않는다.
 
