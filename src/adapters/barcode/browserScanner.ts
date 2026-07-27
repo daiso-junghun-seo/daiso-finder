@@ -12,6 +12,7 @@
 // the rest of the session; the query is cheap, so it is repeated rather than memoised. Do not "optimise"
 // it into a module-level cache.
 // Decode-only: no image recognition (Bible, Engineering/in-store-navigation §dependencies).
+import { type TrackFacts, beginScannerRun, publishScanner } from '../../diagnostics/bus';
 import type { ScanOutcome, ScanTarget, ScannerPort } from '../../domain/ports';
 
 // DataMatrix ONLY — and the exclusivity is correctness, not scope. DAISO packaging carries a 2D
@@ -40,6 +41,7 @@ export interface ScannerDeps {
   createNativeDetector?: () => Promise<NativeDetector | null>;
   loadFallbackDecoder?: () => Promise<FallbackDecoder | null>;
   pollIntervalMs?: number;
+  now?: () => number; // injectable so decoderReadyMs is assertable without a real clock
 }
 
 export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
@@ -52,56 +54,74 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
   const createNative = deps.createNativeDetector ?? defaultNativeDetector;
   const loadFallback = deps.loadFallbackDecoder ?? loadBundledDecoder;
   const pollMs = deps.pollIntervalMs ?? 200;
+  const now = deps.now ?? Date.now;
+
+  // The scan body keeps its many exit points; wrapping it means the outcome is published at exactly one
+  // place, so a future early return cannot silently skip instrumentation.
+  const runScan = async (target: ScanTarget, signal: AbortSignal): Promise<ScanOutcome> => {
+    if (!media?.getUserMedia) return { kind: 'unsupported' };
+    if (signal.aborted) return { kind: 'cancelled' };
+    // DECODER FIRST, CAMERA SECOND. Deciding native-vs-fallback — the platform's async DataMatrix
+    // support query, and then the fallback's dynamic import of the ~92 kB @zxing chunk, which on a
+    // cold iOS Safari cache can take seconds — before touching getUserMedia buys two guarantees the
+    // reverse order cannot: (a) a device with no way to decode never has its camera switched on at
+    // all, and (b) a shopper who closes the overlay while either is in flight aborts a run that owns
+    // no camera, so nothing can outlive the overlay.
+    const decoderStart = now();
+    let native: NativeDetector | null = null;
+    let fallback: FallbackDecoder | null = null;
+    try {
+      // Neither wait is cancellable in itself, but the WAIT for each is: untilAbort settles the moment
+      // the signal fires instead of parking until the support query answers or the chunk lands.
+      native = await untilAbort(createNative(), signal);
+      // An already-aborted run must not go on to pull the lazy decoder chunk it will never use.
+      if (!signal.aborted && !native) fallback = await untilAbort(loadFallback(), signal);
+    } catch {
+      publishScanner({ decoderPath: 'none', decoderReadyMs: now() - decoderStart });
+      return { kind: 'failed' };
+    }
+    publishScanner({
+      decoderPath: native ? 'native' : fallback ? 'zxing' : 'none',
+      decoderReadyMs: now() - decoderStart,
+    });
+    if (signal.aborted) return { kind: 'cancelled' }; // checked before `unsupported`: an abort is not a capability fact
+    if (!native && !fallback) return { kind: 'unsupported' };
+    let stream: MediaStream;
+    try {
+      stream = await media.getUserMedia({ video: { facingMode: 'environment' } });
+    } catch (err) {
+      publishScanner({ cameraError: (err as { name?: string } | null)?.name ?? 'UnknownError' });
+      // A denial is the shopper's choice, not an error state to dramatize. `unsupported` asserts a
+      // permanent capability fact about this device — it's reserved for "there is no getUserMedia API
+      // at all" and "no usable decoder" (no DataMatrix-capable native detector AND no bundled
+      // fallback), both settled above before the camera. Any other getUserMedia rejection here
+      // (camera busy, no device, unknown) is transient — the camera may well work on retry — so it is
+      // `failed`, never `unsupported`, to avoid fabricating a fact this device doesn't actually have.
+      return { kind: isPermissionDenial(err) ? 'permissionDenied' : 'failed' };
+    }
+    publishScanner({ track: readTrackFacts(stream) });
+    const stopCamera = () => {
+      for (const track of stream.getTracks()) track.stop();
+    };
+    try {
+      if (signal.aborted) return { kind: 'cancelled' };
+      if (native) return await scanWithNative(native, stream, target, signal, pollMs);
+      // Narrowed by the `!native && !fallback` guard above — reaching here means fallback is set.
+      return await scanWithFallback(fallback as FallbackDecoder, stream, target, signal);
+    } catch {
+      return { kind: 'failed' };
+    } finally {
+      // The camera is never left running — success, cancel and failure all pass through here.
+      stopCamera();
+    }
+  };
 
   return {
     async scan(target, signal) {
-      if (!media?.getUserMedia) return { kind: 'unsupported' };
-      if (signal.aborted) return { kind: 'cancelled' };
-      // DECODER FIRST, CAMERA SECOND. Deciding native-vs-fallback — the platform's async DataMatrix
-      // support query, and then the fallback's dynamic import of the ~92 kB @zxing chunk, which on a
-      // cold iOS Safari cache can take seconds — before touching getUserMedia buys two guarantees the
-      // reverse order cannot: (a) a device with no way to decode never has its camera switched on at
-      // all, and (b) a shopper who closes the overlay while either is in flight aborts a run that owns
-      // no camera, so nothing can outlive the overlay.
-      let native: NativeDetector | null = null;
-      let fallback: FallbackDecoder | null = null;
-      try {
-        // Neither wait is cancellable in itself, but the WAIT for each is: untilAbort settles the moment
-        // the signal fires instead of parking until the support query answers or the chunk lands.
-        native = await untilAbort(createNative(), signal);
-        // An already-aborted run must not go on to pull the lazy decoder chunk it will never use.
-        if (!signal.aborted && !native) fallback = await untilAbort(loadFallback(), signal);
-      } catch {
-        return { kind: 'failed' };
-      }
-      if (signal.aborted) return { kind: 'cancelled' }; // checked before `unsupported`: an abort is not a capability fact
-      if (!native && !fallback) return { kind: 'unsupported' };
-      let stream: MediaStream;
-      try {
-        stream = await media.getUserMedia({ video: { facingMode: 'environment' } });
-      } catch (err) {
-        // A denial is the shopper's choice, not an error state to dramatize. `unsupported` asserts a
-        // permanent capability fact about this device — it's reserved for "there is no getUserMedia API
-        // at all" and "no usable decoder" (no DataMatrix-capable native detector AND no bundled
-        // fallback), both settled above before the camera. Any other getUserMedia rejection here
-        // (camera busy, no device, unknown) is transient — the camera may well work on retry — so it is
-        // `failed`, never `unsupported`, to avoid fabricating a fact this device doesn't actually have.
-        return { kind: isPermissionDenial(err) ? 'permissionDenied' : 'failed' };
-      }
-      const stopCamera = () => {
-        for (const track of stream.getTracks()) track.stop();
-      };
-      try {
-        if (signal.aborted) return { kind: 'cancelled' };
-        if (native) return await scanWithNative(native, stream, target, signal, pollMs);
-        // Narrowed by the `!native && !fallback` guard above — reaching here means fallback is set.
-        return await scanWithFallback(fallback as FallbackDecoder, stream, target, signal);
-      } catch {
-        return { kind: 'failed' };
-      } finally {
-        // The camera is never left running — success, cancel and failure all pass through here.
-        stopCamera();
-      }
+      beginScannerRun(now());
+      const outcome = await runScan(target, signal);
+      publishScanner({ outcome: outcome.kind });
+      return outcome;
     },
   };
 }
@@ -131,6 +151,25 @@ function isPermissionDenial(err: unknown): boolean {
   return name === 'NotAllowedError' || name === 'SecurityError';
 }
 
+// Observation only: a stream shaped differently than expected (an older browser, a test double) must
+// degrade to "we didn't observe it" rather than break a scan that would otherwise have worked.
+function readTrackFacts(stream: MediaStream): TrackFacts | null {
+  try {
+    const track = stream.getVideoTracks?.()[0];
+    if (!track?.getSettings) return null;
+    const s = track.getSettings();
+    return {
+      width: s.width ?? null,
+      height: s.height ?? null,
+      frameRate: s.frameRate ?? null,
+      facingMode: s.facingMode ?? null,
+      deviceId: s.deviceId ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // A BarcodeDetector that EXISTS is not a BarcodeDetector that can read DataMatrix — support is per
 // platform and, on several, 2D formats are absent. Constructing one blindly is the worst failure mode
 // available here: detect() would simply never fire, so the camera would stay on and the overlay would
@@ -146,12 +185,15 @@ async function defaultNativeDetector(): Promise<NativeDetector | null> {
       };
     }
   ).BarcodeDetector;
+  publishScanner({ hasBarcodeDetector: Boolean(ctor) });
   if (!ctor) return null;
   try {
     const supported = await ctor.getSupportedFormats?.();
+    publishScanner({ supportedFormats: supported ?? null });
     if (!supported?.includes('data_matrix')) return null;
     return new ctor({ formats: [...SCAN_FORMATS] });
   } catch {
+    publishScanner({ supportedFormats: null });
     return null; // unknown support, or a constructor that rejected the format list
   }
 }
@@ -175,6 +217,7 @@ function scanWithNative(
 ): Promise<ScanOutcome> {
   return new Promise<ScanOutcome>((resolve) => {
     let settled = false;
+    let polls = 0;
     const finish = (outcome: ScanOutcome) => {
       if (settled) return;
       settled = true;
@@ -192,6 +235,8 @@ function scanWithNative(
     // interval one statement early is free — its first tick cannot run until this executor returns, by
     // which point attach() has already bound the stream.
     const timer = setInterval(() => {
+      polls += 1;
+      publishScanner({ nativePolls: polls });
       detector
         .detect(target.video)
         .then((codes) => {

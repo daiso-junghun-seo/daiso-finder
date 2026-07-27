@@ -1,3 +1,9 @@
+// The diagnostics flag is frozen at module init in production, so the tests swap it through vi.mock —
+// the same idiom bus.test.ts uses. Hoisted above the imports because vi.mock is hoisted too.
+const flag = vi.hoisted(() => ({ enabled: true }));
+vi.mock('../../diagnostics/enabled', () => ({ isDiagnosticsEnabled: () => flag.enabled }));
+
+import { getSnapshot, resetDiagnostics } from '../../diagnostics/bus';
 import type { ScanTarget } from '../../domain/ports';
 import {
   SCAN_FORMATS,
@@ -506,5 +512,143 @@ test('a getUserMedia failure other than permission denial reports failed, not un
   });
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
     kind: 'failed',
+  });
+});
+
+describe('diagnostics instrumentation', () => {
+  beforeEach(() => {
+    flag.enabled = true;
+    resetDiagnostics();
+  });
+
+  function fakeStream(settings: MediaTrackSettings): MediaStream {
+    const track = { stop: () => {}, getSettings: () => settings };
+    return {
+      getTracks: () => [track],
+      getVideoTracks: () => [track],
+    } as unknown as MediaStream;
+  }
+
+  test('the native path publishes its decoder, formats, track settings and poll count', async () => {
+    const detect = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ rawValue: '19987' }]);
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () => fakeStream({ width: 1920, height: 1080, deviceId: 'cam-1' }),
+      },
+      createNativeDetector: async () => ({ detect }),
+      pollIntervalMs: 1,
+    });
+    // fakeTarget(), not a bare `{} as HTMLVideoElement`: this is the only test in this block that
+    // reaches attach(), and attach() calls video.play(). A bare object has none, so the TypeError would
+    // reject scanWithNative's executor and runScan's catch would report `failed` — measuring the stub,
+    // not the instrumentation. The other tests here take the zxing path, which never touches the video.
+    const outcome = await scanner.scan(fakeTarget(), new AbortController().signal);
+    expect(outcome).toEqual({ kind: 'decoded', value: '19987' });
+    const s = getSnapshot().scanner;
+    expect(s.decoderPath).toBe('native');
+    expect(s.track).toMatchObject({ width: 1920, height: 1080, deviceId: 'cam-1' });
+    expect(s.nativePolls).toBeGreaterThanOrEqual(1);
+    expect(s.outcome).toBe('decoded');
+    expect(s.startedAt).not.toBeNull();
+  });
+
+  // The zxing reader retries inside the library, so nativePolls must stay null rather than report 0.
+  test('the zxing path publishes its decoder and leaves the poll count unmeasured', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: { getUserMedia: async () => fakeStream({ width: 640, height: 480 }) },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
+    });
+    await scanner.scan({ video: {} as HTMLVideoElement }, new AbortController().signal);
+    const s = getSnapshot().scanner;
+    expect(s.decoderPath).toBe('zxing');
+    expect(s.nativePolls).toBeNull();
+    expect(s.track).toMatchObject({ width: 640, height: 480 });
+  });
+
+  test('a camera rejection publishes the error name only', async () => {
+    const err = new Error('user said no, and this message must not be published');
+    err.name = 'NotAllowedError';
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () => {
+          throw err;
+        },
+      },
+      createNativeDetector: async () => ({ detect: async () => [] }),
+    });
+    await scanner.scan({ video: {} as HTMLVideoElement }, new AbortController().signal);
+    const s = getSnapshot().scanner;
+    expect(s.cameraError).toBe('NotAllowedError');
+    expect(s.outcome).toBe('permissionDenied');
+  });
+
+  test('having no usable decoder publishes decoderPath none', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: { getUserMedia: async () => fakeStream({}) },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => null,
+    });
+    const outcome = await scanner.scan(
+      { video: {} as HTMLVideoElement },
+      new AbortController().signal,
+    );
+    expect(outcome).toEqual({ kind: 'unsupported' });
+    expect(getSnapshot().scanner.decoderPath).toBe('none');
+  });
+
+  test('a stream whose tracks expose no getSettings publishes a null track instead of throwing', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () =>
+          ({ getTracks: () => [{ stop: () => {} }] }) as unknown as MediaStream,
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
+    });
+    const outcome = await scanner.scan(
+      { video: {} as HTMLVideoElement },
+      new AbortController().signal,
+    );
+    expect(outcome).toEqual({ kind: 'decoded', value: '19987' });
+    expect(getSnapshot().scanner.track).toBeNull();
+  });
+
+  test('nothing is published while diagnostics are disabled', async () => {
+    flag.enabled = false;
+    const scanner = createBrowserScanner({
+      mediaDevices: { getUserMedia: async () => fakeStream({ width: 640, height: 480 }) },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
+    });
+    await scanner.scan({ video: {} as HTMLVideoElement }, new AbortController().signal);
+    expect(getSnapshot().scanner.startedAt).toBeNull();
+  });
+
+  // Every test above injects createNativeDetector, which bypasses defaultNativeDetector entirely — so
+  // hasBarcodeDetector and supportedFormats would assert vacuously against the injected double there.
+  // This one leaves createNativeDetector OUT so the REAL default resolver runs against an installed
+  // BarcodeDetector stub, and what it publishes is what the platform actually reported.
+  test('the default native resolver publishes the BarcodeDetector facts the platform reported', async () => {
+    const reported = ['ean_13', 'data_matrix', 'qr_code'];
+    class DataMatrixCapableDetector {
+      static getSupportedFormats = async () => reported;
+      async detect() {
+        return [{ rawValue: '19987' }];
+      }
+    }
+    installNativeBarcodeDetector(DataMatrixCapableDetector);
+    const scanner = createBrowserScanner({
+      mediaDevices: { getUserMedia: async () => fakeStream({ width: 1280, height: 720 }) },
+      pollIntervalMs: 1,
+    });
+    const outcome = await scanner.scan(fakeTarget(), new AbortController().signal);
+    expect(outcome).toEqual({ kind: 'decoded', value: '19987' });
+    const s = getSnapshot().scanner;
+    expect(s.hasBarcodeDetector).toBe(true);
+    expect(s.supportedFormats).toEqual(reported);
   });
 });
