@@ -41,7 +41,10 @@ export interface ScannerDeps {
   createNativeDetector?: () => Promise<NativeDetector | null>;
   loadFallbackDecoder?: () => Promise<FallbackDecoder | null>;
   pollIntervalMs?: number;
-  now?: () => number; // injectable so decoderReadyMs is assertable without a real clock
+  // Injectable so decoderReadyMs is assertable without a real clock. Must be epoch-compatible
+  // (Date.now-based): the diagnostics panel stamps startedAt from this clock but computes 경과 against
+  // its own Date.now(), so a non-epoch clock (e.g. performance.now) would render nonsense elapsed times.
+  now?: () => number;
 }
 
 export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {

@@ -521,7 +521,9 @@ describe('diagnostics instrumentation', () => {
     resetDiagnostics();
   });
 
-  function fakeStream(settings: MediaTrackSettings): MediaStream {
+  // Named apart from the module-level fakeStream(track) on purpose: that one takes a track object,
+  // this one takes the settings the track should report. Same name, incompatible parameter.
+  function fakeStreamWithSettings(settings: MediaTrackSettings): MediaStream {
     const track = { stop: () => {}, getSettings: () => settings };
     return {
       getTracks: () => [track],
@@ -536,7 +538,8 @@ describe('diagnostics instrumentation', () => {
       .mockResolvedValue([{ rawValue: '19987' }]);
     const scanner = createBrowserScanner({
       mediaDevices: {
-        getUserMedia: async () => fakeStream({ width: 1920, height: 1080, deviceId: 'cam-1' }),
+        getUserMedia: async () =>
+          fakeStreamWithSettings({ width: 1920, height: 1080, deviceId: 'cam-1' }),
       },
       createNativeDetector: async () => ({ detect }),
       pollIntervalMs: 1,
@@ -558,7 +561,9 @@ describe('diagnostics instrumentation', () => {
   // The zxing reader retries inside the library, so nativePolls must stay null rather than report 0.
   test('the zxing path publishes its decoder and leaves the poll count unmeasured', async () => {
     const scanner = createBrowserScanner({
-      mediaDevices: { getUserMedia: async () => fakeStream({ width: 640, height: 480 }) },
+      mediaDevices: {
+        getUserMedia: async () => fakeStreamWithSettings({ width: 640, height: 480 }),
+      },
       createNativeDetector: async () => null,
       loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
     });
@@ -589,7 +594,9 @@ describe('diagnostics instrumentation', () => {
       return t;
     };
     const scanner = createBrowserScanner({
-      mediaDevices: { getUserMedia: async () => fakeStream({ width: 640, height: 480 }) },
+      mediaDevices: {
+        getUserMedia: async () => fakeStreamWithSettings({ width: 640, height: 480 }),
+      },
       createNativeDetector: async () => null,
       loadFallbackDecoder: async () => {
         now(); // resolving the decoder is not free — this tick must land inside decoderReadyMs
@@ -622,7 +629,7 @@ describe('diagnostics instrumentation', () => {
 
   test('having no usable decoder publishes decoderPath none', async () => {
     const scanner = createBrowserScanner({
-      mediaDevices: { getUserMedia: async () => fakeStream({}) },
+      mediaDevices: { getUserMedia: async () => fakeStreamWithSettings({}) },
       createNativeDetector: async () => null,
       loadFallbackDecoder: async () => null,
     });
@@ -654,7 +661,9 @@ describe('diagnostics instrumentation', () => {
   test('nothing is published while diagnostics are disabled', async () => {
     flag.enabled = false;
     const scanner = createBrowserScanner({
-      mediaDevices: { getUserMedia: async () => fakeStream({ width: 640, height: 480 }) },
+      mediaDevices: {
+        getUserMedia: async () => fakeStreamWithSettings({ width: 640, height: 480 }),
+      },
       createNativeDetector: async () => null,
       loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
     });
@@ -676,7 +685,9 @@ describe('diagnostics instrumentation', () => {
     }
     installNativeBarcodeDetector(DataMatrixCapableDetector);
     const scanner = createBrowserScanner({
-      mediaDevices: { getUserMedia: async () => fakeStream({ width: 1280, height: 720 }) },
+      mediaDevices: {
+        getUserMedia: async () => fakeStreamWithSettings({ width: 1280, height: 720 }),
+      },
       pollIntervalMs: 1,
     });
     const outcome = await scanner.scan(fakeTarget(), new AbortController().signal);

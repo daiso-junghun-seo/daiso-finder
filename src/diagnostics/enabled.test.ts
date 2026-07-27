@@ -48,7 +48,10 @@ test('no parameter falls back to the persisted flag', () => {
   expect(resolveDebugEnabled('', memoryStorage())).toBe(false);
 });
 
-test('an unrelated parameter value does not enable', () => {
+// Proves only that an unrelated value cannot turn the flag ON from empty storage. It deliberately does
+// NOT prove the flag cannot stay on: with the flag persisted, only ?debug=0 clears it (see the
+// falls-back-to-the-persisted-flag test above) — that is the recorded design, not an oversight.
+test('an unrelated parameter value does not enable on its own', () => {
   expect(resolveDebugEnabled('?debug=yes', memoryStorage())).toBe(false);
 });
 
