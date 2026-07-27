@@ -8,14 +8,20 @@
 
 **게이트(main, DataMatrix 정정까지 머지 후 — tip `9570096`)**: vitest **346/346**, tsc clean, biome clean, Playwright **18/18**(dev 15 + preview 3), build 성공(zxing = 별도 지연청크, 엔트리 **172.41 kB**에 zxing 없음, 지연 청크 91.96 kB). src+dist에 시크릿 부재.
 
-### 🟡 진행 중 (2026-07-27) — 온스크린 진단 패널 `feat/dev-diagnostics-panel`
-**설계·플랜 커밋 완료, 구현 미착수.** 브랜치 `feat/dev-diagnostics-panel`(`main` `9570096`에서 분기, 코드 변경 0):
+### ✅ 완료 (2026-07-27) — 온스크린 진단 패널 `feat/dev-diagnostics-panel` (로컬 전용, `main` 미병합)
+**7태스크 전부 구현 완료, 전부 로컬 커밋(푸시·PR·배포 없음).** 브랜치 `feat/dev-diagnostics-panel`(`main` `9570096`에서 분기):
 - 설계 `docs/superpowers/specs/2026-07-27-dev-diagnostics-panel-design.md` (`a47b1be`) — owner 승인 4결정(D1 `?debug=1` 런타임 스위치 / D2 스캐너+앱상태+복사 / D3 하단 접이식 바 / D4 해상도 제약 수정 동반, **패널 먼저**).
-- 플랜 `docs/superpowers/plans/2026-07-27-dev-diagnostics-panel.md` (`80b81e2`) — 7태스크, subagent-driven 실행 전제.
+- 플랜 `docs/superpowers/plans/2026-07-27-dev-diagnostics-panel.md` (`80b81e2`) — 7태스크, subagent-driven 순차 실행.
+- Task 1–6: 플래그 1회 해석(`404f5f2`) + 안정 스냅샷 버스(`0ca3782`) + 구독자 에러 격리(`7bd3a4b`) + 무-날조 마커 리포트 포맷(`7bf8734`) + no-query-string 가드(`03d7071`) + 스캐너의 디코더 경로/트랙/폴카운트 발행(`f50b1c0`) + 주입 가능한 시계로 `decoderReadyMs` 고정(`2b0eb57`) + 컴포지션 루트에서 `/api` 호출 계측(`4bc8e99`) + `?debug=1` 하단 바(복사 가능 리포트, `<textarea>` 폴백)(`58669c3`) + 틱이 리포트 선택을 지우던 버그 수정(`8e4e6f5`).
+- **Task 7(마지막)**: `getUserMedia`가 `width/height: { ideal: 1920/1080 }`만 요청하도록 교정(`exact`/`min` 절대 금지 — owner의 "데스크탑 웹캠을 배제하지 않는다" 결정과 정반대 결과이므로). 패널(Task 1–6)이 먼저 있었기에 이 교정이 추측이 아니라 실측 근거를 갖는다. 앱 결정 = `open-questions.md §B31`.
 
 **동기**: owner가 노트북(Windows Chrome, `npm run dev:live`)에서 스캔이 안 읽히는 것을 확인. 원인 후보를 **콘솔 없이** 화면에서 가리기 위한 계측이며, 특히 폰 실기기(§B9)에는 콘솔 자체가 없다. **`import.meta.env.DEV` 게이팅은 무효** — DEV 빌드는 mock 스캐너라 진단 대상이 없고 `dev:live`·실기기는 PROD 빌드다.
 
 **owner 결정(2026-07-27)**: 데스크탑에서 스캔 버튼을 **기기 종류로 잠그지 않는다**. UA/화면폭 판별은 추측이고 Surface·크롬북처럼 실제로 되는 기기를 잘못 막는다. 캠 성능에 따라 되거나 안 되는 것으로 둔다.
+
+**게이트(이 브랜치, Task 7 커밋까지 — 2026-07-27 실측)**: vitest **389/389**(388 → 389, Task 7의 신규 테스트 1건), tsc clean, biome clean, build 성공(엔트리 177.66 kB, DataMatrix 지연청크 91.96 kB — Task 7은 번들 구성에 영향 없음), Playwright **20/20**(불변).
+
+**다음 단계(실측 검증, 미완료 — owner 몫)**: `npm run dev:live` 실행 → `http://127.0.0.1:8790/?debug=1` 접속 → 패널이 보고하는 `BarcodeDetector`·`지원 포맷`·`디코더`·트랙 해상도(요청 1920×1080 vs 실제 승인값)를 Windows Chrome에서 기록한다. 이후 HTTPS 라우트가 생기면 폰에서 반복한다.
 
 **바코드 스캔은 `main`에 ff 병합 완료(2026-07-26, tip `00d7968`, 브랜치 `feat/barcode-scan` 삭제 — 푸시·배포·PR 없음).** **물리 상품 바코드 = `pdNo`는 data-owner 확인으로 해소**(2026-07-26, §B30-7) — 우리 관측이 아니라 data-owner 진술이 근거이며, 구현은 이미 디코드값을 그대로 `keyword=pdNo`로 넘기므로 코드 변경 없음. **DataMatrix 전용 정정(2026-07-26, 별도 `main` 병합 완료, 최종 tip `9570096`)**: data-owner가 확인한 물리 실체(포장 = 2D DataMatrix, 페이로드 = `pdNo` 자체 — 근거는 **data-owner 진술**이지 우리 관측이 아니다)를 반영해 심볼로지를 최초 1D 7종에서 **DataMatrix 단독**으로 전환했다 — 같은 포장의 1D 바코드는 `pdNo`가 아닌 별개 번호라 디코드하면 엉뚱한 상품에 응답하므로 배타성은 정확성 요구다(상세는 아래 완료된 것 참조). 브랜치는 사용자 노출 카피 1종(**`SCAN_AIM_GUIDE`** — 뷰파인더 조준 안내)도 함께 싣는다: DataMatrix 전용이라 1D 코드를 겨눈 쇼퍼가 무피드백 상태가 되므로 오버레이가 열리는 즉시 어느 코드를 겨눌지 알린다(§B30-8, Bible 비준 대기). 게이트 unit **346**·e2e **18/18**. **남은 미검증은 실기기 디코드 품질**(§B9): DEV/E2E는 무-카메라 mock 스캐너로만 통과했고, 실제 매장 조명·포커스에서 작고 조밀한 DataMatrix를 카메라가 읽어내는지는 실기기 스캔 1회로만 확인된다.
 
@@ -62,7 +68,7 @@ daisomall anti-abuse가 **auth-protected 엔드포인트(selStrPkupStck·selIntP
 5. **UI(마지막 1마일)**: ① 상품 후보 프레젠테이션 + 후보/오버라이드 UX(카피=Bible), 프레젠테이션 폴리싱. **위 1~3이 굳은 뒤.**
 6. **배포 전**: PWA 설치 아이콘/자산(§B19, 미구현). *(오픈 릴레이/키 노출은 키가 공개 상수라 user 종결.)*
 
-**재개 규칙(새 세션)**: 이 HANDOFF → **🟡 진행 중인 `feat/dev-diagnostics-panel` 플랜 실행이 최우선**(owner가 2026-07-27 새 세션 + subagent-driven 실행을 지시). `docs/superpowers/plans/2026-07-27-dev-diagnostics-panel.md`를 `superpowers:subagent-driven-development`로 Task 1부터 순차 실행한다. 플랜이 자족적이므로 **설계 재논의 불필요**.
+**재개 규칙(새 세션)**: `feat/dev-diagnostics-panel` 플랜 7태스크는 **전부 로컬 구현 완료**(2026-07-27, subagent-driven 순차 실행 — `main` 미병합, 푸시·PR·배포 없음). 다음 우선순위는 위 "다음 단계"의 **실측 검증**(`npm run dev:live` → `?debug=1` → Windows Chrome에서 패널 실측값 기록, 이후 폰) — owner가 직접 확인해야 하는 항목이라 새 세션이 대신할 수 없다. 검증 후 `main` 로컬 머지 여부를 결정한다.
 
 그 다음 = 🟢 슬라이스 3번(UI 폴리싱 — 후보 리스트 + 사진 스타일) (1번 후보품질 튜닝 ✅ 2026-07-24 `8518337`; 2번 바코드 스캔 ✅ 2026-07-25/26 **`main` 병합 완료**(`9570096`, DataMatrix 정정 `6c33189`)). 스코프 주의 = `.candidate-list`·`.product-photo`(+ 스캔 오버레이 `.scanner-*`)의 **바운드 프레젠테이션 패스, 카피·마크업 시맨틱 불변**. 큰 수(배포·AI 티어링·반대형)는 owner court(ToS·Bible)라 게이트가 풀린 뒤. 병렬 서브에이전트로 최적화하며 진행 가능. 로컬 테스트는 언제든 `npm run dev:live`.
 

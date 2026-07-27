@@ -88,7 +88,17 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
     if (!native && !fallback) return { kind: 'unsupported' };
     let stream: MediaStream;
     try {
-      stream = await media.getUserMedia({ video: { facingMode: 'environment' } });
+      // Resolution is a correctness input, not a nicety: a DAISO DataMatrix is ~5-8 mm, and at the
+      // common 640x480 default its modules fall under the pixels-per-module floor a decoder needs.
+      // `ideal` only — `exact`/`min` would raise OverconstrainedError on a camera that cannot reach
+      // the target, converting a blurry-but-usable device into an outright failure.
+      stream = await media.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+      });
     } catch (err) {
       publishScanner({ cameraError: (err as { name?: string } | null)?.name ?? 'UnknownError' });
       // A denial is the shopper's choice, not an error state to dramatize. `unsupported` asserts a

@@ -685,4 +685,28 @@ describe('diagnostics instrumentation', () => {
     expect(s.hasBarcodeDetector).toBe(true);
     expect(s.supportedFormats).toEqual(reported);
   });
+
+  // `ideal` is a preference the browser may miss; `exact`/`min` raise OverconstrainedError and would turn
+  // a low-resolution-but-working webcam into a total failure. The owner's 2026-07-27 decision was NOT to
+  // exclude such devices, so this test guards the distinction rather than the numbers.
+  test('the camera is requested with ideal-only resolution hints', async () => {
+    let requested: MediaStreamConstraints | undefined;
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async (constraints) => {
+          requested = constraints;
+          return { getTracks: () => [{ stop: () => {} }] } as unknown as MediaStream;
+        },
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
+    });
+    await scanner.scan({ video: {} as HTMLVideoElement }, new AbortController().signal);
+    const video = requested?.video as MediaTrackConstraints;
+    expect(video.facingMode).toBe('environment');
+    expect(video.width).toEqual({ ideal: 1920 });
+    expect(video.height).toEqual({ ideal: 1080 });
+    expect(JSON.stringify(video)).not.toContain('exact');
+    expect(JSON.stringify(video)).not.toContain('min');
+  });
 });
