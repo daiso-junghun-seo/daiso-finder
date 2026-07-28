@@ -9,7 +9,11 @@
 Design source: [`docs/superpowers/specs/2026-07-23-runtime-resolution.md`](../superpowers/specs/2026-07-23-runtime-resolution.md)
 (Option C). Server implementation: [`scripts/dev-proxy.mjs`](../../scripts/dev-proxy.mjs) — the same file
 used for local dev (`npm run dev:live`), fully env-driven so production is the same code with different
-env vars, not a fork.
+env vars, not a fork. Because it is the same file, any route missing from its handler table is missing on
+gpu01 too, not just locally — `/api/search` was one such gap (fixed 2026-07-28; see
+`functions/api/handler-table.test.ts`, which now guards against this recurring). Once gpu01 is actually
+deployed (still gated on the ToS/robots review above), a `git pull` + `systemctl restart` on that host
+picks up the fix same as any other change to this file — there is no separate proxy codebase to patch.
 
 ---
 
@@ -221,7 +225,7 @@ job — omitted from the sketch above for brevity, not because it's unneeded.
 
 | k-skill-proxy | daiso-finder proxy (this doc) |
 |---|---|
-| Fastify, many routes, per-provider API keys | plain `node:http`, two routes (`/api/availability`, `/api/stores`), one daisomall-shaped auth handshake — **no framework dependency added** |
+| Fastify, many routes, per-provider API keys | plain `node:http`, three routes (`/api/availability`, `/api/search`, `/api/stores`), one daisomall-shaped auth handshake — **no framework dependency added** |
 | `systemctl --user status k-skill-proxy.service` | `systemctl --user status daiso-finder-proxy.service` |
 | `k-skill-proxy-tunnel.service` → `k-skill-proxy.nomadamas.org` | new tunnel route (§6) → `daiso-proxy.<domain>` (hostname TBD) |
 | `.env` in app directory, runtime-injected | same (§3) |
