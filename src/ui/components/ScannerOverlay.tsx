@@ -115,17 +115,29 @@ export function ScannerOverlay({
             {STORE_SELECT_CLOSE}
           </button>
         </div>
-        {/* Decorative preview: the camera image carries no information a screen reader can use — every
-            state is stated in text below. */}
-        {/* biome-ignore lint/a11y/noAriaHiddenOnFocusable: <video> without controls is not focusable */}
-        <video
-          ref={videoRef}
-          className="scanner-overlay__video"
-          aria-hidden="true"
-          playsInline
-          muted
-          autoPlay
-        />
+        <div className="scanner-overlay__viewport">
+          {/* Decorative preview: the camera image carries no information a screen reader can use — every
+              state is stated in text below. */}
+          {/* biome-ignore lint/a11y/noAriaHiddenOnFocusable: <video> without controls is not focusable */}
+          <video
+            ref={videoRef}
+            className="scanner-overlay__video"
+            aria-hidden="true"
+            playsInline
+            muted
+            autoPlay
+          />
+          {/* Aiming brackets, decoration only. Hidden once a notice lands: an aiming guide over a camera
+              that failed is an instruction the app cannot honour. */}
+          {!notice && (
+            <div className="scanner-overlay__aim" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
+          )}
+        </div>
         {notice ? (
           <p className="text-body">{notice}</p>
         ) : (

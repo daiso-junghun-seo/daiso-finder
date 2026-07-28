@@ -107,3 +107,60 @@ input {
   max-height: 60vh;
   object-fit: cover;
 }
+
+.scanner-overlay__viewport {
+  position: relative;
+}
+
+/* Aiming brackets only — corners, never a closed box and never a dimmed surround. Both decode paths
+   read the whole frame (and `object-fit: cover` means slightly more than is visible), so a boundary
+   would imply a crop that does not exist; a dimmed mask would additionally hide the packaging the
+   shopper is scanning for the code. Sized to 60% deliberately: filling it brings the phone closer,
+   which is what raises pixels-per-module. 36vh caps it inside the video's own 60vh ceiling. */
+.scanner-overlay__aim {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(60%, 36vh);
+  aspect-ratio: 1;
+  pointer-events: none;
+}
+
+/* White with a dark halo rather than a theme token: the surface behind is arbitrary camera imagery,
+   so no palette value can guarantee contrast against it. Same reasoning as src/styles/diagnostics.css. */
+.scanner-overlay__aim span {
+  position: absolute;
+  width: 18%;
+  height: 18%;
+  border: 2px solid #ffffff;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6));
+}
+
+.scanner-overlay__aim span:nth-child(1) {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.scanner-overlay__aim span:nth-child(2) {
+  top: 0;
+  right: 0;
+  border-left: 0;
+  border-bottom: 0;
+}
+
+.scanner-overlay__aim span:nth-child(3) {
+  bottom: 0;
+  left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+
+.scanner-overlay__aim span:nth-child(4) {
+  bottom: 0;
+  right: 0;
+  border-left: 0;
+  border-top: 0;
+}

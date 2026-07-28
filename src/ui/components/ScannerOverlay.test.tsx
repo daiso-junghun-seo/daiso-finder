@@ -89,6 +89,30 @@ test('the aiming guide gives way to the notice on a failure outcome', async () =
   expect(screen.queryByText(SCAN_AIM_GUIDE)).not.toBeInTheDocument();
 });
 
+test('a square aiming guide is drawn over the camera while scanning', () => {
+  const { container } = render(
+    <ScannerOverlay scanner={never} onDecoded={() => {}} onClose={() => {}} />,
+  );
+  const aim = container.querySelector('.scanner-overlay__aim');
+  expect(aim).toBeInTheDocument();
+  // Decoration only: the instruction below carries the meaning for assistive tech.
+  expect(aim).toHaveAttribute('aria-hidden', 'true');
+  // It must sit inside the positioned wrapper, next to the video it aims.
+  expect(
+    container.querySelector('.scanner-overlay__viewport .scanner-overlay__aim'),
+  ).toBeInTheDocument();
+});
+
+// Leaving an aiming guide on screen after the camera failed would be an instruction the app cannot honour.
+test('the aiming guide disappears once an outcome notice replaces the guidance', async () => {
+  const scanner: ScannerPort = { scan: async () => ({ kind: 'permissionDenied' }) };
+  const { container } = render(
+    <ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />,
+  );
+  await screen.findByText(SCAN_PERMISSION_DENIED, noticeParagraph);
+  expect(container.querySelector('.scanner-overlay__aim')).not.toBeInTheDocument();
+});
+
 // Focus never leaves 닫기 when an outcome lands, so a notice that is only rendered is silence for a
 // shopper using a screen reader — the sentence has to reach a live region to be spoken at all.
 test.each([
