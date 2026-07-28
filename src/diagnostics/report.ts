@@ -111,6 +111,7 @@ export function buildReport(
     `  카메라 오류: ${value(s.cameraError)}`,
     ...trackLines(s.track),
     `  경과: ${elapsed}`,
+    `  디코드: ${s.decodeMs === null ? UNREPORTED : `${s.decodeMs}ms`}`,
     `  시도 횟수: ${s.nativePolls === null ? UNMEASURED : s.nativePolls}`,
     `  결과: ${s.outcome ?? IN_PROGRESS}`,
     '',

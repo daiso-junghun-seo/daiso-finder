@@ -23,6 +23,9 @@ export interface ScannerDiagnostics {
   cameraError: string | null; // error.name only — never message or stack
   track: TrackFacts | null;
   nativePolls: number | null; // null on the zxing path: its retries happen inside the library
+  // Wall-clock from beginScannerRun to the outcome publish. Distinct from the panel's 경과 line, which
+  // is recomputed from Date.now() on every render and therefore only ever an upper bound.
+  decodeMs: number | null;
   outcome: ScanOutcome['kind'] | null;
 }
 
@@ -49,6 +52,7 @@ function emptyScanner(): ScannerDiagnostics {
     cameraError: null,
     track: null,
     nativePolls: null,
+    decodeMs: null,
     outcome: null,
   };
 }

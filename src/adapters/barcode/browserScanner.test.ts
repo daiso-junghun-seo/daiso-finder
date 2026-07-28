@@ -610,6 +610,29 @@ describe('diagnostics instrumentation', () => {
     expect(s.startedAt).toBe(5);
   });
 
+  // The clock advances 5ms per read. beginScannerRun takes the first, the decoder resolution takes the
+  // next two, and the outcome publish takes the last — so a stamp measured from the run's start reads 15.
+  // A stamp measured from the wrong anchor, or subtracted the wrong way round, cannot produce that.
+  test('the decode duration is stamped when the run settles', async () => {
+    let t = 0;
+    const now = () => {
+      t += 5;
+      return t;
+    };
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () => fakeStreamWithSettings({ width: 640, height: 480 }),
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
+      now,
+    });
+    await scanner.scan(fakeTarget(), new AbortController().signal);
+    const s = getSnapshot().scanner;
+    expect(s.startedAt).toBe(5);
+    expect(s.decodeMs).toBe(15);
+  });
+
   test('a camera rejection publishes the error name only', async () => {
     const err = new Error('user said no, and this message must not be published');
     err.name = 'NotAllowedError';

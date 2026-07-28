@@ -25,6 +25,10 @@ test('a fresh bus reports nothing observed', () => {
   expect(snapshot.network).toEqual([]);
 });
 
+test('a fresh bus has not measured a decode', () => {
+  expect(getSnapshot().scanner.decodeMs).toBeNull();
+});
+
 test('publishScanner merges a patch without clearing earlier fields', () => {
   publishScanner({ decoderPath: 'zxing' });
   publishScanner({ decoderReadyMs: 412 });

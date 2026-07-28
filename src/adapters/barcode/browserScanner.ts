@@ -131,9 +131,10 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
 
   return {
     async scan(target, signal) {
-      beginScannerRun(now());
+      const startedAt = now();
+      beginScannerRun(startedAt);
       const outcome = await runScan(target, signal);
-      publishScanner({ outcome: outcome.kind });
+      publishScanner({ outcome: outcome.kind, decodeMs: now() - startedAt });
       return outcome;
     },
   };

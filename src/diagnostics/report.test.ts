@@ -53,6 +53,7 @@ function snapshotWith(scanner: Partial<DiagnosticsSnapshot['scanner']>): Diagnos
       track: { width: 640, height: 480, frameRate: 30, facingMode: null, deviceId: 'cam-1' },
       nativePolls: null,
       outcome: null,
+      decodeMs: null,
       ...scanner,
     },
     network: [{ path: '/api/availability', status: 200, ms: 318 }],
@@ -81,6 +82,18 @@ test('an unmeasurable poll count is named as unmeasurable, not zero', () => {
 
 test('a measured poll count is printed', () => {
   expect(buildReport(env, snapshotWith({ nativePolls: 14 }), app, 2000)).toContain('14');
+});
+
+// A settled run reports how long the decode actually took. This is NOT the 경과 line: that one is
+// derived from Date.now() on every render, so it keeps growing after the run ends.
+test('a measured decode duration is printed', () => {
+  expect(buildReport(env, snapshotWith({ decodeMs: 8200 }), app, 2000)).toContain('8200ms');
+});
+
+test('an unmeasured decode is named, not defaulted to zero', () => {
+  const report = buildReport(env, snapshotWith({ decodeMs: null }), app, 2000);
+  expect(report).toContain(`디코드: ${UNREPORTED}`);
+  expect(report).not.toMatch(/디코드: 0ms/);
 });
 
 // "the query failed" and "the platform supports nothing" are different facts about the device.
