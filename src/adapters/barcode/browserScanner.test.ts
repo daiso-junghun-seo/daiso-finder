@@ -639,7 +639,6 @@ describe('diagnostics instrumentation', () => {
     expect(s.startedAt).toBe(5);
     expect(s.decodeMs).toBe(25);
     expect(s.cameraMs).toBe(5);
-    expect(s.decodeMs as number).toBeGreaterThan(s.cameraMs as number);
   });
 
   // A camera that never came up has no acquisition duration. Reporting one — 0ms, or the time spent
