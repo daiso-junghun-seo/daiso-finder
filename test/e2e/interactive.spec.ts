@@ -28,8 +28,10 @@ test.describe('with a persisted store context', () => {
     const input = page.getByLabel('상품 검색');
     await input.fill('밀폐용기');
     await input.press('Enter');
-    // RESULTS_NOTICE renders in both the visible CandidateList <p> and the hidden a11y LiveRegion —
-    // scope to the paragraph to avoid a strict-mode multiple-match.
+    // RESULTS_NOTICE renders in both the CandidateList <p> and the a11y LiveRegion — which is itself
+    // on screen here: only the scanner overlay's instance is visually hidden (D7), because one of the
+    // surface's is the sole visible source of the freshness caption in four states. Scope to the
+    // paragraph to avoid a strict-mode multiple-match.
     await expect(page.locator('p', { hasText: RESULTS_NOTICE })).toBeVisible();
     const candidateRow = page.getByRole('button', { name: /리빙 밀폐용기 1\.2L/ });
     await expect(candidateRow).toBeVisible();
@@ -65,8 +67,8 @@ test.describe('with a persisted store context', () => {
     // The mock scanner (no camera) resolves its decode almost immediately, so the dialog can already be
     // gone by the time this assertion runs — assert the answer card the decode lands on, not the
     // overlay's continued presence (the overlay unmounts as soon as a decode lands). The status text
-    // renders in both the visible AnswerCard and the hidden a11y LiveRegion (same pattern as the
-    // 밀폐용기 candidate test above) — .first() avoids the strict-mode multiple-match.
+    // renders in both the AnswerCard and the surface's a11y LiveRegion (same pattern as the 밀폐용기
+    // candidate test above, and equally on screen) — .first() avoids the strict-mode multiple-match.
     await expect(page.getByText('이 매장에 있어요').first()).toBeVisible();
   });
 });

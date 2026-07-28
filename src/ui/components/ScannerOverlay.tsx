@@ -166,8 +166,12 @@ export function ScannerOverlay({
         )}
         {/* Focus stays on 닫기 for the whole overlay, so an outcome notice that is only rendered is
             never spoken. The surface's idiom applies here too: visible copy plus a live region that
-            echoes it. Mounted with the dialog and left in place (message '') so that when an outcome
-            lands only the TEXT changes — a live region inserted together with its content is announced
+            echoes it. THIS instance is the only one that hides the echo (D7): the notice is already on
+            screen one line above, so leaving it visible would print the same sentence twice. The two
+            AvailabilitySurface instances must stay VISIBLE — in four states one of them is the sole
+            on-screen source of LIVE_FRESHNESS_CAPTION, and freshness framing is Bible D061, not ours to
+            drop. Mounted with the dialog and left in place (message '') so that when an outcome lands
+            only the TEXT changes — a live region inserted together with its content is announced
             unreliably. */}
         <LiveRegion message={notice ?? ''} visuallyHidden />
       </section>

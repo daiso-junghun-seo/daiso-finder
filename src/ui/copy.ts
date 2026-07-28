@@ -202,8 +202,9 @@ export const RESULTS_NOTICE = '검색 결과예요. 바코드를 스캔하면 �
 // the printed strip to aim at. '계산바코드' is the label printed on the package (owner statement,
 // 2026-07-28) — a token the shopper matches against the physical world, so D069 keeps it exactly as the
 // world renders it. "꽉 채워" is meant to draw the phone closer to the code; whether that is what
-// actually makes it decodable is the hypothesis Task 1's decodeMs measurement exists to test, not a
-// confirmed fact. The symbology name stays out — a technical term the Korean UX rules forbid.
+// actually makes it decodable is a hypothesis, not a confirmed fact — `ScannerDiagnostics.decodeMs`
+// (docs/notes/open-questions.md §B30-11) exists to test it. The symbology name stays out — a technical
+// term the Korean UX rules forbid.
 export const SCAN_AIM_GUIDE = "'계산바코드' 표시 옆 사각형 코드를 네모에 꽉 채워 주세요.";
 // Emphasised in place by the viewfinder so the shopper can find the label at a glance.
 export const SCAN_AIM_GUIDE_TOKEN = "'계산바코드'";
