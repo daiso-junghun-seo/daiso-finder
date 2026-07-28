@@ -27,6 +27,13 @@ test('is a labelled modal dialog that takes focus on open', async () => {
   expect(container.querySelector('video')).toHaveAttribute('aria-hidden', 'true');
 });
 
+// The notice already renders as a visible paragraph; the live region repeats it for assistive tech only.
+test('the scanner live region does not duplicate the notice on screen', () => {
+  const scanner: ScannerPort = { scan: async () => ({ kind: 'failed' }) };
+  render(<ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />);
+  expect(screen.getByRole('status')).toHaveClass('visually-hidden');
+});
+
 test('a decoded value is handed up exactly once', async () => {
   const decoded: string[] = [];
   const scanner: ScannerPort = { scan: async () => ({ kind: 'decoded', value: '19987' }) };

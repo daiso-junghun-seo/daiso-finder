@@ -169,7 +169,7 @@ export function ScannerOverlay({
             echoes it. Mounted with the dialog and left in place (message '') so that when an outcome
             lands only the TEXT changes — a live region inserted together with its content is announced
             unreliably. */}
-        <LiveRegion message={notice ?? ''} />
+        <LiveRegion message={notice ?? ''} visuallyHidden />
       </section>
     </GlassSurface>
   );
