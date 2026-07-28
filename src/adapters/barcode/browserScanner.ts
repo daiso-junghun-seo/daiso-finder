@@ -90,6 +90,11 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
     if (signal.aborted) return { kind: 'cancelled' }; // checked before `unsupported`: an abort is not a capability fact
     if (!native && !fallback) return { kind: 'unsupported' };
     let stream: MediaStream;
+    // Stamped around getUserMedia alone. On iOS Safari this call does not settle until the shopper
+    // answers the permission prompt, so on a first-of-session run this number is mostly HUMAN time —
+    // which is exactly why it has to be separable from the run total (decodeMs), and why a baseline
+    // taken with a prompt cannot be compared against a later run that had none (§B30-11).
+    const cameraStart = now();
     try {
       // Resolution is a correctness input, not a nicety: a DAISO DataMatrix is ~5-8 mm, and at the
       // common 640x480 default its modules fall under the pixels-per-module floor a decoder needs.
@@ -103,6 +108,8 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
         },
       });
     } catch (err) {
+      // cameraMs stays null here on purpose: no camera was acquired, so there is no acquisition
+      // duration to report. A number would read as "the camera came up in Nms" when it never did.
       publishScanner({ cameraError: (err as { name?: string } | null)?.name ?? 'UnknownError' });
       // A denial is the shopper's choice, not an error state to dramatize. `unsupported` asserts a
       // permanent capability fact about this device — it's reserved for "there is no getUserMedia API
@@ -112,7 +119,7 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
       // `failed`, never `unsupported`, to avoid fabricating a fact this device doesn't actually have.
       return { kind: isPermissionDenial(err) ? 'permissionDenied' : 'failed' };
     }
-    publishScanner({ track: readTrackFacts(stream) });
+    publishScanner({ track: readTrackFacts(stream), cameraMs: now() - cameraStart });
     const stopCamera = () => {
       for (const track of stream.getTracks()) track.stop();
     };

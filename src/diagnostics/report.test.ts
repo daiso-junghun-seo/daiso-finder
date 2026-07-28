@@ -53,6 +53,7 @@ function snapshotWith(scanner: Partial<DiagnosticsSnapshot['scanner']>): Diagnos
       track: { width: 640, height: 480, frameRate: 30, facingMode: null, deviceId: 'cam-1' },
       nativePolls: null,
       outcome: null,
+      cameraMs: null,
       decodeMs: null,
       ...scanner,
     },
@@ -84,16 +85,36 @@ test('a measured poll count is printed', () => {
   expect(buildReport(env, snapshotWith({ nativePolls: 14 }), app, 2000)).toContain('14');
 });
 
-// A settled run reports how long the decode actually took. This is NOT the 경과 line: that one is
-// derived from Date.now() on every render, so it keeps growing after the run ends.
-test('a measured decode duration is printed', () => {
-  expect(buildReport(env, snapshotWith({ decodeMs: 8200 }), app, 2000)).toContain('8200ms');
+// A settled run reports how long the whole run took. This is NOT the 경과 line: that one is derived
+// from Date.now() on every render, so it keeps growing after the run ends. The label is asserted with
+// the number: `decodeMs` is the run total, not the decode loop, and a line that says otherwise is the
+// misreading this field was added to close (§B30-11).
+test('a measured run duration is printed under a label that names what is inside it', () => {
+  const report = buildReport(env, snapshotWith({ decodeMs: 8200 }), app, 2000);
+  expect(report).toContain('스캔 소요: 8200ms');
+  expect(report).toContain('디코더 준비·카메라 승인 포함');
+  // The old label claimed pure decode time; nothing may reintroduce it.
+  expect(report).not.toMatch(/디코드: \d/);
 });
 
-test('an unmeasured decode is named, not defaulted to zero', () => {
+test('an unmeasured run duration is named, not defaulted to zero', () => {
   const report = buildReport(env, snapshotWith({ decodeMs: null }), app, 2000);
-  expect(report).toContain(`디코드: ${UNREPORTED}`);
-  expect(report).not.toMatch(/디코드: 0ms/);
+  expect(report).toContain(`스캔 소요: ${UNREPORTED}`);
+  expect(report).not.toMatch(/스캔 소요: 0ms/);
+});
+
+// The camera wait is reported on its own line because on iOS Safari it contains the permission prompt —
+// i.e. human decision time. Folded into the run total it silently inflates a first-of-session baseline.
+test('a measured camera acquisition is printed', () => {
+  expect(buildReport(env, snapshotWith({ cameraMs: 640 }), app, 2000)).toContain(
+    '카메라 승인: 640ms',
+  );
+});
+
+test('a camera that was never acquired is named, not defaulted to zero', () => {
+  const report = buildReport(env, snapshotWith({ cameraMs: null }), app, 2000);
+  expect(report).toContain(`카메라 승인: ${UNREPORTED}`);
+  expect(report).not.toMatch(/카메라 승인: 0ms/);
 });
 
 // "the query failed" and "the platform supports nothing" are different facts about the device.

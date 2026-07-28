@@ -29,6 +29,10 @@ test('a fresh bus has not measured a decode', () => {
   expect(getSnapshot().scanner.decodeMs).toBeNull();
 });
 
+test('a fresh bus has not measured a camera acquisition', () => {
+  expect(getSnapshot().scanner.cameraMs).toBeNull();
+});
+
 test('publishScanner merges a patch without clearing earlier fields', () => {
   publishScanner({ decoderPath: 'zxing' });
   publishScanner({ decoderReadyMs: 412 });

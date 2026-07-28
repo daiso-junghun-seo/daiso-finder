@@ -610,10 +610,17 @@ describe('diagnostics instrumentation', () => {
     expect(s.startedAt).toBe(5);
   });
 
-  // The clock advances 5ms per read. beginScannerRun takes the first, the decoder resolution takes the
-  // next two, and the outcome publish takes the last — so a stamp measured from the run's start reads 15.
-  // A stamp measured from the wrong anchor, or subtracted the wrong way round, cannot produce that.
-  test('the decode duration is stamped when the run settles', async () => {
+  // The clock advances 5ms per read, and the zxing success path reads it six times in this order:
+  //   1.  5  scan()'s beginScannerRun(now())            -> startedAt
+  //   2. 10  runScan's `const decoderStart = now()`
+  //   3. 15  the decoder publish (decoderReadyMs = 15 - 10)
+  //   4. 20  `const cameraStart = now()`, just before getUserMedia
+  //   5. 25  the track publish (cameraMs = 25 - 20)
+  //   6. 30  scan()'s outcome publish (decodeMs = 30 - 5)
+  // So the run total is 25 and the camera window is 5. The run total is deliberately larger than either
+  // segment: it CONTAINS them (§B30-11). A stamp measured from the wrong anchor, or subtracted the wrong
+  // way round, cannot produce these numbers.
+  test('the run duration is stamped when the run settles, with the camera window inside it', async () => {
     let t = 0;
     const now = () => {
       t += 5;
@@ -630,7 +637,43 @@ describe('diagnostics instrumentation', () => {
     await scanner.scan(fakeTarget(), new AbortController().signal);
     const s = getSnapshot().scanner;
     expect(s.startedAt).toBe(5);
-    expect(s.decodeMs).toBe(15);
+    expect(s.decodeMs).toBe(25);
+    expect(s.cameraMs).toBe(5);
+    expect(s.decodeMs as number).toBeGreaterThan(s.cameraMs as number);
+  });
+
+  // A camera that never came up has no acquisition duration. Reporting one — 0ms, or the time spent
+  // waiting for the rejection — would read as "the camera came up", which it did not.
+  test('a rejected getUserMedia leaves the camera duration unmeasured', async () => {
+    const err = new Error('no camera here');
+    err.name = 'NotFoundError';
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () => {
+          throw err;
+        },
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
+    });
+    const outcome = await scanner.scan(fakeTarget(), new AbortController().signal);
+    const s = getSnapshot().scanner;
+    expect(outcome).toEqual({ kind: 'failed' });
+    expect(s.cameraMs).toBeNull();
+    // The run total is still stamped: the run itself settled, it just never owned a camera.
+    expect(s.decodeMs).not.toBeNull();
+  });
+
+  // Nothing to acquire and nothing to time: the run ends before getUserMedia is ever reached.
+  test('a run that never reaches the camera leaves the camera duration unmeasured', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: { getUserMedia: async () => fakeStreamWithSettings({}) },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => null,
+    });
+    const outcome = await scanner.scan(fakeTarget(), new AbortController().signal);
+    expect(outcome).toEqual({ kind: 'unsupported' });
+    expect(getSnapshot().scanner.cameraMs).toBeNull();
   });
 
   test('a camera rejection publishes the error name only', async () => {
