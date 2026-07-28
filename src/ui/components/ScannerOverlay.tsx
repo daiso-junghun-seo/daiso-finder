@@ -9,17 +9,20 @@ import type { ScanOutcome, ScannerPort } from '../../domain/ports';
 import { LiveRegion } from '../a11y/LiveRegion';
 import {
   SCAN_AIM_GUIDE,
+  SCAN_AIM_GUIDE_TOKEN,
   SCAN_BUTTON_LABEL,
   SCAN_FAILED,
   SCAN_HINT,
   SCAN_PERMISSION_DENIED,
   SCAN_UNSUPPORTED,
   STORE_SELECT_CLOSE,
+  splitAimGuide,
 } from '../copy';
 import { GlassSurface } from './GlassSurface';
 
 const DEFAULT_HINT_DELAY_MS = 10_000;
 const AIM_GUIDE_ID = 'scanner-aim-guide';
+const AIM_GUIDE_PARTS = splitAimGuide(SCAN_AIM_GUIDE, SCAN_AIM_GUIDE_TOKEN);
 
 function noticeFor(outcome: ScanOutcome | null): string | null {
   if (!outcome) return null;
@@ -147,7 +150,16 @@ export function ScannerOverlay({
                 Wired as the dialog's accessible description (aria-describedby above) because focus
                 stays on 닫기 for the whole overlay — a bare paragraph would never be announced. */}
             <p id={AIM_GUIDE_ID} className="text-body">
-              {SCAN_AIM_GUIDE}
+              {AIM_GUIDE_PARTS ? (
+                <>
+                  {AIM_GUIDE_PARTS[0]}
+                  <strong>{AIM_GUIDE_PARTS[1]}</strong>
+                  {AIM_GUIDE_PARTS[2]}
+                </>
+              ) : (
+                /* A token that cannot be found must never cost the shopper the instruction. */
+                SCAN_AIM_GUIDE
+              )}
             </p>
             {hinting && <p className="text-caption">{SCAN_HINT}</p>}
           </>

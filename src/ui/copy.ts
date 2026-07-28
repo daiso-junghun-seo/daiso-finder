@@ -196,11 +196,23 @@ export const RESULTS_NOTICE = '검색 결과예요. 바코드를 스캔하면 �
 // scan produces — its typed Empty tells the shopper to scan, which contradicts itself after a scan.
 // Drafted to the Korean UX rules: result language only (no 권한이 없습니다-style blame, no technical
 // terms), and every line ends with a concrete next step (Anti-goal 5). Replace verbatim on ratification.
-// Shown from the moment the viewfinder opens (spec 2026-07-25-barcode-scan-design §6): DataMatrix-only decoding
-// (B30-2) means a shopper who aims at the package's striped 1D code gets ten seconds of silence before
-// SCAN_HINT appears — nothing else on screen tells them which code to aim at. "정사각형 코드" names the
-// SHAPE, deliberately not the symbology ("DataMatrix" is a technical term the Korean UX rules forbid).
-export const SCAN_AIM_GUIDE = '상품의 정사각형 코드를 화면 안에 맞춰 주세요.';
+// Shown from the moment the viewfinder opens. Two failures made the previous wording ("상품의 정사각형
+// 코드를 화면 안에 맞춰 주세요.") useless on a real device: there was no frame on screen to fit anything
+// into, and naming only the SHAPE left the shopper to guess which part of the printed strip to aim at.
+// '계산바코드' is the label printed on the package (owner statement, 2026-07-28) — a token the shopper
+// matches against the physical world, so D069 keeps it exactly as the world renders it. "꽉 채워" is the
+// operative instruction: filling the brackets brings the phone closer, which is what makes the code
+// decodable. The symbology name stays out — a technical term the Korean UX rules forbid.
+export const SCAN_AIM_GUIDE = "'계산바코드' 표시 옆 사각형 코드를 네모에 꽉 채워 주세요.";
+// Emphasised in place by the viewfinder so the shopper can find the label at a glance.
+export const SCAN_AIM_GUIDE_TOKEN = "'계산바코드'";
+
+/** Split a sentence around a token so the token can be emphasised without duplicating the sentence. */
+export function splitAimGuide(sentence: string, token: string): [string, string, string] | null {
+  const at = sentence.indexOf(token);
+  if (at === -1) return null;
+  return [sentence.slice(0, at), token, sentence.slice(at + token.length)];
+}
 export const SCAN_PERMISSION_DENIED = '카메라를 사용할 수 없어요. 상품명으로 검색해 보세요.';
 export const SCAN_UNSUPPORTED =
   '이 브라우저에서는 바코드 스캔을 쓸 수 없어요. 상품명으로 검색해 보세요.';

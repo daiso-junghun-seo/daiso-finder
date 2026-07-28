@@ -14,6 +14,7 @@ import {
   PARTIAL_STALE_CACHE_CTA,
   RETRY_BUTTON,
   SCAN_AIM_GUIDE,
+  SCAN_AIM_GUIDE_TOKEN,
   SCAN_BUTTON_LABEL,
   SCAN_FAILED,
   SCAN_HINT,
@@ -48,6 +49,7 @@ import {
   priceLocationLine,
   restockBody,
   scanEmptyBody,
+  splitAimGuide,
   storeLine,
 } from './copy';
 
@@ -251,7 +253,7 @@ test('nearbyStoreRowLabel parameterizes the Bible example row (명동역점 · 1
 });
 
 test('scan copy drafts are transcribed exactly (app-owned, pending Bible ratification)', () => {
-  expect(SCAN_AIM_GUIDE).toBe('상품의 정사각형 코드를 화면 안에 맞춰 주세요.');
+  expect(SCAN_AIM_GUIDE).toBe("'계산바코드' 표시 옆 사각형 코드를 네모에 꽉 채워 주세요.");
   expect(SCAN_PERMISSION_DENIED).toBe('카메라를 사용할 수 없어요. 상품명으로 검색해 보세요.');
   expect(SCAN_UNSUPPORTED).toBe(
     '이 브라우저에서는 바코드 스캔을 쓸 수 없어요. 상품명으로 검색해 보세요.',
@@ -261,6 +263,20 @@ test('scan copy drafts are transcribed exactly (app-owned, pending Bible ratific
   expect(scanEmptyBody('19987')).toBe(
     "'19987' 바코드로 등록된 상품을 찾지 못했어요. 상품명으로 검색해 보세요.",
   );
+});
+
+// The panel emphasises the token in place, so the token must actually occur in the sentence.
+test('the emphasised token is part of the aim guide sentence', () => {
+  expect(SCAN_AIM_GUIDE).toContain(SCAN_AIM_GUIDE_TOKEN);
+});
+
+test('splitAimGuide returns the text before, the token, and the text after', () => {
+  expect(splitAimGuide('ab TOKEN cd', 'TOKEN')).toEqual(['ab ', 'TOKEN', ' cd']);
+});
+
+// A split that cannot find its token must not swallow the instruction.
+test('splitAimGuide returns null when the token is absent', () => {
+  expect(splitAimGuide('no token here', 'TOKEN')).toBeNull();
 });
 
 test('every scan copy line ends with a concrete next step and blames nobody', () => {

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import type { ScanOutcome, ScannerPort } from '../../domain/ports';
 import {
   SCAN_AIM_GUIDE,
+  SCAN_AIM_GUIDE_TOKEN,
   SCAN_BUTTON_LABEL,
   SCAN_FAILED,
   SCAN_HINT,
@@ -40,20 +41,35 @@ test('a decoded value is handed up exactly once', async () => {
 const noticeParagraph = { selector: 'p' } as const;
 
 test('the aiming guide is visible immediately on mount, while scanning is in progress', () => {
-  render(<ScannerOverlay scanner={never} onDecoded={() => {}} onClose={() => {}} />);
+  const { container } = render(
+    <ScannerOverlay scanner={never} onDecoded={() => {}} onClose={() => {}} />,
+  );
   // No waitFor: the scan never resolves, so this must already be on screen on the first render —
   // not something that only appears once an outcome (or the 10s hint) lands.
-  expect(screen.getByText(SCAN_AIM_GUIDE)).toBeInTheDocument();
+  // Looked up by id, not getByText(SCAN_AIM_GUIDE): the <strong> emphasis splits the paragraph's
+  // text nodes, and Testing Library's getNodeText only concatenates *direct* text-node children.
+  expect(container.querySelector('#scanner-aim-guide')?.textContent).toBe(SCAN_AIM_GUIDE);
+});
+
+test('the aim guide names the 계산바코드 label and emphasises it', () => {
+  const { container } = render(
+    <ScannerOverlay scanner={never} onDecoded={() => {}} onClose={() => {}} />,
+  );
+  const guide = container.querySelector('#scanner-aim-guide');
+  // The emphasis must not change what the sentence says — the dialog's description is computed from it.
+  expect(guide?.textContent).toBe(SCAN_AIM_GUIDE);
+  expect(guide?.querySelector('strong')?.textContent).toBe(SCAN_AIM_GUIDE_TOKEN);
 });
 
 test("the dialog's accessible description resolves to the aiming guide", () => {
   render(<ScannerOverlay scanner={never} onDecoded={() => {}} onClose={() => {}} />);
   // Focus lands on 닫기 for the whole overlay (see focus test above), so a bare paragraph would
   // never be read aloud — the guide must be wired as the dialog's accessible description instead.
-  expect(
-    screen.getByRole('dialog', { name: SCAN_BUTTON_LABEL, description: SCAN_AIM_GUIDE }),
-  ).toBeInTheDocument();
+  // Containment, not exact equality: nesting the <strong> emphasis can insert whitespace at element
+  // boundaries in the computed accessible description, and containment also survives the Bible
+  // swapping the wording later.
   const dialog = screen.getByRole('dialog', { name: SCAN_BUTTON_LABEL });
+  expect(dialog).toHaveAccessibleDescription(expect.stringContaining('계산바코드'));
   const describedBy = dialog.getAttribute('aria-describedby');
   expect(describedBy).toBeTruthy();
   expect(document.getElementById(describedBy as string)).toHaveTextContent(SCAN_AIM_GUIDE);
@@ -81,12 +97,19 @@ test('a decode failure shows the honest fallback copy and stays open', async () 
 
 test('the aiming guide gives way to the notice on a failure outcome', async () => {
   const scanner: ScannerPort = { scan: async () => ({ kind: 'failed' }) };
-  render(<ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />);
+  const { container } = render(
+    <ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />,
+  );
   // Present at first, before the outcome lands...
-  expect(screen.getByText(SCAN_AIM_GUIDE)).toBeInTheDocument();
+  // Looked up by id, not getByText(SCAN_AIM_GUIDE): the <strong> emphasis splits the paragraph's
+  // text nodes, and Testing Library's getNodeText only concatenates *direct* text-node children.
+  expect(container.querySelector('#scanner-aim-guide')?.textContent).toBe(SCAN_AIM_GUIDE);
   expect(await screen.findByText(SCAN_FAILED, noticeParagraph)).toBeInTheDocument();
   // ...and gone once the notice takes its place — the guide is no longer relevant once we know why.
-  expect(screen.queryByText(SCAN_AIM_GUIDE)).not.toBeInTheDocument();
+  // Asserted against the id, not queryByText(SCAN_AIM_GUIDE): after the <strong> split, that text
+  // lookup never matches the paragraph at all (present or not), so it would pass whether or not the
+  // guide is actually on screen — silently losing its ability to guard this behaviour.
+  expect(container.querySelector('#scanner-aim-guide')).not.toBeInTheDocument();
 });
 
 test('a square aiming guide is drawn over the camera while scanning', () => {
@@ -131,7 +154,9 @@ test.each([
 
 test('a cancelled scan leaves no notice behind, unlike every other terminal outcome', async () => {
   const scanner: ScannerPort = { scan: async () => ({ kind: 'cancelled' }) };
-  render(<ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />);
+  const { container } = render(
+    <ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />,
+  );
   // Flush the already-resolved scan promise chain past a macrotask boundary — 'cancelled' never
   // calls a state setter, so there is no state-driven condition to waitFor() against.
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -144,7 +169,9 @@ test('a cancelled scan leaves no notice behind, unlike every other terminal outc
   // only paragraph left standing is the aiming guide, which stays up whenever there is no outcome
   // notice (a cancelled scan included: it never sets one).
   expect(dialog.querySelectorAll('p')).toHaveLength(1);
-  expect(screen.getByText(SCAN_AIM_GUIDE)).toBeInTheDocument();
+  // Looked up by id, not getByText(SCAN_AIM_GUIDE): the <strong> emphasis splits the paragraph's
+  // text nodes, and Testing Library's getNodeText only concatenates *direct* text-node children.
+  expect(container.querySelector('#scanner-aim-guide')?.textContent).toBe(SCAN_AIM_GUIDE);
 });
 
 test('a slow decode keeps the camera open and only adds a hint', async () => {
