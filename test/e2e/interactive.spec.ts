@@ -103,6 +103,83 @@ function verticalOverlapPx(a: Box, b: Box): number {
   return Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
 }
 
+/** How far `inner` sticks out past `outer` on its worst side, in px; ≤ 0 means fully contained. */
+function overflowPx(inner: Box, outer: Box): number {
+  return Math.max(
+    outer.x - inner.x,
+    outer.y - inner.y,
+    inner.x + inner.width - (outer.x + outer.width),
+    inner.y + inner.height - (outer.y + outer.height),
+  );
+}
+
+// The aiming square carries an instruction the shopper has to be able to obey — 네모에 꽉 채워 주세요
+// (SCAN_AIM_GUIDE). A square larger than the visible preview cannot be filled, and its lower brackets
+// land on the dialog background instead of the camera image. Presence assertions cannot see that, and
+// neither can the CSS-text assertions in src/styles/layout.test.ts: a percentage on `width` resolves
+// against the containing block's WIDTH, so a width-sized square is not bounded by the preview's height
+// at all. Only measured geometry catches it.
+test('the aiming square stays inside the camera preview (phone 390×844)', async ({ page }) => {
+  // Hold the scan open. DEV wires the no-camera mock scanner, which decodes on the next microtask and
+  // closes the overlay before anything can be measured. This substitutes ONE module — the test double
+  // the DEV build already uses — for a scan that never settles, which is the exact state the guide
+  // exists for: a shopper aiming at a package that has not decoded yet. The overlay, its markup and
+  // its stylesheet are the app's own.
+  await page.route('**/adapters/mock/scanner.ts*', (route) =>
+    route.fulfill({
+      contentType: 'text/javascript',
+      body: [
+        "export const MOCK_SCAN_VALUE = '19987';",
+        'export function createMockScanner() {',
+        '  return { scan: () => new Promise(() => {}) };',
+        '}',
+      ].join('\n'),
+    }),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    localStorage.setItem('daiso.storeContext', JSON.stringify({ strCd: '001', strNm: '명동역점' }));
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: '바코드 스캔' }).click();
+  const aim = page.locator('.scanner-overlay__aim');
+  await expect(aim).toBeVisible();
+
+  const videoBox = await boxOf(page.locator('.scanner-overlay__video'), 'camera preview');
+  const aimBox = await boxOf(aim, 'aiming square');
+  const geometry =
+    `preview ${videoBox.width}×${videoBox.height} at y=${videoBox.y} · ` +
+    `aim ${aimBox.width}×${aimBox.height} at y=${aimBox.y} · ` +
+    `overflow=${overflowPx(aimBox, videoBox)}px`;
+
+  // A collapsed or non-square box would satisfy containment vacuously while showing the shopper
+  // something that is not the 네모 the copy names, so pin the shape before the containment.
+  expect(aimBox.height, geometry).toBeGreaterThan(0);
+  expect(Math.abs(aimBox.width - aimBox.height), geometry).toBeLessThanOrEqual(1);
+  // 0.5px of slack for subpixel rounding of the percentage sizing and the centring translate.
+  expect(overflowPx(aimBox, videoBox), geometry).toBeLessThanOrEqual(0.5);
+
+  // The DEV build has no camera, so the preview above falls back to <video>'s default 300×150 object
+  // size — squat, and not the shape the overflow was found at. The field device (iPhone 390×844 with
+  // the 1920×1080 stream the panel reported on 2026-07-28) renders it ~388×218. Force that height and
+  // re-measure: a preview shorter than 60% of its own width is precisely the case a width-sized square
+  // could not survive, and a height-sized one has to.
+  await page
+    .locator('.scanner-overlay__video')
+    .evaluate((el) => el.setAttribute('style', 'height: 218px'));
+  const fieldVideoBox = await boxOf(
+    page.locator('.scanner-overlay__video'),
+    'camera preview (16:9)',
+  );
+  const fieldAimBox = await boxOf(aim, 'aiming square (16:9)');
+  const fieldGeometry =
+    `preview ${fieldVideoBox.width}×${fieldVideoBox.height} at y=${fieldVideoBox.y} · ` +
+    `aim ${fieldAimBox.width}×${fieldAimBox.height} at y=${fieldAimBox.y} · ` +
+    `overflow=${overflowPx(fieldAimBox, fieldVideoBox)}px`;
+  expect(Math.abs(fieldAimBox.width - fieldAimBox.height), fieldGeometry).toBeLessThanOrEqual(1);
+  expect(overflowPx(fieldAimBox, fieldVideoBox), fieldGeometry).toBeLessThanOrEqual(0.5);
+});
+
 test.describe('diagnostics panel', () => {
   test('?debug=1 shows the diagnostics bar', async ({ page }) => {
     await page.goto('/?debug=1');

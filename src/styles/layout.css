@@ -102,7 +102,11 @@ input {
   justify-content: space-between;
 }
 
+/* display: block removes the inline-replaced baseline gap under the video. Without it the wrapper is a
+   few px taller than the picture, and everything positioned against the wrapper — the aiming square
+   below — is centred on a box the shopper cannot see the bottom edge of. */
 .scanner-overlay__video {
+  display: block;
   width: 100%;
   max-height: 60vh;
   object-fit: cover;
@@ -113,22 +117,35 @@ input {
 }
 
 /* Aiming brackets only — corners, never a closed box and never a dimmed surround. Both decode paths
-   read the whole frame (and `object-fit: cover` means slightly more than is visible), so a boundary
-   would imply a crop that does not exist; a dimmed mask would additionally hide the packaging the
-   shopper is scanning for the code. Sized to 60% deliberately: filling it brings the phone closer,
-   which is what raises pixels-per-module. 36vh caps it inside the video's own 60vh ceiling. */
+   read the whole frame (and where this box and the stream differ in aspect ratio, `object-fit: cover`
+   means the decoder reads more than is visible; where they match, nothing is cropped either way), so a
+   boundary would imply a crop that does not exist; a dimmed mask would additionally hide the packaging
+   the shopper is scanning for the code. Sized to 60% deliberately: filling it brings the phone closer,
+   which is what raises pixels-per-module — an UNTESTED HYPOTHESIS this branch exists to measure, not an
+   observed fact (docs/notes/open-questions.md §B30-10, measured by `decodeMs` per §B30-11).
+
+   Sized from the preview's HEIGHT — its short side on a landscape stream — because a percentage on
+   `width` resolves against the containing block's WIDTH, which in portrait is the LONG side and so
+   cannot keep the square inside the picture (390×844 phone, 1920×1080 stream: the preview is ~218px
+   tall while 60% of its width is ~233px). The guarantee this rule gives is exactly what the E2E in
+   test/e2e/interactive.spec.ts measures: the square never leaves the video box, at any preview shape.
+   `max-width` keeps that true if a portrait stream ever makes width the short side. */
 .scanner-overlay__aim {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(60%, 36vh);
+  height: 60%;
+  width: auto;
+  max-width: 60%;
   aspect-ratio: 1;
   pointer-events: none;
 }
 
-/* White with a dark halo rather than a theme token: the surface behind is arbitrary camera imagery,
-   so no palette value can guarantee contrast against it. Same reasoning as src/styles/diagnostics.css. */
+/* White with a dark halo rather than a theme token: this is a shopper-facing surface, but the thing
+   behind it is arbitrary camera imagery, so no palette value can guarantee contrast against it — the
+   halo does, whatever the frame happens to contain. (Not the same reason diagnostics.css sits outside
+   the tokens: that one is a dev-only surface kept out so it cannot drift into shopper-facing UI.) */
 .scanner-overlay__aim span {
   position: absolute;
   width: 18%;
