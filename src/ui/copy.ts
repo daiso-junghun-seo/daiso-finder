@@ -196,13 +196,14 @@ export const RESULTS_NOTICE = '검색 결과예요. 바코드를 스캔하면 �
 // scan produces — its typed Empty tells the shopper to scan, which contradicts itself after a scan.
 // Drafted to the Korean UX rules: result language only (no 권한이 없습니다-style blame, no technical
 // terms), and every line ends with a concrete next step (Anti-goal 5). Replace verbatim on ratification.
-// Shown from the moment the viewfinder opens. Two failures made the previous wording ("상품의 정사각형
-// 코드를 화면 안에 맞춰 주세요.") useless on a real device: there was no frame on screen to fit anything
-// into, and naming only the SHAPE left the shopper to guess which part of the printed strip to aim at.
-// '계산바코드' is the label printed on the package (owner statement, 2026-07-28) — a token the shopper
-// matches against the physical world, so D069 keeps it exactly as the world renders it. "꽉 채워" is the
-// operative instruction: filling the brackets brings the phone closer, which is what makes the code
-// decodable. The symbology name stays out — a technical term the Korean UX rules forbid.
+// Shown from the moment the viewfinder opens. The previous wording ("상품의 정사각형 코드를 화면 안에
+// 맞춰 주세요.") had no frame on screen to fit anything into until Task 2 added one, and named only the
+// SHAPE — the expectation, not an observed fact, is that this left the shopper guessing which part of
+// the printed strip to aim at. '계산바코드' is the label printed on the package (owner statement,
+// 2026-07-28) — a token the shopper matches against the physical world, so D069 keeps it exactly as the
+// world renders it. "꽉 채워" is meant to draw the phone closer to the code; whether that is what
+// actually makes it decodable is the hypothesis Task 1's decodeMs measurement exists to test, not a
+// confirmed fact. The symbology name stays out — a technical term the Korean UX rules forbid.
 export const SCAN_AIM_GUIDE = "'계산바코드' 표시 옆 사각형 코드를 네모에 꽉 채워 주세요.";
 // Emphasised in place by the viewfinder so the shopper can find the label at a glance.
 export const SCAN_AIM_GUIDE_TOKEN = "'계산바코드'";
