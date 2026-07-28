@@ -128,8 +128,10 @@ input {
    `width` resolves against the containing block's WIDTH, which in portrait is the LONG side and so
    cannot keep the square inside the picture (390×844 phone, 1920×1080 stream: the preview is ~218px
    tall while 60% of its width is ~233px). The guarantee this rule gives is exactly what the E2E in
-   test/e2e/interactive.spec.ts measures: the square never leaves the video box, at any preview shape.
-   `max-width` keeps that true if a portrait stream ever makes width the short side. */
+   test/e2e/interactive.spec.ts measures: the square never leaves the video box. `max-width` caps the
+   inline axis at 60% too, so a portrait preview (width as the short side) cannot overflow sideways
+   either — that shape is not one the E2E measures, and whether the box stays exactly square once the
+   cap binds is untested. */
 .scanner-overlay__aim {
   position: absolute;
   top: 50%;
