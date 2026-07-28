@@ -9,26 +9,41 @@ test('the visually-hidden utility hides without leaving the accessibility tree',
   expect(rule.slice(0, rule.indexOf('}'))).not.toContain('visibility: hidden');
 });
 
-// Carried over from Task 2's review: no test exercised the aim guide's CSS at all, so a future edit
-// reintroducing a closed border, a background fill, or a z-index would go completely uncaught. These
-// assertions check the stylesheet's TEXT only — they cannot prove rendered appearance (jsdom never
-// applies this file; see the module comment above and Task 4's brief).
-test('.scanner-overlay__aim declares no background and no border of its own — corners are drawn by its child spans', () => {
-  const start = css.indexOf('.scanner-overlay__aim {');
+// The aim guide's shape decisions (2026-07-28-scan-aim-guide-design.md §2, §6) live entirely in CSS, so
+// without these a future edit reintroducing a closed border, a background fill or a z-index would go
+// completely uncaught. These assertions check the stylesheet's TEXT only — they cannot prove rendered
+// appearance, because Vitest stubs plain CSS imports (`vite.config.ts` limits the CSS pipeline to
+// `css: { include: [/\.css\?raw$/] }`), so jsdom never applies this file. The rendered geometry is
+// measured instead by the phone-viewport bounding-box test in test/e2e/interactive.spec.ts.
+function ruleFor(selector: string): string {
+  const start = css.indexOf(`${selector} {`);
   expect(start).toBeGreaterThan(-1);
-  const end = css.indexOf('}', start);
-  const rule = css.slice(start, end);
+  return css.slice(start, css.indexOf('}', start));
+}
+
+test('.scanner-overlay__aim declares no background and no border of its own — corners are drawn by its child spans', () => {
+  const rule = ruleFor('.scanner-overlay__aim');
   expect(rule).not.toContain('background');
   expect(rule).not.toContain('border');
 });
 
-test('each aim-guide corner span zeroes exactly two border sides, drawing a bracket rather than a closed box', () => {
+// The prohibitions above are satisfied by an EMPTY rule, and an empty rule draws nothing. These pin the
+// square the records claim (§B30-10: corner brackets at 60% of the short side): sized from the height,
+// which is the short side of a landscape preview, never from the width — a percentage width resolves
+// against the containing block's WIDTH and so cannot bound the square inside a landscape picture.
+test('.scanner-overlay__aim is a square sized from the preview height, per §B30-10', () => {
+  const rule = ruleFor('.scanner-overlay__aim');
+  expect(rule).toContain('height: 60%');
+  expect(rule).toContain('aspect-ratio: 1');
+  expect(rule).toMatch(/\bwidth:\s*auto/);
+});
+
+test('each aim-guide corner span draws a solid border and zeroes exactly two sides, making a bracket rather than a closed box', () => {
+  // Without the positive half, deleting the border declaration takes the brackets off the screen while
+  // every "no closed box" assertion below still passes.
+  expect(ruleFor('.scanner-overlay__aim span')).toMatch(/border:\s*\d+px\s+solid/);
   for (let n = 1; n <= 4; n += 1) {
-    const marker = `.scanner-overlay__aim span:nth-child(${n}) {`;
-    const start = css.indexOf(marker);
-    expect(start).toBeGreaterThan(-1);
-    const end = css.indexOf('}', start);
-    const rule = css.slice(start, end);
+    const rule = ruleFor(`.scanner-overlay__aim span:nth-child(${n})`);
     const zeroedSides = rule.match(/border-(top|right|bottom|left):\s*0;/g) ?? [];
     expect(zeroedSides).toHaveLength(2);
   }

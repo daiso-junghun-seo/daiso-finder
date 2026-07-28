@@ -119,7 +119,9 @@ test('the aiming guide gives way to the notice on a failure outcome', async () =
   expect(container.querySelector('#scanner-aim-guide')).not.toBeInTheDocument();
 });
 
-test('a square aiming guide is drawn over the camera while scanning', () => {
+// "corner brackets", not "aiming guide": the guide the shopper READS is the paragraph asserted above,
+// and a failure naming both the same thing sends the next reader to the wrong file.
+test('square corner brackets are drawn over the camera while scanning', () => {
   const { container } = render(
     <ScannerOverlay scanner={never} onDecoded={() => {}} onClose={() => {}} />,
   );
@@ -133,8 +135,8 @@ test('a square aiming guide is drawn over the camera while scanning', () => {
   ).toBeInTheDocument();
 });
 
-// Leaving an aiming guide on screen after the camera failed would be an instruction the app cannot honour.
-test('the aiming guide disappears once an outcome notice replaces the guidance', async () => {
+// Leaving brackets on screen after the camera failed would be an instruction the app cannot honour.
+test('the corner brackets disappear once an outcome notice replaces the guidance', async () => {
   const scanner: ScannerPort = { scan: async () => ({ kind: 'permissionDenied' }) };
   const { container } = render(
     <ScannerOverlay scanner={scanner} onDecoded={() => {}} onClose={() => {}} />,
