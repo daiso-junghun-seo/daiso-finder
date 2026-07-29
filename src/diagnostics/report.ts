@@ -2,7 +2,6 @@
 // so they are asserted directly on the produced strings.
 import type { DiagnosticsSnapshot, NetworkEntry, ScannerDiagnostics, TrackFacts } from './bus';
 
-export const UNMEASURED = '측정 불가 (zxing 내부 루프)';
 export const UNREPORTED = '미보고';
 export const QUERY_FAILED = '질의 실패';
 export const SUPPORTS_NONE = '지원 없음';
@@ -115,7 +114,10 @@ export function buildReport(
     // NOT pure decode time: the label spells out what is inside it so a reader cannot mistake the run
     // total for the decode loop. The permission prompt lands in 카메라 승인 (§B30-11).
     `  스캔 소요: ${s.decodeMs === null ? UNREPORTED : `${s.decodeMs}ms`} (디코더 준비·카메라 승인 포함)`,
-    `  시도 횟수: ${s.nativePolls === null ? UNMEASURED : s.nativePolls}`,
+    `  시도 횟수: ${value(s.decodeAttempts)}`,
+    `  디코드 점유: ${s.decodeBusyMs === null ? UNREPORTED : `${s.decodeBusyMs}ms`}`,
+    `  프레임 복사: ${s.drawMs === null ? UNREPORTED : `${s.drawMs}ms`}`,
+    `  루프 대기: ${s.loopIdleMs === null ? UNREPORTED : `${s.loopIdleMs}ms`}`,
     `  결과: ${s.outcome ?? IN_PROGRESS}`,
     '',
     '[앱 상태]',

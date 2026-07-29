@@ -22,7 +22,13 @@ export interface ScannerDiagnostics {
   decoderReadyMs: number | null;
   cameraError: string | null; // error.name only — never message or stack
   track: TrackFacts | null;
-  nativePolls: number | null; // null on the zxing path: its retries happen inside the library
+  // Both paths count attempts. The three below are FALLBACK-ONLY and stay null on the native path,
+  // whose setInterval does not await the previous detect() — overlapping attempts make a per-attempt
+  // average meaningless, and a number here would read as one.
+  decodeAttempts: number | null;
+  decodeBusyMs: number | null; // time inside decodeFrame calls
+  drawMs: number | null; // time spent copying frames into the canvas
+  loopIdleMs: number | null; // time the loop deliberately waited (rAF + minimum interval)
   // Wall-clock around the getUserMedia call, so the decode loop can be told apart from the wait for the
   // camera. On iOS Safari that wait CONTAINS the permission prompt — getUserMedia does not settle until
   // the shopper taps 허용 — so a first-of-session run carries human decision time here and nowhere else.
@@ -58,7 +64,10 @@ function emptyScanner(): ScannerDiagnostics {
     decoderReadyMs: null,
     cameraError: null,
     track: null,
-    nativePolls: null,
+    decodeAttempts: null,
+    decodeBusyMs: null,
+    drawMs: null,
+    loopIdleMs: null,
     cameraMs: null,
     decodeMs: null,
     outcome: null,

@@ -257,7 +257,7 @@ function scanWithNative(
     // which point attach() has already bound the stream.
     const timer = setInterval(() => {
       polls += 1;
-      publishScanner({ nativePolls: polls });
+      publishScanner({ decodeAttempts: polls });
       detector
         .detect(target.video)
         .then((codes) => {

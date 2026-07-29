@@ -33,6 +33,14 @@ test('a fresh bus has not measured a camera acquisition', () => {
   expect(getSnapshot().scanner.cameraMs).toBeNull();
 });
 
+test('a fresh bus has measured no decode segments', () => {
+  const { scanner } = getSnapshot();
+  expect(scanner.decodeAttempts).toBeNull();
+  expect(scanner.decodeBusyMs).toBeNull();
+  expect(scanner.drawMs).toBeNull();
+  expect(scanner.loopIdleMs).toBeNull();
+});
+
 test('publishScanner merges a patch without clearing earlier fields', () => {
   publishScanner({ decoderPath: 'zxing' });
   publishScanner({ decoderReadyMs: 412 });
@@ -49,13 +57,13 @@ test('getSnapshot returns the same reference until something is published', () =
 });
 
 test('beginScannerRun clears the previous run and stamps the start', () => {
-  publishScanner({ decoderPath: 'zxing', outcome: 'failed', nativePolls: 7 });
+  publishScanner({ decoderPath: 'zxing', outcome: 'failed', decodeAttempts: 7 });
   beginScannerRun(1000);
   expect(getSnapshot().scanner).toMatchObject({
     startedAt: 1000,
     decoderPath: null,
     outcome: null,
-    nativePolls: null,
+    decodeAttempts: null,
   });
 });
 

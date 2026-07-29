@@ -553,12 +553,12 @@ describe('diagnostics instrumentation', () => {
     const s = getSnapshot().scanner;
     expect(s.decoderPath).toBe('native');
     expect(s.track).toMatchObject({ width: 1920, height: 1080, deviceId: 'cam-1' });
-    expect(s.nativePolls).toBeGreaterThanOrEqual(1);
+    expect(s.decodeAttempts).toBeGreaterThanOrEqual(1);
     expect(s.outcome).toBe('decoded');
     expect(s.startedAt).not.toBeNull();
   });
 
-  // The zxing reader retries inside the library, so nativePolls must stay null rather than report 0.
+  // The zxing reader retries inside the library, so decodeAttempts must stay null rather than report 0.
   test('the zxing path publishes its decoder and leaves the poll count unmeasured', async () => {
     const scanner = createBrowserScanner({
       mediaDevices: {
@@ -570,7 +570,7 @@ describe('diagnostics instrumentation', () => {
     await scanner.scan({ video: {} as HTMLVideoElement }, new AbortController().signal);
     const s = getSnapshot().scanner;
     expect(s.decoderPath).toBe('zxing');
-    expect(s.nativePolls).toBeNull();
+    expect(s.decodeAttempts).toBeNull();
     expect(s.track).toMatchObject({ width: 640, height: 480 });
   });
 

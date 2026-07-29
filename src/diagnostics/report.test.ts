@@ -9,7 +9,6 @@ import {
   NOT_STARTED,
   QUERY_FAILED,
   SUPPORTS_NONE,
-  UNMEASURED,
   UNREPORTED,
   buildReport,
   collectEnvironment,
@@ -51,7 +50,10 @@ function snapshotWith(scanner: Partial<DiagnosticsSnapshot['scanner']>): Diagnos
       decoderReadyMs: 412,
       cameraError: null,
       track: { width: 640, height: 480, frameRate: 30, facingMode: null, deviceId: 'cam-1' },
-      nativePolls: null,
+      decodeAttempts: null,
+      decodeBusyMs: null,
+      drawMs: null,
+      loopIdleMs: null,
       outcome: null,
       cameraMs: null,
       decodeMs: null,
@@ -73,16 +75,44 @@ test('summaryLine shows the final outcome once the run ends', () => {
   expect(summaryLine(snapshotWith({ outcome: 'decoded' }).scanner, 2000)).toContain('decoded');
 });
 
-// The zxing reader retries inside decodeOnceFromStream, so we genuinely cannot count its attempts.
-// Printing a number here would invent evidence that a §B9 field decision then rests on.
-test('an unmeasurable poll count is named as unmeasurable, not zero', () => {
-  const report = buildReport(env, snapshotWith({ nativePolls: null }), app, 2000);
-  expect(report).toContain(UNMEASURED);
+// The old marker claimed the count was unmeasurable because the loop lived inside zxing. The app owns
+// that loop now, so both paths count attempts and the marker would be a false statement.
+test('a measured attempt count is printed', () => {
+  expect(buildReport(env, snapshotWith({ decodeAttempts: 14 }), app, 2000)).toContain(
+    '시도 횟수: 14',
+  );
+});
+
+test('an unmeasured attempt count is named, not defaulted to zero', () => {
+  const report = buildReport(env, snapshotWith({ decodeAttempts: null }), app, 2000);
+  expect(report).toContain(`시도 횟수: ${UNREPORTED}`);
   expect(report).not.toMatch(/시도 횟수: 0/);
 });
 
-test('a measured poll count is printed', () => {
-  expect(buildReport(env, snapshotWith({ nativePolls: 14 }), app, 2000)).toContain('14');
+// The three fallback-only segments. Splitting them is the point of this stage: the loop's own pacing
+// must not hide inside a residual that gets read as "focus and framing" (spec §2).
+test('the fallback segments are printed when measured', () => {
+  const report = buildReport(
+    env,
+    snapshotWith({ decodeBusyMs: 4200, drawMs: 380, loopIdleMs: 900 }),
+    app,
+    2000,
+  );
+  expect(report).toContain('디코드 점유: 4200ms');
+  expect(report).toContain('프레임 복사: 380ms');
+  expect(report).toContain('루프 대기: 900ms');
+});
+
+test('the fallback segments are named as unreported on the native path', () => {
+  const report = buildReport(
+    env,
+    snapshotWith({ decodeBusyMs: null, drawMs: null, loopIdleMs: null }),
+    app,
+    2000,
+  );
+  expect(report).toContain(`디코드 점유: ${UNREPORTED}`);
+  expect(report).toContain(`프레임 복사: ${UNREPORTED}`);
+  expect(report).toContain(`루프 대기: ${UNREPORTED}`);
 });
 
 // A settled run reports how long the whole run took. This is NOT the 경과 line: that one is derived
