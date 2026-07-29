@@ -5,7 +5,13 @@
 import { publishScanner } from '../../diagnostics/bus';
 import type { ScanOutcome, ScanTarget } from '../../domain/ports';
 
-/** One frame in, a value or nothing out. A retryable miss is `null`, never a throw. */
+/**
+ * One frame in, a value or nothing out. A retryable miss is `null`, never a throw.
+ *
+ * `dispose()` may be called while a `decodeFrame` call is still pending — an abort tears the decoder
+ * down without waiting for the in-flight decode to settle. An implementer must tolerate a decode that
+ * resolves or throws after `dispose()` has already run.
+ */
 export interface FrameDecoder {
   decodeFrame(canvas: HTMLCanvasElement): Promise<string | null>;
   dispose(): void;
@@ -105,7 +111,10 @@ export async function runFrameLoop(
       }
     }
   } catch {
-    return { kind: 'failed' };
+    // The abort listener above disposes the decoder while a decodeFrame call may still be in flight, so
+    // a decoder that throws on use-after-dispose must still report `cancelled`: every other exit in this
+    // loop gives abort precedence, and the loop's own teardown must not be the one path that doesn't.
+    return signal.aborted ? { kind: 'cancelled' } : { kind: 'failed' };
   } finally {
     signal.removeEventListener('abort', dispose);
     dispose();
