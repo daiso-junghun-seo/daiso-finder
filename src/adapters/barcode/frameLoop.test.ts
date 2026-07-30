@@ -158,6 +158,55 @@ test('an abort during the decode that then throws is cancelled, not failed', asy
   expect(outcome).toEqual({ kind: 'cancelled' });
 });
 
+// THE HOLE THIS STAGE OPENED. On iOS a hidden or backgrounded tab stops firing requestAnimationFrame
+// altogether, and an unraced wait on it never settles: the loop parks, runScan's finally never runs and
+// stopCamera() never runs, so the camera stays live behind a closed overlay. A `nextFrame` that never
+// calls back reproduces exactly that, with no timing assumption. With the race removed this test does not
+// merely fail — it hangs to vitest's timeout, which is the shape of the production bug.
+test('an abort settles the loop even if no frame ever arrives', async () => {
+  const controller = new AbortController();
+  const decoder: FrameDecoder = { decodeFrame: async () => '19987', dispose: () => {} };
+  const running = runFrameLoop(
+    decoder,
+    target(),
+    controller.signal,
+    harness({ nextFrame: () => {} }),
+  );
+  controller.abort();
+  await expect(running).resolves.toEqual({ kind: 'cancelled' });
+});
+
+// The pacing wait needs the same race for a plainer reason: a shopper who closes the overlay mid-interval
+// must not wait out the remainder of it, and the shipped interval is 200ms per miss. The interval here is
+// 10s, far beyond vitest's timeout, so an unraced wait cannot pass by being merely slow.
+test('an abort during the pacing wait settles at once, not after the interval', async () => {
+  const controller = new AbortController();
+  let attempted: () => void = () => {};
+  const firstAttempt = new Promise<void>((resolve) => {
+    attempted = resolve;
+  });
+  const decoder: FrameDecoder = {
+    decodeFrame: async () => {
+      attempted();
+      return null; // never decodes, so the loop always reaches the pacing wait
+    },
+    dispose: () => {},
+  };
+  const running = runFrameLoop(
+    decoder,
+    target(),
+    controller.signal,
+    harness({ minIntervalMs: 10_000 }),
+  );
+  await firstAttempt;
+  // The loop must be INSIDE the pacing wait when the abort lands. Without this delay the post-decode
+  // abort check wins the race — the loop returns `cancelled` having never reached the interval — and the
+  // test passes whether or not the wait is raced (verified: it did). 20ms against a 10s interval.
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  controller.abort();
+  await expect(running).resolves.toEqual({ kind: 'cancelled' });
+});
+
 // RENAMED and widened: the old name claimed "every exit path" while exercising the decoded one alone.
 // Now it drives the three exits the loop actually has, because "exactly once" is the interesting half of
 // the contract — the abort listener and the finally both call dispose, so a cancelled run is the case

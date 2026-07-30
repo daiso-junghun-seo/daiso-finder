@@ -53,6 +53,34 @@ function defaultCopyFrame(video: HTMLVideoElement, canvas: HTMLCanvasElement): v
   canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
 }
 
+// BOTH of the loop's waits must lose a race with the signal. Without this, a hidden or backgrounded tab —
+// where requestAnimationFrame does not fire at all — parks the loop forever: it never settles, so
+// runScan's `finally` never runs and `stopCamera()` never runs, leaving the camera live after the overlay
+// closed and falsifying browserScanner's claim that every path passes through there. Even in the ordinary
+// case an unraced wait delays a cancel by a frame, or by the whole minimum interval.
+//
+// This is a regression THIS stage introduced: the replaced decodeOnceFromStream path had
+// `decoder.cancel()` -> `reader.reset()` reject the pending decode immediately, and it always settled
+// because its retry timer was a `setTimeout(loop, 0)`. Racing also closes a zombie-publish hole — a loop
+// that woke minutes later would publish over the NEXT run's counters.
+//
+// The pending rAF or timer is deliberately NOT cancelled: it still fires, and its callback is a no-op
+// because the promise has already settled. Same shape, and the same reasoning, as browserScanner's
+// untilAbort.
+function waitOrAbort(signal: AbortSignal, start: (done: () => void) => void): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', finish);
+      resolve();
+    };
+    signal.addEventListener('abort', finish, { once: true });
+    start(finish);
+  });
+}
+
 export async function runFrameLoop(
   decoder: FrameDecoder,
   target: ScanTarget,
@@ -84,7 +112,7 @@ export async function runFrameLoop(
     for (;;) {
       if (signal.aborted) return { kind: 'cancelled' };
       const idleStart = now();
-      await new Promise<void>((resolve) => nextFrame(resolve));
+      await waitOrAbort(signal, nextFrame);
       const waited = now() - idleStart;
       waits += 1;
 
@@ -131,7 +159,9 @@ export async function runFrameLoop(
       const remaining = minIntervalMs - (now() - decodeStart);
       if (remaining > 0) {
         const waitStart = now();
-        await new Promise<void>((resolve) => setTimeout(resolve, remaining));
+        await waitOrAbort(signal, (done) => {
+          setTimeout(done, remaining);
+        });
         idleMs += now() - waitStart;
       }
     }
