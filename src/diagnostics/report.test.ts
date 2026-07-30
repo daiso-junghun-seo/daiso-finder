@@ -66,6 +66,9 @@ function snapshotWith(scanner: Partial<DiagnosticsSnapshot['scanner']>): Diagnos
       warmupMs: null,
       outcome: null,
       cameraMs: null,
+      appliedZoom: null,
+      zoomMs: null,
+      symbolSidePx: null,
       decodeMs: null,
       ...scanner,
     },
@@ -194,6 +197,56 @@ test('a camera that was never acquired is named, not defaulted to zero', () => {
   const report = buildReport(env, snapshotWith({ cameraMs: null }), app, 2000);
   expect(report).toContain(`카메라 승인: ${UNREPORTED}`);
   expect(report).not.toMatch(/카메라 승인: 0ms/);
+});
+
+// The zoom lever (§B30-17). Two lines rather than one: the factor the platform CONFIRMED and the cost of
+// asking for it are different facts, and the cost needs its own line because WebKit routes a zoom change
+// through the same capture-session reconfiguration path as a resolution change.
+test('the applied zoom and the cost of applying it are printed when measured', () => {
+  const report = buildReport(env, snapshotWith({ appliedZoom: 2, zoomMs: 41 }), app, 2000);
+  expect(report).toContain('줌 적용: 2');
+  expect(report).toContain('줌 소요: 41ms');
+});
+
+// 1 is a real, measured answer — the camera was asked for 2 and confirmed 1 — and it is the single most
+// interesting answer this line can give, so it must render as a number and not as 미보고.
+//
+// The 0 case is what gives this test teeth, and it is the same rule as 워밍업 대기: 0ms above: readAppliedZoom
+// passes through ANY finite number the platform names, 0 included, and a measured 0 is an observation about
+// the camera rather than an absence of one. A `s.appliedZoom ? … : UNREPORTED` truthiness check renders 1
+// perfectly well and only breaks here — which is exactly why the assertion on 1 alone was not enough.
+test('an applied zoom is printed as a measurement, including a measured zero', () => {
+  const one = buildReport(env, snapshotWith({ appliedZoom: 1, zoomMs: 3 }), app, 2000);
+  expect(one).toContain('줌 적용: 1');
+  expect(one).not.toContain(`줌 적용: ${UNREPORTED}`);
+  const zero = buildReport(env, snapshotWith({ appliedZoom: 0, zoomMs: 3 }), app, 2000);
+  expect(zero).toContain('줌 적용: 0');
+  expect(zero).not.toContain(`줌 적용: ${UNREPORTED}`);
+});
+
+// The two fabrications this line must never commit: printing the number we ASKED for as though the camera
+// confirmed it, and printing 0ms for a session reconfiguration that never happened.
+test('an unapplied zoom is named, not defaulted to zero or to a requested value', () => {
+  const report = buildReport(env, snapshotWith({ appliedZoom: null, zoomMs: null }), app, 2000);
+  expect(report).toContain(`줌 적용: ${UNREPORTED}`);
+  expect(report).toContain(`줌 소요: ${UNREPORTED}`);
+  expect(report).not.toMatch(/줌 소요: 0ms/);
+  expect(report).not.toMatch(/줌 적용: \d/);
+});
+
+// The instrument that verifies the zoom did what a sensor crop is supposed to do. Printed in PIXELS, never
+// as pixels-per-module: the zxing Result carries no module count, so a PPM line here would be an assumed
+// 16x16 dressed up as a measurement (§B30-17).
+test('the decoded symbol size is printed in pixels when measured', () => {
+  expect(buildReport(env, snapshotWith({ symbolSidePx: 168 }), app, 2000)).toContain(
+    '심볼 크기: 168px',
+  );
+});
+
+test('an unmeasured symbol size is named, not defaulted to zero', () => {
+  const report = buildReport(env, snapshotWith({ symbolSidePx: null }), app, 2000);
+  expect(report).toContain(`심볼 크기: ${UNREPORTED}`);
+  expect(report).not.toMatch(/심볼 크기: 0px/);
 });
 
 // "the query failed" and "the platform supports nothing" are different facts about the device.

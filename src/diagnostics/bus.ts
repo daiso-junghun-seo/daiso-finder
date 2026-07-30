@@ -68,6 +68,17 @@ export interface ScannerDiagnostics {
   // which is exactly why it has to be visible separately. Published by the zxing decoder itself so the
   // loop stays decoder-agnostic; a decoder that assembles nothing leaves it null.
   assembleMs: number | null;
+  // The decoded symbol's side length, in whole pixels of the frame that decoded it: the median edge of the
+  // quadrilateral the DataMatrix detector reported (exact derivation in zxingFrameDecoder's
+  // symbolSideLength). This is the INSTRUMENT for the camera-zoom lever — a sensor crop should raise it
+  // roughly in proportion to the applied factor, and that makes the effect an observation rather than a
+  // prediction. Deliberately NOT pixels-per-module: the zxing Result carries no module count (only the
+  // detector's internal BitMatrix knows it, and it is not exposed), so a PPM field here would be an assumed
+  // 16x16 dressed up as a measurement. The conversion, with its assumption named, lives in docs/HANDOFF.md.
+  // null = no attempt decoded, or the result carried no usable corner points. Published by the zxing
+  // decoder alongside assembleMs, and for the same reason: the loop must not learn that a decoder has
+  // symbols.
+  symbolSidePx: number | null;
   drawMs: number | null; // time spent copying frames into the canvas (the drawImage call alone)
   // Time the loop DELIBERATELY waited — rAF plus the minimum interval — counted only for frames that
   // already had dimensions. The wait for a frame that had none is warm-up, not pacing, and is reported
@@ -83,6 +94,19 @@ export interface ScannerDiagnostics {
   // the shopper taps 허용 — so a first-of-session run carries human decision time here and nowhere else.
   // null when the camera was never acquired (no decoder, aborted first, or getUserMedia rejected).
   cameraMs: number | null;
+  // The zoom factor this run ACTUALLY got, read back from track.getSettings().zoom after the
+  // applyConstraints await — never the factor that was requested. null = no zoom was applied, or the
+  // platform names no zoom in its settings; either way we did not observe one, and printing the request here
+  // would be a fabrication (the panel would claim a 2x sensor crop on a camera that quietly ignored it).
+  // zoomMs is what tells the two cases apart: a number there means the request was made and awaited.
+  appliedZoom: number | null;
+  // Wall-clock around the zoom applyConstraints await ALONE, deliberately kept out of cameraMs. WebKit
+  // routes a zoom change through setSessionSizeFrameRateAndZoom — the same path as a resolution change — so
+  // applying it can reconfigure the whole capture session and cost real time. Folded into cameraMs that
+  // cost would read as a slower permission prompt; folded into decodeMs it would read as a slower decode.
+  // null = no zoom was attempted (no zoom capability, no applyConstraints, or no camera at all), never 0 —
+  // 0 would claim a session reconfiguration that took no time.
+  zoomMs: number | null;
   // Wall-clock from beginScannerRun to the outcome publish — the WHOLE run, decoder resolution
   // (decoderReadyMs) and camera acquisition (cameraMs) included, not the decode loop alone. Subtract
   // those two to isolate decoding. Distinct from the panel's 경과 line, which is recomputed from
@@ -116,10 +140,13 @@ function emptyScanner(): ScannerDiagnostics {
     decodeAttempts: null,
     decodeBusyMs: null,
     assembleMs: null,
+    symbolSidePx: null,
     drawMs: null,
     loopIdleMs: null,
     warmupMs: null,
     cameraMs: null,
+    appliedZoom: null,
+    zoomMs: null,
     decodeMs: null,
     outcome: null,
   };

@@ -64,9 +64,79 @@ export async function importZxingFrameParts() {
   };
 }
 
+// Every member the result side declares is OPTIONAL on purpose. zxing's real Result has all of them, but
+// these shapes are also what an injected double and a future package version present, and this file must
+// degrade to "not observed" rather than throw on a result that is missing one — a TypeError here would turn
+// a good decode into a `failed` run.
+interface ZxingResultPoint {
+  getX?: () => number;
+  getY?: () => number;
+}
+interface ZxingDecodeResult {
+  getText(): string;
+  getResultPoints?: () => ZxingResultPoint[] | null | undefined;
+}
 interface ZxingFrameParts {
   assemble: (canvas: HTMLCanvasElement) => unknown;
-  decode: (bitmap: unknown) => { getText(): string };
+  decode: (bitmap: unknown) => ZxingDecodeResult;
+}
+
+// THE DECODED SYMBOL'S SIDE LENGTH IN PIXELS, derived from the four corner points the DataMatrix detector
+// puts on the Result — verified in the installed 0.21.3 at datamatrix/DataMatrixReader.js:57-62
+// (`points = detectorResult.getPoints()`), exposed by `Result.prototype.getResultPoints`.
+//
+// EXACTLY HOW, so the number's meaning is unambiguous. Four corners give SIX pairwise distances: the four
+// sides and the two diagonals. They are sorted ascending, the two largest are discarded as the diagonals,
+// and what is published is the MEDIAN of the remaining four — the mean of the 2nd and 3rd smallest of the
+// six. In one sentence: **the median edge length of the quadrilateral the detector reported, in pixels of
+// the frame that decoded it, rounded to whole pixels.** Two properties that buys:
+//   - It is independent of the order the detector returns the corners in (it happens to be topLeft,
+//     bottomLeft, bottomRight, topRight, but nothing here relies on that).
+//   - A symbol is usually ROTATED in the frame, and an axis-aligned bounding box overstates a rotated one —
+//     a square turned 45 degrees has a bounding box the length of its diagonal, 41% too big. Discarding the
+//     two longest distances is what excludes the diagonals. Taking the median of the four rather than their
+//     mean additionally absorbs one displaced corner, which matters because this detector's corners come
+//     from an integer-precision scan.
+//
+// NOT pixels-per-module, deliberately. PPM needs the symbol's module count, and the Result does not carry
+// it — only the detector's internal BitMatrix knows the dimension and it is never exposed — so publishing
+// PPM would mean baking in an assumed module count (a 16x16 guess from a single sample) and dressing it as a
+// measurement. Pixels is the honest measurement; the conversion, with its assumption named, belongs in
+// docs/HANDOFF.md. One caveat that belongs with the derivation: the detector shifts each corner to a MODULE
+// CENTRE before returning it (`shiftToModuleCenter`, Detector.js — "shift points to the center of each
+// modules"), so this span is a fraction of a module shorter than the printed symbol's outer edge. The bias
+// is proportional to the module size, so it does not disturb a ratio taken across two zoom levels.
+function symbolSideLength(result: ZxingDecodeResult): number | null {
+  if (typeof result.getResultPoints !== 'function') return null;
+  const points = result.getResultPoints();
+  // Fewer than four corners is not a measurement. The empty NO_POINTS case belongs to the PURE_BARCODE path,
+  // which this decoder never takes (it passes no hints at all) — guarded anyway, because a length derived
+  // from three corners would be a silent fabrication rather than a visible crash.
+  if (!points || points.length < 4) return null;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const point of points.slice(0, 4)) {
+    const x = point?.getX?.();
+    const y = point?.getY?.();
+    if (typeof x !== 'number' || typeof y !== 'number') return null;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    xs.push(x);
+    ys.push(y);
+  }
+  const distances: number[] = [];
+  for (let i = 0; i < 4; i += 1) {
+    for (let j = i + 1; j < 4; j += 1) {
+      distances.push(Math.hypot((xs[i] ?? 0) - (xs[j] ?? 0), (ys[i] ?? 0) - (ys[j] ?? 0)));
+    }
+  }
+  distances.sort((a, b) => a - b);
+  // Six sorted distances: [0..3] are the sides, [4] and [5] are the diagonals. The median of the sides is
+  // the mean of [1] and [2].
+  const lower = distances[1];
+  const upper = distances[2];
+  if (lower === undefined || upper === undefined) return null;
+  const side = (lower + upper) / 2;
+  return Number.isFinite(side) ? Math.round(side) : null;
 }
 
 function isRetryableMiss(err: unknown): boolean {
@@ -107,6 +177,8 @@ export async function loadZxingFrameDecoder(
     // could be ranked before this split.
     let assembleMs = 0;
     let frames = 0;
+    // Stashed rather than published where it is measured: see dispose() below.
+    let symbolSidePx: number | null = null;
     const timedAssemble = (canvas: HTMLCanvasElement): unknown => {
       const start = now();
       try {
@@ -120,7 +192,13 @@ export async function loadZxingFrameDecoder(
     return {
       decodeFrame: async (canvas) => {
         try {
-          return decode(timedAssemble(canvas)).getText();
+          const result = decode(timedAssemble(canvas));
+          const text = result.getText();
+          // Only on the attempt that actually produced a value. A miss carries no corner points, and an
+          // empty string is a miss as far as the loop is concerned (it keeps scanning), so measuring one
+          // would attach a symbol size to a run that never read a symbol.
+          if (text) symbolSidePx = symbolSideLength(result);
+          return text;
         } catch (err) {
           if (isRetryableMiss(err)) return null;
           throw err;
@@ -131,8 +209,16 @@ export async function loadZxingFrameDecoder(
       // once per run, at teardown, which keeps the "never publish per attempt" discipline and keeps
       // frameLoop.ts decoder-agnostic — the loop cannot know that a decoder assembles anything.
       // null, not 0, when no frame was ever assembled: nothing was measured.
+      //
+      // symbolSidePx rides along here rather than publishing where it is measured, and the reason is not
+      // just tidiness. A symbol size exists on exactly ONE attempt, so publishing it inside decodeFrame
+      // would technically still be "once per run" — but that publish would land INSIDE the loop's timed
+      // decode window, i.e. inside decodeBusyMs and inside assembleMs's own attempt, notifying every bus
+      // subscriber and rebuilding the whole diagnostics report in the middle of the numbers this run exists
+      // to compare. dispose() runs after the last decodeFrame has returned, so from here it cannot. null,
+      // not 0, when nothing decoded: 0px would claim we measured a symbol with no size.
       dispose: () => {
-        publishScanner({ assembleMs: frames === 0 ? null : Math.round(assembleMs) });
+        publishScanner({ assembleMs: frames === 0 ? null : Math.round(assembleMs), symbolSidePx });
       },
     };
   } catch {

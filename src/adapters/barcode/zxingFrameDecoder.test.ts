@@ -209,6 +209,153 @@ test('an assembly that throws still contributes its cost', async () => {
   expect(getSnapshot().scanner.assembleMs).toBe(10);
 });
 
+// A zxing Result double carrying detector corner points — only the two methods the derivation reads. On a
+// real camera decode DataMatrixReader puts four of these on the Result (`points = detectorResult.getPoints()`,
+// DataMatrixReader.js:57-62) and Result.getResultPoints exposes them.
+function resultWith(text: string, points: Array<[number, number]> | null) {
+  return {
+    getText: () => text,
+    getResultPoints: () =>
+      points === null ? null : points.map(([x, y]) => ({ getX: () => x, getY: () => y })),
+  };
+}
+
+async function symbolSideFor(points: Array<[number, number]> | null): Promise<number | null> {
+  const decoder = await loadZxingFrameDecoder({
+    assemble: () => ({}),
+    decode: () => resultWith('19987', points),
+  });
+  await decoder?.decodeFrame({} as HTMLCanvasElement);
+  decoder?.dispose();
+  return getSnapshot().scanner.symbolSidePx;
+}
+
+// THE INSTRUMENT FOR THE ZOOM LEVER (§B30-17), and the case that pins the derivation rather than merely
+// exercising it: a square rotated 45 degrees. Its four sides are each sqrt(200) = 14.14 px, its two
+// diagonals are 20 px, and its axis-aligned bounding box is 20x20. So a bounding-box implementation prints
+// 20 and OVERSTATES the symbol by 41%, and an implementation that averaged all six pairwise distances
+// prints 16. Only "drop the two largest, take the median of the remaining four" gives 14.
+test('the symbol side length is the symbol edge, not its bounding box or its diagonal', async () => {
+  const side = await symbolSideFor([
+    [10, 0],
+    [20, 10],
+    [10, 20],
+    [0, 10],
+  ]);
+  expect(side).toBe(14);
+  expect(side).not.toBe(20); // the bounding box and the diagonal both land here
+  expect(side).not.toBe(16); // the mean of all six pairwise distances lands here
+});
+
+// WHY THE MEDIAN and not the mean of the four sides. One corner of a detected quadrilateral can sit well
+// off the symbol — the detector's corners come from a WhiteRectangleDetector scan whose precision is
+// integer, so a low-resolution symbol skews them. Here a 100x100 square has one corner pulled out to
+// (140, 0): the six distances are 100, 100, 107.70, 140, 141.42, 172.05. Dropping the two largest still
+// leaves the four real sides (the displaced side, 140, is genuinely shorter than either diagonal), and the
+// median of those four is 103.85 -> 104. Their MEAN is 111.93 -> 112, the smallest alone is 100, and the
+// bounding box is 140. All four are distinguishable, so this test cannot pass on the wrong derivation.
+test('one displaced corner moves the measurement by a little, not by a lot', async () => {
+  const side = await symbolSideFor([
+    [0, 0],
+    [0, 100],
+    [100, 100],
+    [140, 0],
+  ]);
+  expect(side).toBe(104);
+  expect(side).not.toBe(112); // the mean of the four sides
+  expect(side).not.toBe(100); // the shortest side alone
+  expect(side).not.toBe(140); // the bounding box
+});
+
+// Guarded rather than trusted: the empty NO_POINTS case belongs to the PURE_BARCODE path, which this
+// decoder never takes (it passes no hints at all), but a size derived from three corners would be a
+// silent fabrication rather than a crash.
+test('fewer than four corner points is not a measurement', async () => {
+  expect(
+    await symbolSideFor([
+      [0, 0],
+      [0, 100],
+      [100, 100],
+    ]),
+  ).toBeNull();
+});
+
+test('a result carrying no corner points at all is not a measurement', async () => {
+  expect(await symbolSideFor(null)).toBeNull();
+});
+
+test('a non-finite corner coordinate is not a measurement', async () => {
+  expect(
+    await symbolSideFor([
+      [0, 0],
+      [0, Number.NaN],
+      [100, 100],
+      [100, 0],
+    ]),
+  ).toBeNull();
+  expect(
+    await symbolSideFor([
+      [0, 0],
+      [0, 100],
+      [Number.POSITIVE_INFINITY, 100],
+      [100, 0],
+    ]),
+  ).toBeNull();
+});
+
+// A result whose shape predates this measurement — no getResultPoints method at all — must degrade to "not
+// observed" rather than throw and turn a good decode into a `failed` run.
+test('a result with no getResultPoints method still decodes, and reports no size', async () => {
+  const decoder = await loadZxingFrameDecoder({
+    assemble: () => ({}),
+    decode: () => ({ getText: () => '19987' }),
+  });
+  await expect(decoder?.decodeFrame({} as HTMLCanvasElement)).resolves.toBe('19987');
+  decoder?.dispose();
+  expect(getSnapshot().scanner.symbolSidePx).toBeNull();
+});
+
+// PUBLISHED ON DISPOSE, with assembleMs, and for the same two reasons: one commit per run rather than two,
+// and — decisively here — dispose() runs after the last decodeFrame has returned, so this measurement's own
+// bus commit cannot land inside decodeBusyMs or assembleMs, the numbers the run exists to compare.
+test('the symbol size is published once, on dispose, not during the run', async () => {
+  const decoder = await loadZxingFrameDecoder({
+    assemble: () => ({}),
+    decode: () =>
+      resultWith('19987', [
+        [10, 0],
+        [20, 10],
+        [10, 20],
+        [0, 10],
+      ]),
+  });
+  await decoder?.decodeFrame({} as HTMLCanvasElement);
+  expect(getSnapshot().scanner.symbolSidePx).toBeNull();
+  decoder?.dispose();
+  expect(getSnapshot().scanner.symbolSidePx).toBe(14);
+});
+
+// Same discipline as every other unmeasured segment: a run in which nothing decoded measured no symbol.
+// The double hands back four perfectly good corner points ALONGSIDE an empty text, so the guard being
+// tested is the one on the text and not an accident of the points being absent — an empty string is a miss
+// as far as the loop is concerned (it keeps scanning), so a size measured from it would attach a symbol to
+// a run that never read one.
+test('a run that decoded nothing publishes no symbol size, not zero', async () => {
+  const decoder = await loadZxingFrameDecoder({
+    assemble: () => ({}),
+    decode: () =>
+      resultWith('', [
+        [10, 0],
+        [20, 10],
+        [10, 20],
+        [0, 10],
+      ]),
+  });
+  await decoder?.decodeFrame({} as HTMLCanvasElement);
+  decoder?.dispose();
+  expect(getSnapshot().scanner.symbolSidePx).toBeNull();
+});
+
 test('a decoded result yields its text', async () => {
   const decoder = await loadZxingFrameDecoder({
     assemble: () => ({}) as never,

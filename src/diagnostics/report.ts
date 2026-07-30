@@ -145,6 +145,19 @@ export function buildReport(
     ...trackLines(s.track),
     `  경과: ${elapsed}`,
     `  카메라 승인: ${s.cameraMs === null ? UNREPORTED : `${s.cameraMs}ms`}`,
+    // What the camera CONFIRMED, read back from its settings — never the factor that was requested. `=== null`
+    // rather than a truthiness check on purpose: a confirmed 1 is the single most interesting answer this
+    // line can give (asked for 2, got none of it) and must not render as 미보고.
+    `  줌 적용: ${s.appliedZoom === null ? UNREPORTED : s.appliedZoom}`,
+    // Its own line because applying zoom can reconfigure the capture session — see ScannerDiagnostics.zoomMs.
+    // It also disambiguates the line above: a duration here means the request was made, so a 미보고 next to
+    // it reads as "the platform would not say", not as "we never asked".
+    `  줌 소요: ${s.zoomMs === null ? UNREPORTED : `${s.zoomMs}ms`}`,
+    // Adjacent to the two zoom lines rather than down among the decode segments, because the decision rule
+    // this number exists for compares it DIRECTLY against 줌 적용: does the symbol grow roughly in
+    // proportion to the applied factor (a sensor crop) or not (a software upscale, or a request ignored)?
+    // Pixels, never pixels-per-module — the module count is not in the Result (see bus.ts).
+    `  심볼 크기: ${s.symbolSidePx === null ? UNREPORTED : `${s.symbolSidePx}px`}`,
     // NOT pure decode time: the label spells out what is inside it so a reader cannot mistake the run
     // total for the decode loop. The permission prompt lands in 카메라 승인 (§B30-11).
     `  스캔 소요: ${s.decodeMs === null ? UNREPORTED : `${s.decodeMs}ms`} (디코더 준비·카메라 승인 포함)`,

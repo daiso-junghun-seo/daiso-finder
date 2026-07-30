@@ -1014,6 +1014,164 @@ describe('diagnostics instrumentation', () => {
     expect(capabilities).not.toHaveProperty('torch');
   });
 
+  // A track that can be asked ABOUT zoom and asked TO zoom. The three surfaces are deliberately
+  // independent, because on a real device they are: a camera can report a zoom range, accept the request,
+  // and still name no zoom in its settings — and the adapter must publish only what it can read back.
+  // Returns the request log and the stop flag alongside the stream, so a test can assert what was asked
+  // for, that it was asked exactly once, and that the camera was released either way.
+  function fakeZoomStream(spec: {
+    zoom?: { min?: number; max?: number; step?: number };
+    settings?: MediaTrackSettings;
+    onApply?: () => Promise<void>;
+  }): { stream: MediaStream; requests: MediaTrackConstraints[]; stopped: () => boolean } {
+    const requests: MediaTrackConstraints[] = [];
+    let stopped = false;
+    const track = {
+      stop: () => {
+        stopped = true;
+      },
+      getSettings: () => spec.settings ?? {},
+      // Omitted entirely when the test gives no range — that is the WebKit-shaped "this camera never named
+      // zoom" case, and a getCapabilities returning `{}` would be a different fact.
+      ...(spec.zoom ? { getCapabilities: () => ({ zoom: spec.zoom }) } : {}),
+      applyConstraints: async (constraints: MediaTrackConstraints) => {
+        requests.push(constraints);
+        if (spec.onApply) await spec.onApply();
+      },
+    };
+    return {
+      stream: {
+        getTracks: () => [track],
+        getVideoTracks: () => [track],
+      } as unknown as MediaStream,
+      requests,
+      stopped: () => stopped,
+    };
+  }
+
+  function zoomScanner(stream: MediaStream, now?: () => number) {
+    return createBrowserScanner({
+      mediaDevices: { getUserMedia: async () => stream },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
+      ...(now ? { now } : {}),
+    });
+  }
+
+  // THE CAP, and it is a correctness bound rather than a preference: above the model's
+  // virtualDeviceSwitchOverVideoZoomFactors (3x or 5x) an iPhone hands the session to the telephoto lens,
+  // which cannot focus close — so an uncapped request would trade away the near-scan case that already
+  // works. The measured device reports zoom 0.5~10, so without the cap this request would be 10.
+  test('zoom is requested once, capped at 2, and only through the best-effort advanced list', async () => {
+    const { stream, requests } = fakeZoomStream({
+      zoom: { min: 0.5, max: 10, step: 0.1 },
+      settings: { width: 1920, height: 1080 },
+    });
+    await zoomScanner(stream).scan(fakeTarget(), new AbortController().signal);
+    expect(requests).toEqual([{ advanced: [{ zoom: 2 }] }]);
+    // `advanced` is what makes an unsupported entry get DROPPED rather than raise OverconstrainedError —
+    // the same reasoning as the ideal-only width/height rule. A top-level or exact/min zoom would turn a
+    // camera that cannot honour the range it reported into a total scan failure.
+    expect(JSON.stringify(requests[0])).not.toContain('exact');
+    expect(JSON.stringify(requests[0])).not.toContain('ideal');
+  });
+
+  test('zoom is clamped down to the ceiling this camera reported when that is below the cap', async () => {
+    const { stream, requests } = fakeZoomStream({
+      zoom: { min: 1, max: 1.5, step: 0.1 },
+      settings: { width: 1920, height: 1080, zoom: 1.5 },
+    });
+    await zoomScanner(stream).scan(fakeTarget(), new AbortController().signal);
+    // Asking for 2 on a camera whose maximum is 1.5 must not happen at all.
+    expect(requests).toEqual([{ advanced: [{ zoom: 1.5 }] }]);
+    expect(getSnapshot().scanner.appliedZoom).toBe(1.5);
+  });
+
+  test('a camera that reports no zoom range is never asked to zoom, and no duration is invented', async () => {
+    const { stream, requests } = fakeZoomStream({ settings: { width: 1920, height: 1080 } });
+    await zoomScanner(stream).scan(fakeTarget(), new AbortController().signal);
+    expect(requests).toEqual([]);
+    const s = getSnapshot().scanner;
+    // 0 would claim we asked and that a session reconfiguration was free; we never asked.
+    expect(s.zoomMs).toBeNull();
+    expect(s.appliedZoom).toBeNull();
+  });
+
+  test('a rejected applyConstraints leaves the scan working and still stops the camera', async () => {
+    const { stream, stopped } = fakeZoomStream({
+      zoom: { min: 0.5, max: 10 },
+      settings: { width: 1920, height: 1080 },
+      onApply: async () => {
+        throw new Error('the capture session refused to reconfigure');
+      },
+    });
+    await expect(
+      zoomScanner(stream).scan(fakeTarget(), new AbortController().signal),
+    ).resolves.toEqual({ kind: 'decoded', value: '19987' });
+    expect(stopped()).toBe(true);
+    const s = getSnapshot().scanner;
+    // The wait happened and cost what it cost, so it is still reported — but nothing was applied, and this
+    // platform names no zoom in its settings, so there is no applied factor to claim.
+    expect(s.zoomMs).not.toBeNull();
+    expect(s.appliedZoom).toBeNull();
+  });
+
+  // THE NO-FABRICATION ONE. The camera was asked for 2 and answered 1.8; publishing the request would
+  // render a 2x crop that never happened, and every later reading of the symbol-size instrument against it
+  // would be wrong.
+  test('the applied zoom is read back from the track, never echoed from the request', async () => {
+    const { stream, requests } = fakeZoomStream({
+      zoom: { min: 0.5, max: 10 },
+      settings: { width: 1920, height: 1080, zoom: 1.8 },
+    });
+    await zoomScanner(stream).scan(fakeTarget(), new AbortController().signal);
+    expect(requests).toEqual([{ advanced: [{ zoom: 2 }] }]);
+    expect(getSnapshot().scanner.appliedZoom).toBe(1.8);
+  });
+
+  test('a platform that names no zoom in its settings reports none applied, though one was requested', async () => {
+    const { stream, requests } = fakeZoomStream({
+      zoom: { min: 0.5, max: 10 },
+      settings: { width: 1920, height: 1080 },
+    });
+    await zoomScanner(stream).scan(fakeTarget(), new AbortController().signal);
+    expect(requests).toHaveLength(1);
+    const s = getSnapshot().scanner;
+    expect(s.appliedZoom).toBeNull();
+    // zoomMs is what tells "we never asked" apart from "we asked and could not read the answer".
+    expect(s.zoomMs).not.toBeNull();
+  });
+
+  // The clock advances 5ms per read, and this path reads it eight times in this order:
+  //   1.  5  scan()'s beginScannerRun(now())        -> startedAt
+  //   2. 10  runScan's `const decoderStart = now()`
+  //   3. 15  the decoder publish (decoderReadyMs = 5)
+  //   4. 20  `const cameraStart = now()`, just before getUserMedia
+  //   5. 25  the track publish (cameraMs = 25 - 20 = 5)
+  //   6. 30  `const zoomStart = now()`, just before the applyConstraints await
+  //   7. 35  the zoom publish (zoomMs = 35 - 30 = 5)
+  //   8. 40  scan()'s outcome publish (decodeMs = 40 - 5 = 35)
+  // So cameraMs stays 5 with the zoom wait OUTSIDE it. Moving the zoom above the track publish — the way
+  // it would hide if the two shared a stamp — makes cameraMs 15, and folding zoom into cameraMs instead of
+  // giving it its own counter leaves zoomMs null. Neither mutation can produce these three numbers.
+  test('the zoom wait is timed on its own and stays outside the camera window', async () => {
+    let t = 0;
+    const now = () => {
+      t += 5;
+      return t;
+    };
+    const { stream } = fakeZoomStream({
+      zoom: { min: 0.5, max: 10 },
+      settings: { width: 1920, height: 1080, zoom: 2 },
+    });
+    await zoomScanner(stream, now).scan(fakeTarget(), new AbortController().signal);
+    const s = getSnapshot().scanner;
+    expect(s.cameraMs).toBe(5);
+    expect(s.zoomMs).toBe(5);
+    expect(s.decodeMs).toBe(35);
+  });
+
   test('nothing is published while diagnostics are disabled', async () => {
     flag.enabled = false;
     const scanner = createBrowserScanner({

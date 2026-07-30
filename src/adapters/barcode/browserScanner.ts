@@ -146,6 +146,16 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
     };
     try {
       if (signal.aborted) return { kind: 'cancelled' };
+      // INSIDE this try, so even a failure mode applyScanZoom itself did not anticipate is caught below and
+      // still passes through the finally that stops the camera. Before attach() so no frame the decode loop
+      // ever sees is unzoomed — an awaited reconfiguration that landed mid-loop would contaminate the
+      // measurement with a mixture of zoomed and unzoomed frames. The "nothing suspends between attach()
+      // and the abort listener" ordering scanWithNative depends on is about what comes AFTER attach, so an
+      // await placed here does not disturb it.
+      //
+      // Note the resolution on the 해상도 line was stamped in the publish above, i.e. BEFORE this — so it
+      // reports the track settings as acquired, not as reconfigured.
+      await applyScanZoom(stream, now);
       // BOTH paths need this now. The old stream-level fallback bound the stream itself, inside
       // zxing's decodeOnceFromStream -> attachStreamToVideo; runFrameLoop does not, because it only
       // ever copies frames OUT of a <video> somebody else fed. Without this the camera would be on
@@ -255,6 +265,13 @@ type ExtendedCapabilities = MediaTrackCapabilities & {
   torch?: boolean;
   pointsOfInterest?: unknown;
 };
+// The WRITE and READ-BACK halves of the same omission: lib.dom declares `zoom` on neither
+// MediaTrackConstraintSet nor MediaTrackSettings. Same technique as the two aliases above, in both
+// directions — each alias only ADDS an optional property, so a genuine value of the real interface stays
+// assignable to it (read back), and a value of the alias stays assignable to the real interface the DOM
+// method expects (written into applyConstraints). No cast is needed at either end.
+type ExtendedConstraintSet = MediaTrackConstraintSet & { zoom?: number };
+type ExtendedSettings = MediaTrackSettings & { zoom?: number };
 
 // null = getSupportedConstraints is absent on this platform, or the call threw — an honest "we don't
 // know", never reported as an empty list (which would read as "the platform supports none of them").
@@ -292,6 +309,94 @@ function readImageCaptureCapabilities(track: MediaStreamTrack): CaptureCapabilit
 
 function toRangeFacts(range: MediaSettingsRange): CaptureRangeFacts {
   return { min: range.min ?? null, max: range.max ?? null, step: range.step ?? null };
+}
+
+// THE ZOOM CEILING, and it is a correctness bound rather than a preference. An iPhone's back camera is a
+// VIRTUAL multi-camera device: past the model's virtualDeviceSwitchOverVideoZoomFactors (3x or 5x depending
+// on the phone) the system hands the session to the TELEPHOTO lens, and a telephoto cannot focus close. So
+// an uncapped request would trade away the one case that already works — the owner reports a code held close
+// decodes almost immediately — to chase the one that does not. At 2.0 or below the session stays on the wide
+// lens and its minimum focus distance is unchanged. The tests pin the literal `{ zoom: 2 }` that reaches
+// applyConstraints rather than reading this constant back, so lifting the cap cannot pass them.
+const MAX_SCAN_ZOOM = 2;
+
+// Applies the camera's sensor-crop zoom ONCE, before any frame can reach a decoder, and publishes what the
+// platform actually did. Never throws and never rejects: a camera that cannot zoom has to scan exactly as it
+// does today, and the caller's finally must remain the only thing that stops it.
+//
+// WHY zoom, and why it is the lever rather than a guess. The measured numbers ruled CPU out: 150 attempts in
+// a 3.1 s scan is 48 attempts/sec against a 30 fps camera, so this loop already samples faster than the
+// camera produces distinct frames, and the 12x rise in sample rate that got there cut wall clock only 42% —
+// most frames are genuinely unreadable, not merely untried. Apple's TN2325 prescribes exactly this fix for
+// barcodes: a raised videoZoomFactor "provides a higher resolution window on a smaller part of the image,
+// which means there are more barcode pixels for the decoder to work with." WebKit maps the web `zoom`
+// constraint straight onto AVCaptureDevice.videoZoomFactor, which is a CENTRE CROP OF THE SENSOR and not a
+// software upscale — so the modules of a symbol at a fixed distance really do land on more pixels. That is
+// what this decoder needs: @zxing/library ships only zxing's OLD DataMatrix detector (WhiteRectangleDetector
+// plus an integer-precision transitionsBetween — see node_modules/@zxing/library/esm/core/datamatrix/
+// detector/Detector.js), the one zxing documents as working on HIGH RESOLUTION scans. The sub-pixel detector
+// zxing-cpp added for ~2 pixels-per-module scans is not in this package at all.
+//
+// Whether it works is NOT asserted here, it is measured: symbolSidePx (see zxingFrameDecoder) is the
+// instrument, and the decision rule for the next real-device run is in docs/HANDOFF.md.
+async function applyScanZoom(stream: MediaStream, now: () => number): Promise<void> {
+  const track = stream.getVideoTracks?.()[0];
+  if (!track || typeof track.applyConstraints !== 'function') return;
+  const target = zoomTarget(track);
+  // Nothing to ask for. zoomMs stays null rather than 0: we did not attempt a reconfiguration, and 0 would
+  // claim we did and that it was free.
+  if (target === null) return;
+  const zoomStart = now();
+  try {
+    // `advanced` ONLY, and for the same reason width/height are `ideal` only (see getUserMedia above): per
+    // spec an advanced constraint set the device cannot satisfy is DROPPED, never escalated into an
+    // OverconstrainedError. So a camera that reported a zoom range it cannot actually honour still yields a
+    // working scan instead of a failed one.
+    const advanced: ExtendedConstraintSet[] = [{ zoom: target }];
+    await track.applyConstraints({ advanced });
+  } catch {
+    // A refused reconfiguration is not a scan failure — the run continues unzoomed. The duration below is
+    // still published: the wait happened and it cost what it cost.
+  } finally {
+    // Stamped exactly like cameraMs — the same injected epoch clock, subtracted at publish time — so the two
+    // are directly comparable and neither can hide inside the other. appliedZoom is read back HERE, after
+    // the await settles, because that is the only moment at which the platform's answer exists.
+    publishScanner({ zoomMs: now() - zoomStart, appliedZoom: readAppliedZoom(track) });
+  }
+}
+
+// The factor to request: the cap, additionally clamped DOWN to whatever ceiling this camera reported.
+// null = this camera named no zoom range at all, so there is nothing to ask it for. A camera whose minimum
+// exceeds the cap is deliberately still asked for the cap — `advanced` drops an unsatisfiable set, and
+// raising the request to reach such a minimum would breach the lens-switch bound above.
+function zoomTarget(track: MediaStreamTrack): number | null {
+  if (typeof track.getCapabilities !== 'function') return null;
+  try {
+    const capabilities: ExtendedCapabilities = track.getCapabilities();
+    const max = capabilities.zoom?.max;
+    // A reported range with no max is a range whose ceiling we do not know. Ask for the cap and let
+    // `advanced` drop it if the device cannot honour it, rather than inventing a ceiling.
+    if (typeof max !== 'number' || !Number.isFinite(max))
+      return capabilities.zoom ? MAX_SCAN_ZOOM : null;
+    return Math.min(MAX_SCAN_ZOOM, max);
+  } catch {
+    return null;
+  }
+}
+
+// What the platform says it ACTUALLY DID, never what was asked for. A requested-but-unconfirmed factor
+// rendered as applied would be a fabrication — the panel would report a 2x sensor crop on a camera that
+// silently ignored the request, and every later reading of symbolSidePx against it would be wrong. So an
+// absent or unreadable settings.zoom is null: an honest "the platform would not say".
+function readAppliedZoom(track: MediaStreamTrack): number | null {
+  if (typeof track.getSettings !== 'function') return null;
+  try {
+    const settings: ExtendedSettings = track.getSettings();
+    const zoom = settings.zoom;
+    return typeof zoom === 'number' && Number.isFinite(zoom) ? zoom : null;
+  } catch {
+    return null;
+  }
 }
 
 // A BarcodeDetector that EXISTS is not a BarcodeDetector that can read DataMatrix — support is per
