@@ -99,11 +99,19 @@ const [streaming, setStreaming] = useState(false);
   0%, 100% { transform: translate(-50%, -50%) scale(1);                        opacity: var(--aim-breathe-dim); }
   50%      { transform: translate(-50%, -50%) scale(var(--aim-breathe-scale)); opacity: 1; }
 }
+```
 
+**지역 `@media (prefers-reduced-motion: reduce)` 블록은 쓰지 않는다 — 2026-07-31 플랜 작성 중 정정.** `tokens.css:46`에 이미 전역 규칙이 있다:
+
+```css
 @media (prefers-reduced-motion: reduce) {
-  .scanner-overlay__aim--live { animation: none; opacity: 1; }
+  * { animation: none !important; transition: none !important; }
 }
 ```
+
+`!important`가 `--live`의 `animation`을 이긴다. 그리고 `.scanner-overlay__aim` 기본 규칙에는 `opacity` 선언이 **없으므로** 애니메이션이 죽으면 초기값 `1`로 돌아간다 — 설계가 요구한 **"완전 불투명한 정적 브래킷"이 추가 코드 없이 나온다.** 지역 블록을 또 쓰면 중복일 뿐 아니라 전역 규칙을 신뢰하지 않는다는 잘못된 신호가 된다.
+
+**대신 그 전역 규칙이 이 기능의 하중 부재가 되므로 테스트를 붙인다**(§7 ⑤) — 현재 `src/styles/tokens.test.ts`에 `reduced-motion` 언급이 **0건**이라, 그 블록을 지워도 전 스위트가 통과하고 모션 감소를 설정한 쇼퍼가 호흡을 그대로 보게 된다. 이 설계 이전에는 무해한 누락이었고, 이 설계가 그것을 결함으로 만든다.
 
 세 가지를 명시한다:
 
@@ -130,7 +138,9 @@ const [streaming, setStreaming] = useState(false);
 
 ## 6. 접근성
 
-`prefers-reduced-motion: reduce`에서 모션을 끄고 **완전 불투명한 정적 브래킷**으로 둔다. 조준 안내(`SCAN_AIM_GUIDE`)와 `aria-describedby` 배선은 불변이므로, 모션이 없어도 쇼퍼가 잃는 정보는 없다 — 모션은 텍스트가 이미 말하는 것에 아무것도 더하지 않는 장식이다.
+`prefers-reduced-motion: reduce`에서 모션을 끄고 **완전 불투명한 정적 브래킷**으로 둔다. 이는 `tokens.css:46`의 **전역** 규칙이 이미 제공하며 이 기능은 코드를 더하지 않는다(§4.2) — 대신 그 규칙에 **처음으로 테스트를 붙인다**(§7 ⑤).
+
+조준 안내(`SCAN_AIM_GUIDE`)와 `aria-describedby` 배선은 불변이므로, 모션이 없어도 쇼퍼가 잃는 정보는 없다 — 모션은 텍스트가 이미 말하는 것에 아무것도 더하지 않는 장식이다.
 
 ---
 
@@ -149,9 +159,13 @@ CSS는 렌더 결과를 단위 테스트로 볼 수 없다(Vitest가 평문 CSS 
 
 3. `.scanner-overlay__aim--live`가 `animation`을 **선언한다** — **긍정 단언**. 이 저장소는 금지 단언만 둔 CSS 가드가 "선언을 지워도 전부 통과"하는 것을 이미 한 번 겪었다(§B30-15 ④)
 4. `@keyframes aim-breathe`가 `transform`·`opacity` **외의 속성을 건드리지 않는다** — 레이아웃 속성이 들어오면 GPU 전용 제약이 조용히 깨지고 96.7% 포화 위에서 디코드 루프와 경합한다
-5. `prefers-reduced-motion` 블록이 `animation: none`을 준다
+`tokens.test.ts` (신규 1):
 
-**이빨은 뮤테이션으로 실증한다**: `animation` 선언 삭제 → 3번 사망 / 키프레임에 `height` 주입 → 4번 사망 / reduced-motion 블록 삭제 → 5번 사망 / `onPlaying` 제거 → 2번 사망 / `--live`를 무조건 붙이기 → 1번 사망. 살아남는 뮤테이션이 있으면 그 자체가 findings다.
+5. `tokens.css`의 전역 `prefers-reduced-motion: reduce` 블록이 `animation`을 끈다 — **이 설계가 접근성을 그 규칙에 의존하게 만들므로**(§4.2·§6) 이제 하중 부재다. 현재 이 파일에 `reduced-motion` 단언은 **0건**이라, 블록을 통째로 지워도 전 스위트가 통과한다
+
+**키프레임과 미디어 블록은 `ruleFor`로 읽을 수 없다** — 기존 헬퍼는 `css.indexOf('}')`로 잘라내므로 중첩 중괄호를 가진 `@keyframes`·`@media`에서는 **첫 내부 블록만** 반환한다. 중괄호 짝을 세는 `blockFor(header)` 헬퍼를 새로 만든다(플랜 Task 2·3에 코드 포함).
+
+**이빨은 뮤테이션으로 실증한다**: `animation` 선언 삭제 → 3번 사망 / 키프레임에 `height` 주입 → 4번 사망 / `tokens.css`의 전역 reduced-motion 블록 삭제 → 5번 사망 / `onPlaying` 제거 → 2번 사망 / `--live`를 무조건 붙이기 → 1번 사망. 살아남는 뮤테이션이 있으면 그 자체가 findings다.
 
 E2E는 추가하지 않는다. dev/E2E는 무-카메라 mock 스캐너로 도는 경로라 `<video>`가 실제로 재생되지 않으므로, E2E가 고정할 수 있는 것은 단위 테스트가 이미 고정한 것보다 적다.
 
