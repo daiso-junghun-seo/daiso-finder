@@ -787,6 +787,7 @@ In `docs/HANDOFF.md`, update the resume record with the measured gate counts fro
 - Same device, same product, permission already granted, **at least two runs each**. Exclude the first post-prompt run and any run that was backgrounded mid-scan.
 - Record `스캔 소요` · `카메라 승인` · `디코더 준비` · `시도 횟수` · `디코드 점유` · `프레임 복사` · `루프 대기`.
 - The decision rule: `디코드 점유 / 시도 횟수` large → the decoder is slow, stage 2 (`zxing-wasm`) is justified. `프레임 복사` large → resolution or cropping, wasm is irrelevant. `루프 대기` large with few attempts → the interval is too long, tune the constant. A large **residual** after subtracting all three → there is an unmeasured segment, most likely the video warm-up (`playing` event) that no stamp covers today.
+  - **⚠️ 2026-07-30 정정(전체-브랜치 최종 리뷰)**: 이 문단의 규칙 중 **둘이 틀렸다** — 잔차 규칙은 워밍업이 `루프 대기`에 흡수되어 발화 불가였고, `프레임 복사` 규칙은 조립 비용이 `디코드 점유`에 들어 있어 발화 불가였다. 실행된 계측은 이 문단을 그대로 따랐다. 정정 정본 = `docs/HANDOFF.md` 판정 규칙 표 + `open-questions.md §B30-15`.
 - **Success is not "it got faster."** It is that the four segments separate and the 5.7 s is finally attributable. If it got slower, record that and tune the interval.
 
 - [ ] **Step 3: Run the full gate**
