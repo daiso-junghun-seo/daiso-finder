@@ -21,6 +21,24 @@ function ruleFor(selector: string): string {
   return css.slice(start, css.indexOf('}', start));
 }
 
+// ruleFor stops at the first `}`, which is right for a flat rule and WRONG for anything containing a
+// nested block: an `@keyframes` or `@media` body would come back truncated at its first inner brace,
+// and every assertion against the truncated text would then be about the wrong thing. This counts
+// braces instead, so the whole at-rule body is returned.
+function blockFor(header: string): string {
+  const start = css.indexOf(header);
+  expect(start).toBeGreaterThan(-1);
+  let depth = 0;
+  for (let i = css.indexOf('{', start); i < css.length; i += 1) {
+    if (css[i] === '{') depth += 1;
+    else if (css[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return css.slice(start, i + 1);
+    }
+  }
+  throw new Error(`unterminated block: ${header}`);
+}
+
 test('.scanner-overlay__aim declares no background and no border of its own — corners are drawn by its child spans', () => {
   const rule = ruleFor('.scanner-overlay__aim');
   expect(rule).not.toContain('background');
@@ -55,4 +73,21 @@ test('no z-index appears anywhere in layout.css — this codebase stacks by DOM 
   // actual declaration, not prose.
   const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
   expect(withoutComments).not.toContain('z-index');
+});
+
+// A POSITIVE assertion, deliberately. This file already learned once that a CSS guard made only of
+// prohibitions passes with the declaration deleted — an empty rule violates nothing and draws nothing.
+test('.scanner-overlay__aim--live actually declares the breathing animation', () => {
+  expect(ruleFor('.scanner-overlay__aim--live')).toMatch(/animation:\s*aim-breathe/);
+});
+
+// THE GPU-COMPOSITE CONSTRAINT, pinned. The decode loop runs its own requestAnimationFrame at 96.7%
+// main-thread occupancy (§B30-20 ⑥), so a keyframe that animated a layout or paint property would
+// compete with the very work this motion advertises — and it would do so invisibly, since nothing about
+// the rendered result is observable from a unit test.
+test('@keyframes aim-breathe animates transform and opacity only', () => {
+  const block = blockFor('@keyframes aim-breathe');
+  const declared = [...block.matchAll(/^\s*([a-z-]+):/gm)].map((m) => m[1]);
+  expect(declared.length).toBeGreaterThan(0);
+  expect(new Set(declared)).toEqual(new Set(['transform', 'opacity']));
 });

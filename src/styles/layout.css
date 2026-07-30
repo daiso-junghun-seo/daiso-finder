@@ -142,6 +142,46 @@ input {
   max-width: 60%;
   aspect-ratio: 1;
   pointer-events: none;
+  /* The motion's three knobs, together in one place so a real-device adjustment is one edit rather
+     than three. They are NOT a runtime override: there is no ?debug= switch for them and none is
+     planned. Chosen against a static mock on a monitor; the real thing rides a shaky hand-held camera
+     image, where the same values usually read weaker. */
+  --aim-breathe-duration: 1.3s;
+  --aim-breathe-scale: 1.09;
+  --aim-breathe-dim: 0.32;
+}
+
+/* ANIMATED ONLY WHILE FRAMES ARE ARRIVING. ScannerOverlay adds this class on the <video>'s `playing`
+   event, never at mount: getUserMedia can be outstanding for a second or more on iOS because the
+   permission prompt is inside it (749-1005 ms measured, §B30-20 ⑤), and the motion's single
+   proposition is "the camera is delivering frames".
+
+   transform and opacity ONLY, and the test next door pins that. The decode loop runs its own
+   requestAnimationFrame at 96.7% main-thread occupancy (§B30-20 ⑥), so anything costing layout or
+   paint here competes with the work being advertised. A sweeping line — the familiar scanner idiom —
+   was rejected for a different reason: every attempt decodes the WHOLE frame, so a line implying
+   "reading this band now" depicts progress that does not exist (design §2).
+
+   NO local prefers-reduced-motion block: tokens.css kills every animation globally with `!important`,
+   and this rule declares no opacity of its own, so a reduced-motion shopper gets exactly the fully
+   opaque static brackets the design asks for. tokens.test.ts pins that global rule. */
+.scanner-overlay__aim--live {
+  animation: aim-breathe var(--aim-breathe-duration) ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* translate(-50%, -50%) is repeated in BOTH keyframes deliberately. transform is a single property, so
+   a keyframe that omits it overrides the centring declared above and the brackets jump off centre. */
+@keyframes aim-breathe {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: var(--aim-breathe-dim);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(var(--aim-breathe-scale));
+    opacity: 1;
+  }
 }
 
 /* White with a dark halo rather than a theme token: this is a shopper-facing surface, but the thing
