@@ -56,6 +56,42 @@ test('the real assembly decodes a blank frame as a miss rather than an error', a
   await expect(decoder?.decodeFrame(canvas)).resolves.toBeNull();
 });
 
+// Legacy parity (owner decision, 2026-07-30): the stream path tried an inverted read on alternating
+// frames, so a light-on-dark print could still decode. This pins that the real assembly still does —
+// and it pins it through the LIBRARY's own static toggle, which is the only thing that makes it happen.
+// Alternating the argument ourselves would cancel that toggle and silently disable inversion forever.
+test('the real assembly alternates normal and inverted reads across attempts', async () => {
+  const width = 8;
+  const height = 8;
+  // Deliberately asymmetric: a uniform frame would grayscale identically inverted or not, and the
+  // assertion below would pass without any inversion happening.
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let i = 0; i < data.length; i += 4) {
+    const level = (i / 4) % 3 === 0 ? 20 : 230;
+    data[i] = level;
+    data[i + 1] = level;
+    data[i + 2] = level;
+    data[i + 3] = 255;
+  }
+  const canvas = {
+    width,
+    height,
+    getContext: () => ({ getImageData: () => ({ data, width, height }) }),
+  } as unknown as HTMLCanvasElement;
+  const { BinaryBitmap, HybridBinarizer, HTMLCanvasElementLuminanceSource } =
+    await importZxingFrameParts();
+  const rowOf = (invert: boolean) => {
+    const bitmap = new BinaryBitmap(
+      new HybridBinarizer(new HTMLCanvasElementLuminanceSource(canvas, invert)),
+    );
+    return bitmap.getBlackRow(0, undefined as never).toString();
+  };
+  // Two constructions with the flag ON must differ, because the static FRAME_INDEX flipped between
+  // them. Two with it OFF must match. That difference IS the alternation.
+  expect(rowOf(true)).not.toBe(rowOf(true));
+  expect(rowOf(false)).toBe(rowOf(false));
+});
+
 test('a retryable miss becomes null, not a throw', async () => {
   const decoder = await loadZxingFrameDecoder({
     assemble: () => ({}) as never,

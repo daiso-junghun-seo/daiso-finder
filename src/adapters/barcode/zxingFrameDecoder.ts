@@ -68,13 +68,17 @@ export async function loadZxingFrameDecoder(
       const { BinaryBitmap, HybridBinarizer, HTMLCanvasElementLuminanceSource, reader } =
         await importZxingFrameParts();
       parts = {
-        // doAutoInvert stays FALSE. The stream path alternated inverted frames via a static toggle
-        // that only engaged for HTMLVideoElement, so this is a deliberate change in decode behaviour,
-        // recorded rather than hidden (spec D2b).
+        // TRUE, restoring the stream path's parity (owner decision, 2026-07-30): that path passed true
+        // for every HTMLVideoElement, so a light-on-dark print still had a chance. Passing false made
+        // this — the only decode path iOS ever takes — unable to read one at all.
+        //
+        // The alternation is the LIBRARY's, not ours: HTMLCanvasElementLuminanceSource flips a static
+        // FRAME_INDEX on every buffer it builds and inverts only when that flag is false AND
+        // doAutoInvert is true, so a constant true yields normal, inverted, normal, … across attempts.
+        // Do NOT alternate this argument as well — the two toggles then cancel and nothing is ever
+        // inverted. Verified against HTMLCanvasElementLuminanceSource.js:36-39 in 0.21.3.
         assemble: (canvas) =>
-          new BinaryBitmap(
-            new HybridBinarizer(new HTMLCanvasElementLuminanceSource(canvas, false)),
-          ),
+          new BinaryBitmap(new HybridBinarizer(new HTMLCanvasElementLuminanceSource(canvas, true))),
         decode: (bitmap) => reader.decode(bitmap as never),
       };
     }

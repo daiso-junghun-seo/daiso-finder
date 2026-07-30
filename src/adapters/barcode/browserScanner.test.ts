@@ -52,13 +52,21 @@ function frameDecoder(decodeFrame: () => Promise<string | null>, dispose = () =>
 // come back out. The loop's own pacing, metric arithmetic and abort contracts are pinned in
 // frameLoop.test.ts against an injected clock, and are deliberately not re-asserted here.
 //
-// minIntervalMs 0 and a synchronous nextFrame keep a retrying test from spending 200 ms of wall clock per
-// attempt. `now` is deliberately NOT injected: two tests below pin exact read counts on the SCANNER's
-// clock, and the loop keeping its own Date.now is what makes those counts stable.
+// minIntervalMs 0 keeps a retrying test from spending 200 ms of wall clock per attempt. `now` is
+// deliberately NOT injected: two tests below pin exact read counts on the SCANNER's clock, and the loop
+// keeping its own Date.now is what makes those counts stable.
+//
+// nextFrame MUST yield to a macrotask. A synchronous callback plus minIntervalMs 0 gives the loop no
+// path back to the macrotask queue at all, so a decoder double that keeps missing starves vitest's own
+// timeout timer: the suite hangs forever with no failure and no output. Cheap here — every test below
+// settles within a couple of attempts — and the one thing standing between the next such test and a
+// wedged CI run.
 function frameLoopStub() {
   return {
     minIntervalMs: 0,
-    nextFrame: (cb: () => void) => cb(),
+    nextFrame: (cb: () => void) => {
+      setTimeout(cb, 0);
+    },
     copyFrame: () => {},
     createCanvas: () => ({ width: 0, height: 0 }) as HTMLCanvasElement,
   };
