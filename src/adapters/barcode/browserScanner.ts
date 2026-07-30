@@ -12,7 +12,13 @@
 // the rest of the session; the query is cheap, so it is repeated rather than memoised. Do not "optimise"
 // it into a module-level cache.
 // Decode-only: no image recognition (Bible, Engineering/in-store-navigation §dependencies).
-import { type TrackFacts, beginScannerRun, publishScanner } from '../../diagnostics/bus';
+import {
+  type CaptureCapabilityFacts,
+  type CaptureRangeFacts,
+  type TrackFacts,
+  beginScannerRun,
+  publishScanner,
+} from '../../diagnostics/bus';
 import type { ScanOutcome, ScanTarget, ScannerPort } from '../../domain/ports';
 import { type FrameDecoder, type FrameLoopDeps, runFrameLoop } from './frameLoop';
 import { loadZxingFrameDecoder } from './zxingFrameDecoder';
@@ -29,8 +35,15 @@ export interface NativeDetector {
   detect(source: HTMLVideoElement): Promise<Array<{ rawValue: string }>>;
 }
 
+// getSupportedConstraints is optional here, unlike getUserMedia: every existing caller of this file
+// constructs a mediaDevices double with only getUserMedia, and requiring the new method on all of them
+// (as a bare Pick would) breaks every one for a probe those tests never asked to exercise. Its real
+// default, navigator.mediaDevices, always has both, so production is unaffected either way.
+type ScannerMediaDevices = Pick<MediaDevices, 'getUserMedia'> &
+  Partial<Pick<MediaDevices, 'getSupportedConstraints'>>;
+
 export interface ScannerDeps {
-  mediaDevices?: Pick<MediaDevices, 'getUserMedia'> | undefined;
+  mediaDevices?: ScannerMediaDevices | undefined;
   // Async because the platform's DataMatrix support can only be learned from the asynchronous static
   // BarcodeDetector.getSupportedFormats() — see defaultNativeDetector.
   createNativeDetector?: () => Promise<NativeDetector | null>;
@@ -127,7 +140,7 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
       // `failed`, never `unsupported`, to avoid fabricating a fact this device doesn't actually have.
       return { kind: isPermissionDenial(err) ? 'permissionDenied' : 'failed' };
     }
-    publishScanner({ track: readTrackFacts(stream), cameraMs: now() - cameraStart });
+    publishScanner({ track: readTrackFacts(stream, media), cameraMs: now() - cameraStart });
     const stopCamera = () => {
       for (const track of stream.getTracks()) track.stop();
     };
@@ -190,7 +203,10 @@ function isPermissionDenial(err: unknown): boolean {
 
 // Observation only: a stream shaped differently than expected (an older browser, a test double) must
 // degrade to "we didn't observe it" rather than break a scan that would otherwise have worked.
-function readTrackFacts(stream: MediaStream): TrackFacts | null {
+function readTrackFacts(
+  stream: MediaStream,
+  media: ScannerMediaDevices | undefined,
+): TrackFacts | null {
   try {
     const track = stream.getVideoTracks?.()[0];
     if (!track?.getSettings) return null;
@@ -201,10 +217,81 @@ function readTrackFacts(stream: MediaStream): TrackFacts | null {
       frameRate: s.frameRate ?? null,
       facingMode: s.facingMode ?? null,
       deviceId: s.deviceId ?? null,
+      supportedImageCaptureConstraints: readSupportedImageCaptureConstraints(media),
+      imageCaptureCapabilities: readImageCaptureCapabilities(track),
     };
   } catch {
     return null;
   }
+}
+
+// The five MediaStream Image Capture keys this probe cares about. Not the whole ~20-entry
+// MediaTrackSupportedConstraints object — the panel is read on a phone, and every other key (echoCancellation,
+// sampleRate, ...) answers a question nobody here is asking. See the 2026-07-30 frame-loop measurement notes:
+// the owner's real complaint (a native scanner reads a near subject that this app's decoder does not) looks
+// like a focus problem, not a decode-speed one, and this is the capability check that has to run BEFORE any
+// focus code is written — if the platform never names `focusMode`, that code would be a silent no-op.
+const IMAGE_CAPTURE_KEYS = [
+  'focusMode',
+  'focusDistance',
+  'zoom',
+  'torch',
+  'pointsOfInterest',
+] as const;
+type ImageCaptureKey = (typeof IMAGE_CAPTURE_KEYS)[number];
+
+// lib.dom's MediaTrackSupportedConstraints / MediaTrackCapabilities do not declare any of the five keys
+// above — they are non-standard extensions Chrome implements and WebKit historically does not, so
+// TypeScript only ships the intersection every UA agrees on. Each alias below ADDS optional properties on
+// top of the real interface; because every added property is optional, a genuine
+// MediaTrackSupportedConstraints/MediaTrackCapabilities value — which never has to name any of them — is
+// directly assignable to the wider alias. That is what lets the reads below happen with no cast.
+type ExtendedSupportedConstraints = MediaTrackSupportedConstraints &
+  Partial<Record<ImageCaptureKey, boolean>>;
+type ExtendedCapabilities = MediaTrackCapabilities & {
+  focusMode?: string[];
+  focusDistance?: MediaSettingsRange;
+  zoom?: MediaSettingsRange;
+  torch?: boolean;
+  pointsOfInterest?: unknown;
+};
+
+// null = getSupportedConstraints is absent on this platform, or the call threw — an honest "we don't
+// know", never reported as an empty list (which would read as "the platform supports none of them").
+function readSupportedImageCaptureConstraints(
+  media: ScannerMediaDevices | undefined,
+): string[] | null {
+  if (typeof media?.getSupportedConstraints !== 'function') return null;
+  const supported: ExtendedSupportedConstraints = media.getSupportedConstraints();
+  // Per spec a supported constraint name maps to `true`; unsupported ones are simply absent, never `false`.
+  // The `=== true` check mirrors that rather than trusting truthiness of a value the spec never defines.
+  return IMAGE_CAPTURE_KEYS.filter((key) => supported[key] === true);
+}
+
+// null = getCapabilities is absent on this track, or the call threw — "we don't know", not a measured
+// negative. Otherwise an object holding a value for each of the five keys the platform actually named —
+// an absent key here means the platform did not name it, and must stay absent rather than become `false`.
+function readImageCaptureCapabilities(track: MediaStreamTrack): CaptureCapabilityFacts | null {
+  if (typeof track.getCapabilities !== 'function') return null;
+  const capabilities: ExtendedCapabilities = track.getCapabilities();
+  const facts: CaptureCapabilityFacts = {};
+  if ('focusMode' in capabilities && capabilities.focusMode)
+    facts.focusMode = capabilities.focusMode;
+  if ('focusDistance' in capabilities && capabilities.focusDistance) {
+    facts.focusDistance = toRangeFacts(capabilities.focusDistance);
+  }
+  if ('zoom' in capabilities && capabilities.zoom) facts.zoom = toRangeFacts(capabilities.zoom);
+  // torch is a plain boolean capability (not a range), and a platform that names it CAN legitimately name
+  // it `false` — that is a measured negative, distinct from the key being absent altogether.
+  if ('torch' in capabilities) facts.torch = Boolean(capabilities.torch);
+  // pointsOfInterest has no meaningful range — the spec reports it as `{}` when supported — so naming it
+  // at all is the entire fact worth keeping; `!= null` treats an explicit null the same as absence.
+  if (capabilities.pointsOfInterest != null) facts.pointsOfInterest = true;
+  return facts;
+}
+
+function toRangeFacts(range: MediaSettingsRange): CaptureRangeFacts {
+  return { min: range.min ?? null, max: range.max ?? null, step: range.step ?? null };
 }
 
 // A BarcodeDetector that EXISTS is not a BarcodeDetector that can read DataMatrix — support is per

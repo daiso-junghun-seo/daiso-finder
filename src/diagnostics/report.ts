@@ -1,6 +1,13 @@
 // Pure formatting for the diagnostics panel. DOM-free on purpose: the no-fabrication rules live here,
 // so they are asserted directly on the produced strings.
-import type { DiagnosticsSnapshot, NetworkEntry, ScannerDiagnostics, TrackFacts } from './bus';
+import type {
+  CaptureCapabilityFacts,
+  CaptureRangeFacts,
+  DiagnosticsSnapshot,
+  NetworkEntry,
+  ScannerDiagnostics,
+  TrackFacts,
+} from './bus';
 
 export const UNREPORTED = '미보고';
 export const QUERY_FAILED = '질의 실패';
@@ -71,6 +78,29 @@ function dataMatrixMembership(list: string[] | null): string {
   return list.includes('data_matrix') ? '포함' : '미포함';
 }
 
+// min/max/step for a single named capability range. A bound the platform did not report prints UNREPORTED
+// rather than being dropped or shown as 0 — the same discipline as every other unmeasured field here.
+function rangeText(range: CaptureRangeFacts): string {
+  return `${value(range.min)}~${value(range.max)}`;
+}
+
+// track.getCapabilities(), narrowed to the same five Image Capture keys as the constraint-support line
+// above. null (the method is absent, or the track's whole facts object is) prints QUERY_FAILED — "we don't
+// know" — never SUPPORTS_NONE, which would read as "this camera measurably supports none of them". An
+// empty object (the method answered and named none of the five) is the only case that earns SUPPORTS_NONE.
+function captureCapabilitiesLine(capabilities: CaptureCapabilityFacts | null): string {
+  if (!capabilities) return QUERY_FAILED;
+  const parts: string[] = [];
+  if (capabilities.focusMode) parts.push(`focusMode=${capabilities.focusMode.join('/')}`);
+  if (capabilities.focusDistance)
+    parts.push(`focusDistance=${rangeText(capabilities.focusDistance)}`);
+  if (capabilities.zoom) parts.push(`zoom=${rangeText(capabilities.zoom)}`);
+  // torch is reported whenever the platform named it, `true` or `false` alike — both are measured facts.
+  if (capabilities.torch !== undefined) parts.push(`torch=${capabilities.torch}`);
+  if (capabilities.pointsOfInterest) parts.push('pointsOfInterest=지원');
+  return parts.length === 0 ? SUPPORTS_NONE : parts.join(' · ');
+}
+
 function trackLines(track: TrackFacts | null): string[] {
   if (!track) return ['  트랙: 없음'];
   return [
@@ -78,6 +108,10 @@ function trackLines(track: TrackFacts | null): string[] {
     `  frameRate: ${value(track.frameRate)}`,
     `  facingMode: ${value(track.facingMode)}`,
     `  deviceId: ${value(track.deviceId)}`,
+    // formats() is the SAME null/[]/join renderer used for supportedFormats above — reused rather than
+    // reinvented, since the fact shape is identical: a browser-reported list of names the platform knows.
+    `  지원 제약: ${formats(track.supportedImageCaptureConstraints)}`,
+    `  카메라 기능: ${captureCapabilitiesLine(track.imageCaptureCapabilities)}`,
   ];
 }
 

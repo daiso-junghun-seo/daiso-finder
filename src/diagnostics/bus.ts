@@ -4,12 +4,44 @@
 import type { ScanOutcome } from '../domain/ports';
 import { isDiagnosticsEnabled } from './enabled';
 
+// A MediaSettingsRange as reported by track.getCapabilities() — the Image Capture spec's shape for
+// focusDistance/zoom. Each bound is independently optional per spec (a UA may report a step with no max,
+// etc.), hence null rather than 0 for a bound the platform did not name.
+export interface CaptureRangeFacts {
+  min: number | null;
+  max: number | null;
+  step: number | null;
+}
+
+// track.getCapabilities() narrowed to the MediaStream Image Capture keys standard lib.dom types omit
+// (focusMode/focusDistance/zoom/torch/pointsOfInterest — Chrome implements them, WebKit historically has
+// not). A key is present here ONLY when the platform named it; an absent key must read as "not observed",
+// never as a measured `false` — that distinction is the entire point of this probe (see readTrackFacts).
+// pointsOfInterest carries no min/max/step of its own — the spec reports it as `{}` when supported — so
+// its value here is presence-only.
+export interface CaptureCapabilityFacts {
+  focusMode?: string[];
+  focusDistance?: CaptureRangeFacts;
+  zoom?: CaptureRangeFacts;
+  torch?: boolean;
+  pointsOfInterest?: boolean;
+}
+
 export interface TrackFacts {
   width: number | null;
   height: number | null;
   frameRate: number | null;
   facingMode: string | null;
   deviceId: string | null;
+  // navigator.mediaDevices.getSupportedConstraints(), narrowed to the five Image Capture keys above.
+  // null = the method is absent or the query threw — "we don't know" — and must never collapse into an
+  // empty list, which would read as a measured "the platform supports none of them". [] = the method
+  // answered and named none of the five. Otherwise the subset it named. Same null/[] discipline as
+  // ScannerDiagnostics.supportedFormats below.
+  supportedImageCaptureConstraints: string[] | null;
+  // track.getCapabilities() for the same five keys, values only for the ones THIS camera named. null =
+  // getCapabilities is absent on this track (or threw) — "we don't know", not a measured negative.
+  imageCaptureCapabilities: CaptureCapabilityFacts | null;
 }
 
 export interface ScannerDiagnostics {

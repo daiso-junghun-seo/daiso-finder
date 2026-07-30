@@ -52,7 +52,15 @@ test('the collapsed summary reflects published scanner facts', () => {
   beginScannerRun(Date.now());
   publishScanner({
     decoderPath: 'zxing',
-    track: { width: 640, height: 480, frameRate: null, facingMode: null, deviceId: null },
+    track: {
+      width: 640,
+      height: 480,
+      frameRate: null,
+      facingMode: null,
+      deviceId: null,
+      supportedImageCaptureConstraints: null,
+      imageCaptureCapabilities: null,
+    },
   });
   render(<DiagnosticsBar />);
   expect(screen.getByRole('button', { name: /zxing/ })).toBeInTheDocument();

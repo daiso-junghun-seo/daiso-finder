@@ -1,7 +1,7 @@
 const flag = vi.hoisted(() => ({ enabled: true }));
 vi.mock('./enabled', () => ({ isDiagnosticsEnabled: () => flag.enabled }));
 
-import type { DiagnosticsSnapshot } from './bus';
+import type { DiagnosticsSnapshot, TrackFacts } from './bus';
 import { getSnapshot, publishNetwork, resetDiagnostics } from './bus';
 import {
   type AppFacts,
@@ -49,7 +49,15 @@ function snapshotWith(scanner: Partial<DiagnosticsSnapshot['scanner']>): Diagnos
       decoderPath: 'zxing',
       decoderReadyMs: 412,
       cameraError: null,
-      track: { width: 640, height: 480, frameRate: 30, facingMode: null, deviceId: 'cam-1' },
+      track: {
+        width: 640,
+        height: 480,
+        frameRate: 30,
+        facingMode: null,
+        deviceId: 'cam-1',
+        supportedImageCaptureConstraints: null,
+        imageCaptureCapabilities: null,
+      },
       decodeAttempts: null,
       decodeBusyMs: null,
       assembleMs: null,
@@ -62,6 +70,19 @@ function snapshotWith(scanner: Partial<DiagnosticsSnapshot['scanner']>): Diagnos
       ...scanner,
     },
     network: [{ path: '/api/availability', status: 200, ms: 318 }],
+  };
+}
+
+function trackWith(overrides: Partial<TrackFacts>): TrackFacts {
+  return {
+    width: 640,
+    height: 480,
+    frameRate: 30,
+    facingMode: null,
+    deviceId: 'cam-1',
+    supportedImageCaptureConstraints: null,
+    imageCaptureCapabilities: null,
+    ...overrides,
   };
 }
 
@@ -198,6 +219,80 @@ test('the format list and its data_matrix membership are both reported', () => {
 test('track keys the browser did not report are named as unreported', () => {
   const report = buildReport(env, snapshotWith({}), app, 2000);
   expect(report).toContain(`facingMode: ${UNREPORTED}`);
+});
+
+// The camera-capability probe (2026-07-30): before any focus-control code is written, the panel has to
+// say whether the platform even NAMES the constraint at all. An absent getSupportedConstraints and a
+// query that measured zero of the five interesting keys are different facts about the device and must
+// render as different strings — collapsing them would silently turn "we don't know" into "measured none".
+test('the constraint-support line distinguishes an absent API from a platform that names nothing', () => {
+  const unknown = buildReport(
+    env,
+    snapshotWith({ track: trackWith({ supportedImageCaptureConstraints: null }) }),
+    app,
+    2000,
+  );
+  const none = buildReport(
+    env,
+    snapshotWith({ track: trackWith({ supportedImageCaptureConstraints: [] }) }),
+    app,
+    2000,
+  );
+  expect(unknown).toContain(`지원 제약: ${QUERY_FAILED}`);
+  expect(none).toContain(`지원 제약: ${SUPPORTS_NONE}`);
+  expect(unknown).not.toBe(none);
+});
+
+test('the constraint-support line names the keys the platform reported', () => {
+  const report = buildReport(
+    env,
+    snapshotWith({ track: trackWith({ supportedImageCaptureConstraints: ['focusMode', 'zoom'] }) }),
+    app,
+    2000,
+  );
+  expect(report).toContain('지원 제약: focusMode, zoom');
+});
+
+// Same null/{} discipline, one level down: getCapabilities can be absent on a track even when the
+// platform-level getSupportedConstraints named the key, and that must read as "we don't know" too, not
+// as "this camera measurably supports none of them".
+test('the capability-values line distinguishes an absent getCapabilities from a track that named nothing', () => {
+  const unknown = buildReport(
+    env,
+    snapshotWith({ track: trackWith({ imageCaptureCapabilities: null }) }),
+    app,
+    2000,
+  );
+  const none = buildReport(
+    env,
+    snapshotWith({ track: trackWith({ imageCaptureCapabilities: {} }) }),
+    app,
+    2000,
+  );
+  expect(unknown).toContain(`카메라 기능: ${QUERY_FAILED}`);
+  expect(none).toContain(`카메라 기능: ${SUPPORTS_NONE}`);
+  expect(unknown).not.toBe(none);
+});
+
+// torch is the one boolean-valued key in the set, so it is the one place a real `false` and an absent key
+// could be confused. A platform that names torch and reports it unsupported must still print `false`
+// literally — omitting it would misreport the fact as unmeasured rather than measured-and-negative.
+test('the capability-values line reports real values, including an explicit false as a measured fact', () => {
+  const report = buildReport(
+    env,
+    snapshotWith({
+      track: trackWith({
+        imageCaptureCapabilities: {
+          focusMode: ['continuous', 'manual'],
+          zoom: { min: 1, max: 8, step: 0.1 },
+          torch: false,
+        },
+      }),
+    }),
+    app,
+    2000,
+  );
+  expect(report).toContain('카메라 기능: focusMode=continuous/manual · zoom=1~8 · torch=false');
 });
 
 test('the report carries environment, app state and network lines', () => {

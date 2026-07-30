@@ -667,6 +667,21 @@ describe('diagnostics instrumentation', () => {
     } as unknown as MediaStream;
   }
 
+  // Adds an optional getCapabilities to the track fakeStreamWithSettings makes. A second helper rather
+  // than an optional parameter on the first: most tests in this file want a track that simply lacks
+  // getCapabilities (the common real-world case on WebKit), and this keeps that the default without every
+  // call site passing `undefined` explicitly.
+  function fakeStreamWithCapabilities(
+    settings: MediaTrackSettings,
+    getCapabilities: () => unknown,
+  ): MediaStream {
+    const track = { stop: () => {}, getSettings: () => settings, getCapabilities };
+    return {
+      getTracks: () => [track],
+      getVideoTracks: () => [track],
+    } as unknown as MediaStream;
+  }
+
   test('the native path publishes its decoder, formats, track settings and poll count', async () => {
     const detect = vi
       .fn()
@@ -886,6 +901,115 @@ describe('diagnostics instrumentation', () => {
     const outcome = await scanner.scan(fakeTarget(), new AbortController().signal);
     expect(outcome).toEqual({ kind: 'decoded', value: '19987' });
     expect(getSnapshot().scanner.track).toBeNull();
+  });
+
+  // The camera-capability probe (2026-07-30): before any focus-control code gets written, the panel has
+  // to say whether this platform even supports asking the camera to focus. Every other test in this
+  // describe block already injects a mediaDevices double with no getSupportedConstraints and a track with
+  // no getCapabilities — this is the common WebKit-shaped case — so this test pins that the honest
+  // "we don't know" comes out, not a fabricated empty list that would read as a measured negative.
+  test('a platform with neither getSupportedConstraints nor getCapabilities publishes null for both, not an empty measurement', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () => fakeStreamWithSettings({ width: 640, height: 480 }),
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
+    });
+    await scanner.scan(fakeTarget(), new AbortController().signal);
+    const track = getSnapshot().scanner.track;
+    expect(track?.supportedImageCaptureConstraints).toBeNull();
+    expect(track?.imageCaptureCapabilities).toBeNull();
+  });
+
+  // A platform can name a constraint (Chrome/Android does) on a track that still cannot report
+  // getCapabilities for it — the two APIs are queried independently and must be published independently:
+  // one real, one honestly unknown, never both collapsed to the same value.
+  test('a platform naming focusMode is reported even when this track cannot report getCapabilities', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () => fakeStreamWithSettings({ width: 640, height: 480 }),
+        getSupportedConstraints: () =>
+          ({ focusMode: true, aspectRatio: true }) as unknown as MediaTrackSupportedConstraints,
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
+    });
+    await scanner.scan(fakeTarget(), new AbortController().signal);
+    const track = getSnapshot().scanner.track;
+    // aspectRatio is a real MediaTrackSupportedConstraints key but not one of the five this probe cares
+    // about — its presence must not leak into the reported list.
+    expect(track?.supportedImageCaptureConstraints).toEqual(['focusMode']);
+    expect(track?.imageCaptureCapabilities).toBeNull();
+  });
+
+  // Both APIs answering for real: the values getCapabilities reports must reach the bus verbatim, and a
+  // capability outside the five of interest (frameRate, a real MediaTrackCapabilities key) must not leak
+  // in alongside them.
+  test('real capability values are published, narrowed to the five keys of interest', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () =>
+          fakeStreamWithCapabilities({ width: 1920, height: 1080 }, () => ({
+            focusMode: ['continuous', 'manual'],
+            focusDistance: { min: 10, max: 500, step: 1 },
+            zoom: { min: 1, max: 8, step: 0.1 },
+            torch: true,
+            pointsOfInterest: {},
+            frameRate: { min: 1, max: 30 },
+          })),
+        getSupportedConstraints: () =>
+          ({
+            focusMode: true,
+            focusDistance: true,
+            zoom: true,
+            torch: true,
+            pointsOfInterest: true,
+          }) as unknown as MediaTrackSupportedConstraints,
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
+    });
+    await scanner.scan(fakeTarget(), new AbortController().signal);
+    const track = getSnapshot().scanner.track;
+    expect(track?.supportedImageCaptureConstraints).toEqual([
+      'focusMode',
+      'focusDistance',
+      'zoom',
+      'torch',
+      'pointsOfInterest',
+    ]);
+    expect(track?.imageCaptureCapabilities).toEqual({
+      focusMode: ['continuous', 'manual'],
+      focusDistance: { min: 10, max: 500, step: 1 },
+      zoom: { min: 1, max: 8, step: 0.1 },
+      torch: true,
+      pointsOfInterest: true,
+    });
+  });
+
+  // torch is the one boolean-valued key of the five — the one place a fabricated `false` and a genuinely
+  // absent key are hardest to tell apart by eye. A platform that never names torch at all must leave it
+  // out of the published facts entirely, not default it to false.
+  test('a capabilities object that never names torch does not fabricate a torch reading', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () =>
+          fakeStreamWithCapabilities({ width: 640, height: 480 }, () => ({
+            focusMode: ['continuous'],
+          })),
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
+    });
+    await scanner.scan(fakeTarget(), new AbortController().signal);
+    const capabilities = getSnapshot().scanner.track?.imageCaptureCapabilities;
+    expect(capabilities).toEqual({ focusMode: ['continuous'] });
+    expect(capabilities).not.toHaveProperty('torch');
   });
 
   test('nothing is published while diagnostics are disabled', async () => {
