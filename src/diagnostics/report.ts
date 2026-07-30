@@ -83,10 +83,16 @@ function dataMatrixMembership(list: string[] | null): string {
   return list.includes('data_matrix') ? '포함' : '미포함';
 }
 
-// min/max/step for a single named capability range. A bound the platform did not report prints UNREPORTED
-// rather than being dropped or shown as 0 — the same discipline as every other unmeasured field here.
+// A single named capability range. min~max are always claimed, so a bound the platform did not report
+// prints UNREPORTED rather than being dropped or shown as 0 — the same discipline as every other unmeasured
+// field here. `step` is different in kind and so is APPENDED only when the platform named it: it is what
+// decides whether an intermediate factor (1.5x) is even requestable, which the zoom sweep needs, but a
+// platform that never mentions it must render exactly the line it rendered before step existed here — a
+// step=UNREPORTED would be noise about a bound nobody claimed, not a missing measurement. `== null` rather
+// than a truthiness check: a step the platform reported as 0 is a measurement and prints as 0.
 function rangeText(range: CaptureRangeFacts): string {
-  return `${value(range.min)}~${value(range.max)}`;
+  const step = range.step == null ? '' : ` step=${range.step}`;
+  return `${value(range.min)}~${value(range.max)}${step}`;
 }
 
 // track.getCapabilities(), narrowed to the same five Image Capture keys as the constraint-support line

@@ -347,7 +347,67 @@ test('the capability-values line reports real values, including an explicit fals
     app,
     2000,
   );
-  expect(report).toContain('카메라 기능: focusMode=continuous/manual · zoom=1~8 · torch=false');
+  expect(report).toContain(
+    '카메라 기능: focusMode=continuous/manual · zoom=1~8 step=0.1 · torch=false',
+  );
+});
+
+// The step is what decides whether an INTERMEDIATE factor is even requestable — the next real-device run is
+// a zoom sweep that asks for values between min and max — so a step the platform named has to reach the
+// line instead of being collected and dropped. A step reported as 0 is a measured value like any other (the
+// same rule as 워밍업 대기: 0ms), so a truthiness check here would drop the one value that says "this
+// camera quantises to nothing".
+test('a reported range step reaches the capability line, including a measured zero', () => {
+  const report = buildReport(
+    env,
+    snapshotWith({
+      track: trackWith({
+        imageCaptureCapabilities: {
+          focusDistance: { min: 0.02, max: null, step: 0.01 },
+          zoom: { min: 0.5, max: 10, step: 0.1 },
+        },
+      }),
+    }),
+    app,
+    2000,
+  );
+  expect(report).toContain(
+    `카메라 기능: focusDistance=0.02~${UNREPORTED} step=0.01 · zoom=0.5~10 step=0.1`,
+  );
+  const quantisedToNothing = buildReport(
+    env,
+    snapshotWith({
+      track: trackWith({ imageCaptureCapabilities: { zoom: { min: 1, max: 2, step: 0 } } }),
+    }),
+    app,
+    2000,
+  );
+  expect(quantisedToNothing).toContain('카메라 기능: zoom=1~2 step=0');
+});
+
+// The other half of the rule, and the case a real iPhone actually produced (2026-07-30): a platform that
+// never mentions step must render EXACTLY the line it rendered before step was printed at all. Nothing new
+// is known there, so a `step=미보고` would be noise about a bound nobody asked about rather than a missing
+// measurement — unlike min/max, which are always claimed and so must name their absence.
+test('a range the platform reported without a step renders unchanged, with no unreported-step noise', () => {
+  const report = buildReport(
+    env,
+    snapshotWith({
+      track: trackWith({
+        imageCaptureCapabilities: {
+          focusDistance: { min: 0.02, max: null, step: null },
+          zoom: { min: 0.5, max: 10, step: null },
+          torch: true,
+        },
+      }),
+    }),
+    app,
+    2000,
+  );
+  expect(report).toContain(
+    `카메라 기능: focusDistance=0.02~${UNREPORTED} · zoom=0.5~10 · torch=true`,
+  );
+  expect(report).not.toContain('step=');
 });
 
 test('the report carries environment, app state and network lines', () => {
