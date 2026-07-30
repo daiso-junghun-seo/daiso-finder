@@ -22,13 +22,30 @@ export interface ScannerDiagnostics {
   decoderReadyMs: number | null;
   cameraError: string | null; // error.name only — never message or stack
   track: TrackFacts | null;
-  // Both paths count attempts. The three below are FALLBACK-ONLY and stay null on the native path,
-  // whose setInterval does not await the previous detect() — overlapping attempts make a per-attempt
-  // average meaningless, and a number here would read as one.
+  // Both paths count attempts. The five below are FALLBACK-ONLY and stay null on the native path, whose
+  // setInterval does not await the previous detect() — overlapping attempts make a per-attempt average
+  // meaningless, and a number here would read as one. All five are whole milliseconds: the frame loop's
+  // clock is sub-ms, so each sum is rounded once, where it is published.
   decodeAttempts: number | null;
-  decodeBusyMs: number | null; // time inside decodeFrame calls
-  drawMs: number | null; // time spent copying frames into the canvas
-  loopIdleMs: number | null; // time the loop deliberately waited (rAF + minimum interval)
+  // Time inside decodeFrame calls. This INCLUDES bitmap assembly — see assembleMs, which is the part of
+  // it that is not the decoder. The decoder's own cost is decodeBusyMs − assembleMs.
+  decodeBusyMs: number | null;
+  // The assembly half of decodeBusyMs: getImageData's CPU readback out of the canvas, the greyscale pass
+  // and the binarizer. A SUBSET of decodeBusyMs, never an addend — adding the two double-counts it. This
+  // is the boundary a wasm decoder does NOT move (it consumes the same canvas through getImageData),
+  // which is exactly why it has to be visible separately. Published by the zxing decoder itself so the
+  // loop stays decoder-agnostic; a decoder that assembles nothing leaves it null.
+  assembleMs: number | null;
+  drawMs: number | null; // time spent copying frames into the canvas (the drawImage call alone)
+  // Time the loop DELIBERATELY waited — rAF plus the minimum interval — counted only for frames that
+  // already had dimensions. The wait for a frame that had none is warm-up, not pacing, and is reported
+  // separately below; folding it in here made "the interval is too long" the reading for a cost no
+  // interval change can touch.
+  loopIdleMs: number | null;
+  // Time waited on frames that had no dimensions yet: the video warming up between srcObject and
+  // loadedmetadata, commonly tens to hundreds of ms on iOS. Those frames are excluded from
+  // decodeAttempts, so this segment has no per-attempt reading.
+  warmupMs: number | null;
   // Wall-clock around the getUserMedia call, so the decode loop can be told apart from the wait for the
   // camera. On iOS Safari that wait CONTAINS the permission prompt — getUserMedia does not settle until
   // the shopper taps 허용 — so a first-of-session run carries human decision time here and nowhere else.
@@ -66,8 +83,10 @@ function emptyScanner(): ScannerDiagnostics {
     track: null,
     decodeAttempts: null,
     decodeBusyMs: null,
+    assembleMs: null,
     drawMs: null,
     loopIdleMs: null,
+    warmupMs: null,
     cameraMs: null,
     decodeMs: null,
     outcome: null,

@@ -52,8 +52,10 @@ function snapshotWith(scanner: Partial<DiagnosticsSnapshot['scanner']>): Diagnos
       track: { width: 640, height: 480, frameRate: 30, facingMode: null, deviceId: 'cam-1' },
       decodeAttempts: null,
       decodeBusyMs: null,
+      assembleMs: null,
       drawMs: null,
       loopIdleMs: null,
+      warmupMs: null,
       outcome: null,
       cameraMs: null,
       decodeMs: null,
@@ -89,30 +91,56 @@ test('an unmeasured attempt count is named, not defaulted to zero', () => {
   expect(report).not.toMatch(/시도 횟수: 0/);
 });
 
-// The three fallback-only segments. Splitting them is the point of this stage: the loop's own pacing
-// must not hide inside a residual that gets read as "focus and framing" (spec §2).
+// The five fallback-only segments. Splitting them is the point of this stage: the loop's own pacing must
+// not hide inside a residual that gets read as "focus and framing" (spec §2), the video warm-up must not
+// hide inside the pacing, and the bitmap assembly must not hide inside the decoder's own cost.
 test('the fallback segments are printed when measured', () => {
   const report = buildReport(
     env,
-    snapshotWith({ decodeBusyMs: 4200, drawMs: 380, loopIdleMs: 900 }),
+    snapshotWith({
+      decodeBusyMs: 4200,
+      assembleMs: 2600,
+      drawMs: 380,
+      loopIdleMs: 900,
+      warmupMs: 240,
+    }),
     app,
     2000,
   );
-  expect(report).toContain('디코드 점유: 4200ms');
+  // The label states the containment, so nobody adds 비트맵 조립 to 디코드 점유 and double-counts it.
+  expect(report).toContain('디코드 점유(조립 포함): 4200ms');
+  expect(report).toContain('비트맵 조립: 2600ms');
   expect(report).toContain('프레임 복사: 380ms');
   expect(report).toContain('루프 대기: 900ms');
+  expect(report).toContain('워밍업 대기: 240ms');
 });
 
 test('the fallback segments are named as unreported on the native path', () => {
   const report = buildReport(
     env,
-    snapshotWith({ decodeBusyMs: null, drawMs: null, loopIdleMs: null }),
+    snapshotWith({
+      decodeBusyMs: null,
+      assembleMs: null,
+      drawMs: null,
+      loopIdleMs: null,
+      warmupMs: null,
+    }),
     app,
     2000,
   );
-  expect(report).toContain(`디코드 점유: ${UNREPORTED}`);
+  expect(report).toContain(`디코드 점유(조립 포함): ${UNREPORTED}`);
+  expect(report).toContain(`비트맵 조립: ${UNREPORTED}`);
   expect(report).toContain(`프레임 복사: ${UNREPORTED}`);
   expect(report).toContain(`루프 대기: ${UNREPORTED}`);
+  expect(report).toContain(`워밍업 대기: ${UNREPORTED}`);
+});
+
+// The zero these fields must never print is the UNMEASURED one; a measured 0 is a real observation (no
+// frame lacked dimensions, the assembly cost under a millisecond) and must print as 0.
+test('a measured zero segment prints as zero, not as unreported', () => {
+  const report = buildReport(env, snapshotWith({ warmupMs: 0, assembleMs: 0 }), app, 2000);
+  expect(report).toContain('워밍업 대기: 0ms');
+  expect(report).toContain('비트맵 조립: 0ms');
 });
 
 // A settled run reports how long the whole run took. This is NOT the 경과 line: that one is derived

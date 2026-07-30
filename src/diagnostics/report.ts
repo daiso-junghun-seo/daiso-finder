@@ -115,9 +115,14 @@ export function buildReport(
     // total for the decode loop. The permission prompt lands in 카메라 승인 (§B30-11).
     `  스캔 소요: ${s.decodeMs === null ? UNREPORTED : `${s.decodeMs}ms`} (디코더 준비·카메라 승인 포함)`,
     `  시도 횟수: ${value(s.decodeAttempts)}`,
-    `  디코드 점유: ${s.decodeBusyMs === null ? UNREPORTED : `${s.decodeBusyMs}ms`}`,
+    // The label carries `조립 포함` because 비트맵 조립 is a SUBSET of this number, not a sibling: the
+    // loop times the whole decodeFrame call and the assembly happens inside it. Without the qualifier the
+    // two lines invite addition, which double-counts the assembly and inflates the residual.
+    `  디코드 점유(조립 포함): ${s.decodeBusyMs === null ? UNREPORTED : `${s.decodeBusyMs}ms`}`,
+    `  비트맵 조립: ${s.assembleMs === null ? UNREPORTED : `${s.assembleMs}ms`}`,
     `  프레임 복사: ${s.drawMs === null ? UNREPORTED : `${s.drawMs}ms`}`,
     `  루프 대기: ${s.loopIdleMs === null ? UNREPORTED : `${s.loopIdleMs}ms`}`,
+    `  워밍업 대기: ${s.warmupMs === null ? UNREPORTED : `${s.warmupMs}ms`}`,
     `  결과: ${s.outcome ?? IN_PROGRESS}`,
     '',
     '[앱 상태]',

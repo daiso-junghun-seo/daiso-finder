@@ -37,8 +37,10 @@ test('a fresh bus has measured no decode segments', () => {
   const { scanner } = getSnapshot();
   expect(scanner.decodeAttempts).toBeNull();
   expect(scanner.decodeBusyMs).toBeNull();
+  expect(scanner.assembleMs).toBeNull();
   expect(scanner.drawMs).toBeNull();
   expect(scanner.loopIdleMs).toBeNull();
+  expect(scanner.warmupMs).toBeNull();
 });
 
 test('publishScanner merges a patch without clearing earlier fields', () => {
