@@ -102,7 +102,8 @@ export async function loadZxingFrameDecoder(
     // The loop's drawMs times only the GPU-side drawImage and comes out small, so all of that
     // resolution-proportional cost read as "the decoder is slow → migrate to wasm". But zxing-wasm consumes
     // the same canvas through the same getImageData (spec D2), so it does not move this boundary at all,
-    // while cropping to the aiming brackets — roughly a tenth of the pixels — moves all of it. Neither
+    // while cropping to the aiming brackets — about a FIFTH of the pixels, since the box is a square on
+    // 60% of the short side: (0.6*1080)^2 / (1920*1080) = 20.25% — moves all of it. Neither
     // could be ranked before this split.
     let assembleMs = 0;
     let frames = 0;
