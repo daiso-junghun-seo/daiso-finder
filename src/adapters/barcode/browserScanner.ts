@@ -35,8 +35,8 @@ export interface ScannerDeps {
   // BarcodeDetector.getSupportedFormats() — see defaultNativeDetector.
   createNativeDetector?: () => Promise<NativeDetector | null>;
   // A FRAME decoder, not a stream decoder: the retry loop is runFrameLoop's, so what this hands back
-  // decodes exactly one canvas per call. That is what makes the attempt count and the three durations
-  // observable at all — inside zxing's own decodeOnce they were not.
+  // decodes exactly one canvas per call. That is what makes the attempt count and the five fallback
+  // durations observable at all — inside zxing's own decodeOnce they were not.
   loadFallbackDecoder?: () => Promise<FrameDecoder | null>;
   // Handed straight to runFrameLoop, unread here. Production passes nothing and the loop uses its own
   // defaults; this exists because the loop's frame plumbing cannot run under jsdom at all — getContext()
@@ -62,6 +62,10 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
   const loadFallback = deps.loadFallbackDecoder ?? loadZxingFrameDecoder;
   const pollMs = deps.pollIntervalMs ?? 200;
   const now = deps.now ?? Date.now;
+  // Captured here like the five above, rather than read as deps.frameLoop at the call site: one place
+  // where the deps object stops mattering, so a caller mutating it after construction cannot change what
+  // a run in flight uses.
+  const frameLoopDeps = deps.frameLoop;
 
   // The scan body keeps its many exit points; wrapping it means the outcome is published at exactly one
   // place, so a future early return cannot silently skip instrumentation.
@@ -139,7 +143,7 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
       attach(target.video, stream);
       if (native) return await scanWithNative(native, target, signal, pollMs);
       // Narrowed by the `!native && !fallback` guard above — reaching here means fallback is set.
-      return await runFrameLoop(fallback as FrameDecoder, target, signal, deps.frameLoop);
+      return await runFrameLoop(fallback as FrameDecoder, target, signal, frameLoopDeps);
     } catch {
       return { kind: 'failed' };
     } finally {
@@ -283,8 +287,11 @@ function scanWithNative(
           // failure and the overlay shows a hint instead (Engineering §5).
         });
     }, pollMs);
-    // addEventListener never fires for a signal that was ALREADY aborted, so this is the only thing
-    // standing between an abort landing just before the dispatch and a run that polls forever.
+    // addEventListener never fires for a signal that was ALREADY aborted, so without this an abort that
+    // landed before the dispatch would leave a run polling forever. In today's call graph the branch is
+    // UNREACHABLE — runScan checks `signal.aborted` a few statements earlier and nothing between there and
+    // here suspends (attach() does not await play()), so the signal cannot become aborted in between.
+    // Kept as defence-in-depth against a future await appearing on that path, not as a live guard.
     if (signal.aborted) finish({ kind: 'cancelled' });
   });
 }

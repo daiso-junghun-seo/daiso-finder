@@ -50,7 +50,7 @@ function frameDecoder(decodeFrame: () => Promise<string | null>, dispose = () =>
 //
 // minIntervalMs 0 keeps a retrying test from spending 200 ms of wall clock per attempt. `now` is
 // deliberately NOT injected: two tests below pin exact read counts on the SCANNER's clock, and the loop
-// keeping its own Date.now is what makes those counts stable.
+// keeping its own clock (monotonicNow, not the scanner's) is what makes those counts stable.
 //
 // nextFrame MUST yield to a macrotask. A synchronous callback plus minIntervalMs 0 gives the loop no
 // path back to the macrotask queue at all, so a decoder double that keeps missing starves vitest's own
