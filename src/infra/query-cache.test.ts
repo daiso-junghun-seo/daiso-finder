@@ -93,16 +93,21 @@ test('a timeout beyond timeoutMs is treated as a failure', async () => {
   expect(await run.run(store, { keyword: '밀폐용기' })).toMatchObject({ type: 'FAILURE' });
 });
 // The 2000ms DEFAULT, which every other test here bypasses by injecting `timeoutMs` — so nothing pinned the
-// only value production actually runs under (AvailabilitySurface's liveQueryRunner passes none). It is
-// Bible-owned (Engineering/availability-check.md §5's dependency table states a flat 2s store/stock timeout,
-// with no Hypothesis label) and it is COUPLED to storeStockRepository's AVAILABILITY_ATTEMPT_TIMEOUT_MS =
-// 1800, deliberately chosen to sit UNDER it: raise this to 3000 and the 1800ms per-attempt deadline becomes
+// only value production actually runs under (AvailabilitySurface's liveQueryRunner passes none). The figure
+// comes from the Bible (Engineering/availability-check.md §5's dependency table states a flat 2s store/stock
+// timeout) but is labelled a Hypothesis there — ":58 — requires field validation", likewise :53 and :156 —
+// so under CLAUDE.md §3 it is refinable HERE on recorded field evidence rather than by owner escalation.
+// What holds it at 2000 today is that every latency measured so far traverses localtunnel and the proxy does
+// not report its own upstream duration, so vendor latency is not yet separable (§B30-18 ②). This test pins
+// the value against accident, not against a decision. It is COUPLED to storeStockRepository's
+// AVAILABILITY_ATTEMPT_TIMEOUT_MS = 1800, deliberately chosen to sit UNDER it: raise this to 3000 and the
+// 1800ms per-attempt deadline becomes
 // the binding cap, aborting reads that would have succeeded; lower it to 1500 and that deadline can never
 // fire, so "did a network timeout occur" becomes unanswerable again. Both directions are asserted, because
 // breaking either is silent. Behavioural rather than a source-text guard: the default is directly
 // observable — the runner's own timer is what produces the FAILURE — so there is nothing the text could say
 // that the clock does not.
-test('the default timeout is 2000ms (Bible-owned; coupled to the 1800ms per-attempt deadline)', async () => {
+test('the default timeout is 2000ms (coupled to the 1800ms per-attempt deadline)', async () => {
   vi.useFakeTimers();
   try {
     const run = createQueryRunner({

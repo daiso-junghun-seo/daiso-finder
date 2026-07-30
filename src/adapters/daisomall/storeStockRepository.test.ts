@@ -361,6 +361,11 @@ test('a transport-level rejection is published as a networkError, not as a cance
   await tick();
 
   const entries = getSnapshot().network;
+  // The length assertion is what stops the two `every` calls below from passing VACUOUSLY: an empty array
+  // satisfies both, so without it the whole `networkError` publish could be deleted and this test — the
+  // only one that names the classification — would still be green while real transport failures vanished
+  // from the panel entirely. Every sibling outcome test in this file pins its count for the same reason.
+  expect(entries).toHaveLength(AVAILABILITY_ATTEMPTS);
   expect(entries.every((e) => e.outcome === 'networkError')).toBe(true);
   expect(entries.every((e) => e.outcome !== 'aborted')).toBe(true);
 });
@@ -430,9 +435,16 @@ test('a loser aborted mid-body keeps its observed 200 — one entry, not a 200 p
   expect(entries.every((e) => e.outcome === 'ok' && e.status === 200)).toBe(true);
 });
 
-// §B30-19③ reads the `시간 초과` count LITERALLY ("`시간 초과` 0건") to decide that escalating the
-// Bible-owned 2000ms runner cap is not urgent. A phantom timeout for a request that demonstrably answered
-// 200 inverts that reading.
+// §B30-19③ reads the `시간 초과` count LITERALLY ("`시간 초과` 0건") to judge how urgently the 2000ms runner
+// cap needs revisiting. A phantom timeout for a request that demonstrably answered 200 inverts that reading.
+//
+// THE PRICE OF THIS RULE, stated here because the test is what enforces it: first-observed wins, so the
+// count is blind in the mirror direction. An attempt whose headers arrived and whose BODY then outran the
+// 1800ms deadline keeps its `200 · ok` and publishes no `시간 초과` at all. So "`시간 초과` 0건" means "no
+// attempt was cancelled BEFORE its response headers arrived" — not "no attempt hit its deadline". Recorded
+// as a reading rule rather than fixed in code: the alternative (letting a terminal outcome overwrite the
+// observed one) would cost the `200 whose body will not parse is still a 200 on the wire` fact that the
+// test below pins, and no measurement so far needs the distinction. See §B30-21.
 test('an attempt whose body stalls past the deadline reports no phantom 시간 초과 over its 200', async () => {
   const { attempts, fetchImpl } = racingFetch();
   const repo = createDaisoStoreStockRepository({ fetchImpl, timeoutMs: 20 });

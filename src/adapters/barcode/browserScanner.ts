@@ -289,12 +289,18 @@ function readSupportedImageCaptureConstraints(
   // Caught HERE rather than left to readTrackFacts's outer catch, so a throw costs this field alone. The
   // outer one discards the whole TrackFacts object — including the width/height/frameRate/facingMode/deviceId
   // getSettings() already answered — and the panel would then print `트랙: 없음` for a live, scanning camera.
-  // A non-object return is covered by the same wrapper: `supported[key]` on a null throws a TypeError.
   try {
-    const supported: ExtendedSupportedConstraints = media.getSupportedConstraints();
+    const supported: unknown = media.getSupportedConstraints();
+    // The shape has to be CHECKED here, unlike in the sibling probe, which gets the same protection for
+    // free: `'focusMode' in capabilities` throws a TypeError on every non-object, whereas `supported[key]`
+    // throws only on null and undefined. Without this, any other non-object answers `undefined` per key and
+    // the filter returns `[]` — asserting that this platform measurably supports NONE of the five, from a
+    // query that answered nothing. `[]` and null are different facts on the panel, so they must not collapse.
+    if (typeof supported !== 'object' || supported === null) return null;
+    const named = supported as ExtendedSupportedConstraints;
     // Per spec a supported constraint name maps to `true`; unsupported ones are simply absent, never `false`.
     // The `=== true` check mirrors that rather than trusting truthiness of a value the spec never defines.
-    return IMAGE_CAPTURE_KEYS.filter((key) => supported[key] === true);
+    return IMAGE_CAPTURE_KEYS.filter((key) => named[key] === true);
   } catch {
     return null;
   }

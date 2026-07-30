@@ -32,10 +32,19 @@ export interface FrameDecoder {
 // requestAnimationFrame wait (see `remaining` below, which is now always <= 0). The diagnostic this value
 // also served has ANSWERED: run C measured 150 attempts in a 3135 ms scan — a 42% wall-clock drop against
 // the 5366 ms prior at roughly 12x the sampling rate — so the run is TIME-LIMITED, not sample-limited.
-// Sampling was a real but partial lever; the decoder itself is ~5.4 ms per attempt, so CPU is not the bound,
-// and camera zoom became the next lever. Stays 0 regardless: nothing about that outcome argues for
-// re-slowing the loop. See open-questions.md §B30-16 (why 0 shipped) and §B30-17 ① / §B30-19 ② (what the
-// run showed).
+//
+// READ THAT PRECISELY: what is not the bound is the SAMPLE RATE. At ~48-50 attempts/sec against a 30 fps
+// camera the loop already asks faster than new frames arrive, so a quicker decoder buys attempts and no new
+// frames — that, and not any cost share, is why decoder speed stopped being the lever and camera zoom
+// became it. It is NOT a statement that the main thread has headroom, and the numbers above must not be
+// read as one: the ~42.6/48.8 ms and 4.4% figures belong to the 200 ms-paced runs A/B, where the loop slept
+// most of the scan. At pacing 0 the decoder's share is 16-26% of a per-attempt cost that is itself
+// continuous, and run F measured 19.17 ms of real work at 50.5 attempts/sec = 96.7% MAIN-THREAD OCCUPANCY.
+// That saturation is why any scan animation must be GPU-composite only (transform/opacity, never a JS
+// requestAnimationFrame loop, which would contend with this one) and why the bracket crop is now argued for
+// on main-thread budget. Stays 0 regardless: nothing about that outcome argues for re-slowing the loop.
+// See open-questions.md §B30-16 (why 0 shipped), §B30-17 ① / §B30-19 ② (what the run showed) and §B30-20
+// (the occupancy measurement that bounds what else can run on this thread).
 export const FRAME_LOOP_MIN_INTERVAL_MS = 0;
 
 // DELTA-ONLY, which is why the adapter's epoch requirement does not apply here: ScannerDeps.now must be

@@ -27,13 +27,20 @@ export const AVAILABILITY_ATTEMPTS = 3;
 // The window for this number is CRAMPED, and that is a finding rather than a preference. Real-device
 // ?debug=1 runs measured SUCCESSFUL /api/availability responses at 442–1445ms (one session: 1445, 1239,
 // 977, 442, 1190), so the floor is 1445ms plus headroom. The ceiling is createQueryRunner's 2000ms abort
-// (src/infra/query-cache.ts), which is Bible-owned — Engineering/availability-check.md §5's dependency
-// table states a flat 2s store/stock timeout and is NOT hypothesis-labeled — and therefore not this
-// repo's to raise (CLAUDE.md §3; the Bible requires explicit owner approval). 1800ms is what fits:
-// ~1.25x the measured maximum, and 200ms under the runner's cap so an attempt timeout is what gets
-// REPORTED rather than being masked by the runner's blind abort (the observed `error · 2002ms`).
-// Generous headroom is NOT achievable under that cap — see docs/notes/open-questions.md §B30-18, which
-// records this as the escalation the owner has to settle.
+// (src/infra/query-cache.ts). That ceiling is NOT jurisdictionally frozen, and an earlier version of this
+// comment had it wrong: Engineering/availability-check.md §5's dependency table does state a flat 2s, but
+// the same document labels the 2s figure itself a Hypothesis at :53, :58 and :156 ("a budget commitment
+// measured against real store networks, not a demonstrated capability. Hypothesis — requires field
+// validation"). A Hypothesis-labelled figure is the Bible INVITING field validation, so under CLAUDE.md §3
+// this repo may refine it on recorded evidence — no owner escalation required.
+// What blocks raising it today is EVIDENTIARY, not jurisdictional: every latency we have traverses
+// localtunnel and the proxy does not report its own upstream duration, so path latency and vendor latency
+// are not separated (and the earlier 408s were positively confirmed to be the tunnel). Raising a budget
+// from tunnel-inflated numbers is exactly the unfounded change the record exists to prevent, so the next
+// step is proxy upstream instrumentation. 1800ms is what fits under the cap meanwhile: ~1.25x the measured
+// maximum, and 200ms under the runner's so an attempt timeout is what gets REPORTED rather than being
+// masked by the runner's blind abort (the observed `error · 2002ms`). Generous headroom is NOT achievable
+// under that cap — see docs/notes/open-questions.md §B30-18 ②.
 //
 // These two numbers are COUPLED. If the 2000ms runner cap ever moves, this must move with it: left at
 // 1800ms under a larger cap it becomes the binding deadline and starts aborting reads that would have

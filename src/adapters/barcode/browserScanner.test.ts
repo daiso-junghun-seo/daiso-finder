@@ -1060,8 +1060,9 @@ describe('diagnostics instrumentation', () => {
     expect(track?.supportedImageCaptureConstraints).toEqual(['zoom']);
   });
 
-  // The mirror image, so the symmetric guard is not left to inference. A non-object return is covered by the
-  // same wrapper: `supported[key]` on a null would throw a TypeError rather than reporting a capability.
+  // The mirror image, so the symmetric guard is not left to inference. A THROW is only half of what this
+  // probe has to survive — the non-object return is the other half, and it needs its own shape check rather
+  // than the wrapper; the test below it covers that case.
   test('a getSupportedConstraints that throws nulls only that field and keeps the rest of the facts', async () => {
     const scanner = createBrowserScanner({
       mediaDevices: {
@@ -1080,6 +1081,74 @@ describe('diagnostics instrumentation', () => {
     expect(track).toMatchObject({ width: 640, height: 480 });
     expect(track?.supportedImageCaptureConstraints).toBeNull();
     expect(track?.imageCaptureCapabilities).toEqual({ torch: true });
+  });
+
+  // THE CASE A THROW DOES NOT COVER. `'focusMode' in capabilities` throws a TypeError for every non-object,
+  // so the sibling probe degrades correctly on all of them — but `supported[key]` only throws for null and
+  // undefined. Any other non-object yields `undefined` per key, so the filter would return `[]`: the
+  // adapter would assert this platform MEASURABLY supports none of the five, from a query that answered
+  // nothing. An empty list and null render as different facts on the panel, so the two must not collapse.
+  test('a getSupportedConstraints that answers with a non-object reports unknown, not "supports none"', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () =>
+          fakeStreamWithCapabilities({ width: 640, height: 480 }, () => ({ torch: true })),
+        getSupportedConstraints: () => 1 as unknown as MediaTrackSupportedConstraints,
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
+    });
+    await scanner.scan(fakeTarget(), new AbortController().signal);
+    const track = getSnapshot().scanner.track;
+    expect(track?.supportedImageCaptureConstraints).toBeNull();
+    // And it costs only its own field, exactly as a throw does.
+    expect(track).toMatchObject({ width: 640, height: 480 });
+    expect(track?.imageCaptureCapabilities).toEqual({ torch: true });
+  });
+
+  // THE PRODUCER SIDE of the measured-zero rule. report.test.ts pins that a `step: 0` RENDERS as `step=0`,
+  // but it hand-builds the fact — so `toRangeFacts` could turn a platform's measured zero into null (a `||`
+  // in place of `??`) with that renderer test still green, and the panel would then say "this platform did
+  // not name a step" about a platform that named one. A continuous-zoom camera reporting `step: 0` is the
+  // real shape this protects.
+  test('a range the platform reported as zero publishes the measured zeros, not unknowns', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () =>
+          fakeStreamWithCapabilities({ width: 1920, height: 1080 }, () => ({
+            zoom: { min: 0, max: 2, step: 0 },
+          })),
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
+    });
+    await scanner.scan(fakeTarget(), new AbortController().signal);
+    expect(getSnapshot().scanner.track?.imageCaptureCapabilities).toEqual({
+      zoom: { min: 0, max: 2, step: 0 },
+    });
+  });
+
+  // THE OTHER DIRECTION. A bound the platform never named must reach the bus as null so the line can print
+  // the unreported marker; a `?? 0` there would invent a quantisation the zoom sweep then plans against.
+  // WebKit's focusDistance is exactly this shape — run F saw `min 0.02` with no max reported.
+  test('a bound the platform never named is published as unknown, never as zero', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () =>
+          fakeStreamWithCapabilities({ width: 1920, height: 1080 }, () => ({
+            focusDistance: { min: 0.02 },
+          })),
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
+    });
+    await scanner.scan(fakeTarget(), new AbortController().signal);
+    expect(getSnapshot().scanner.track?.imageCaptureCapabilities).toEqual({
+      focusDistance: { min: 0.02, max: null, step: null },
+    });
   });
 
   // A track that can be asked ABOUT zoom and asked TO zoom. The three surfaces are deliberately
