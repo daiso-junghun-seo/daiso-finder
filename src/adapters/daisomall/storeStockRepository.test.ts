@@ -80,6 +80,31 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const okSettled = (body: unknown): Settled => ({ ok: true, status: 200, json: async () => body });
 const inStockSettled = () => okSettled({ data: observationFixtures.inStock });
 
+// A response whose HEADERS have arrived but whose BODY never settles on its own — what a real Response is
+// while its body stream is still streaming. Aborting a real Response errors that stream per spec, so
+// json() rejects; this double reproduces exactly that, which is the only way to reach the window between
+// the `ok` publish and the parse. Every other double in this file detaches json() from the signal
+// (`json: async () => body`), so that window is invisible to them.
+const stallingBody = (signal: AbortSignal | undefined): Settled => ({
+  ok: true,
+  status: 200,
+  json: () =>
+    new Promise<unknown>((_resolve, reject) => {
+      if (signal?.aborted) reject(abortError());
+      else signal?.addEventListener('abort', () => reject(abortError()));
+    }),
+});
+
+// The `now` seam, scripted. The repository calls now() exactly TWICE per attempt — once for `started`
+// (synchronously, in index order, before the first await) and once inside publish — so a fixed reading
+// list pins each attempt's elapsed window to a number chosen here. A call past the end yields NaN rather
+// than repeating the last reading: a changed call pattern has to surface as a failure, not as a
+// plausible-looking duration.
+function scriptedClock(readings: number[]): () => number {
+  let i = 0;
+  return () => readings[i++] ?? Number.NaN;
+}
+
 // ---------------------------------------------------------------------------------------------------
 // Existing single-answer contract (must survive the race unchanged)
 // ---------------------------------------------------------------------------------------------------
@@ -375,6 +400,107 @@ test('a malformed body publishes the successful transport only, never a second e
   const entries = getSnapshot().network;
   expect(entries).toHaveLength(AVAILABILITY_ATTEMPTS);
   expect(entries.every((e) => e.outcome === 'ok' && e.status === 200)).toBe(true);
+});
+
+// ---------------------------------------------------------------------------------------------------
+// One entry per attempt, whatever happens after the response arrives
+// ---------------------------------------------------------------------------------------------------
+
+// The whole panel reading rests on `#i/total` being a partition: bus.ts's NETWORK_LIMIT = 12 is sized as
+// "four consecutive 3-attempt lookups", and a lookup that emitted four lines would make one `#i/3` appear
+// twice. An attempt that already reported an OBSERVED response must not go on to report a second outcome.
+test('a loser aborted mid-body keeps its observed 200 — one entry, not a 200 plus a 취소', async () => {
+  const { attempts, fetchImpl } = racingFetch();
+  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  const pending = repo.query(store, { keyword: '밀폐용기' });
+  await tick();
+
+  // Both losers get their headers first, so each publishes its `ok` entry and then parks on the body…
+  attempts[1]?.resolve(stallingBody(attempts[1]?.signal));
+  attempts[2]?.resolve(stallingBody(attempts[2]?.signal));
+  // …and the winner then settles fully, which aborts the two parked bodies mid-read.
+  attempts[0]?.resolve(inStockSettled());
+  await expect(pending).resolves.toEqual(mockAnswers.inStock);
+  await tick();
+
+  const entries = getSnapshot().network;
+  expect(entries).toHaveLength(AVAILABILITY_ATTEMPTS);
+  expect(new Set(entries.map((e) => e.attempt?.index)).size).toBe(AVAILABILITY_ATTEMPTS);
+  // The surviving entry is the one that states a fact: a 200 really did arrive on all three.
+  expect(entries.every((e) => e.outcome === 'ok' && e.status === 200)).toBe(true);
+});
+
+// §B30-19③ reads the `시간 초과` count LITERALLY ("`시간 초과` 0건") to decide that escalating the
+// Bible-owned 2000ms runner cap is not urgent. A phantom timeout for a request that demonstrably answered
+// 200 inverts that reading.
+test('an attempt whose body stalls past the deadline reports no phantom 시간 초과 over its 200', async () => {
+  const { attempts, fetchImpl } = racingFetch();
+  const repo = createDaisoStoreStockRepository({ fetchImpl, timeoutMs: 20 });
+  const pending = repo.query(store, { keyword: '밀폐용기' });
+  pending.catch(() => {}); // rejects before the assertion below attaches — see the caller-abort test
+  await tick();
+  // Headers land on every attempt well inside the deadline; only the bodies outrun it.
+  for (const attempt of attempts) attempt.resolve(stallingBody(attempt.signal));
+  await expect(pending).rejects.toThrow();
+  await tick();
+
+  const entries = getSnapshot().network;
+  expect(entries).toHaveLength(AVAILABILITY_ATTEMPTS);
+  expect(entries.every((e) => e.outcome === 'ok' && e.status === 200)).toBe(true);
+  expect(entries.some((e) => e.outcome === 'timeout')).toBe(false);
+});
+
+// ---------------------------------------------------------------------------------------------------
+// Per-attempt elapsed time (the `ms` §B30-19③ reasons over)
+// ---------------------------------------------------------------------------------------------------
+
+test('each attempt publishes its own elapsed window — the winner its latency, a loser its cancellation', async () => {
+  const { attempts, fetchImpl } = racingFetch();
+  // Starts 0/10/20, then the winner's publish at 1169 and the two cancellations at 1181/1192 — the shape a
+  // real lookup produces: one winner, then two cancellations a couple of ms behind it. Distinct windows on
+  // purpose: equal ones could not tell "each attempt measures itself" from "all three share one number".
+  const now = scriptedClock([0, 10, 20, 1169, 1181, 1192]);
+  const repo = createDaisoStoreStockRepository({ fetchImpl, now });
+  const pending = repo.query(store, { keyword: '밀폐용기' });
+  await tick();
+  attempts[0]?.resolve(inStockSettled());
+  await expect(pending).resolves.toEqual(mockAnswers.inStock);
+  await tick();
+
+  const entries = getSnapshot().network;
+  const byIndex = new Map(entries.map((e) => [e.attempt?.index, e]));
+  expect(byIndex.get(1)?.ms).toBe(1169);
+  // A loser's ms is its time to CANCELLATION — every attempt starts in the same synchronous tick and the
+  // losers are aborted only after the winner has settled — so it says nothing about that attempt's own
+  // vendor latency. Pinned anyway, because §B30-19③ reads these numbers.
+  expect(byIndex.get(2)?.ms).toBe(1171);
+  expect(byIndex.get(3)?.ms).toBe(1172);
+  for (const entry of entries) expect(Number.isFinite(entry.ms)).toBe(true);
+});
+
+// Fake timers, and the DEFAULT `now` (Date.now) rather than the scripted seam: the point is that the
+// published duration is derived from a real clock and lands on the deadline, which a scripted reading
+// could only assert by restating itself.
+test('a timed-out attempt reports the deadline it outran, never 0', async () => {
+  vi.useFakeTimers();
+  try {
+    const { fetchImpl } = racingFetch(); // never settles on its own — only the deadline can end it
+    const repo = createDaisoStoreStockRepository({
+      fetchImpl,
+      timeoutMs: AVAILABILITY_ATTEMPT_TIMEOUT_MS,
+    });
+    const pending = repo.query(store, { keyword: '밀폐용기' });
+    pending.catch(() => {});
+    await vi.advanceTimersByTimeAsync(AVAILABILITY_ATTEMPT_TIMEOUT_MS);
+    await expect(pending).rejects.toThrow();
+
+    const entries = getSnapshot().network;
+    expect(entries).toHaveLength(AVAILABILITY_ATTEMPTS);
+    expect(entries.every((e) => e.outcome === 'timeout')).toBe(true);
+    for (const entry of entries) expect(entry.ms).toBe(AVAILABILITY_ATTEMPT_TIMEOUT_MS);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 // ---------------------------------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { mockAnswers } from '../adapters/mock/fixtures';
 import { createMockRepository } from '../adapters/mock/mockRepository';
 import { defaultPolicy } from '../domain/policy';
-import type { AvailabilityAnswer } from '../domain/types';
+import type { AvailabilityAnswer, StoreEvent } from '../domain/types';
 import type { CacheStorage } from './cache-storage';
 import { createQueryRunner } from './query-cache';
 
@@ -91,6 +91,42 @@ test('a timeout beyond timeoutMs is treated as a failure', async () => {
     timeoutMs: 10,
   });
   expect(await run.run(store, { keyword: '밀폐용기' })).toMatchObject({ type: 'FAILURE' });
+});
+// The 2000ms DEFAULT, which every other test here bypasses by injecting `timeoutMs` — so nothing pinned the
+// only value production actually runs under (AvailabilitySurface's liveQueryRunner passes none). It is
+// Bible-owned (Engineering/availability-check.md §5's dependency table states a flat 2s store/stock timeout,
+// with no Hypothesis label) and it is COUPLED to storeStockRepository's AVAILABILITY_ATTEMPT_TIMEOUT_MS =
+// 1800, deliberately chosen to sit UNDER it: raise this to 3000 and the 1800ms per-attempt deadline becomes
+// the binding cap, aborting reads that would have succeeded; lower it to 1500 and that deadline can never
+// fire, so "did a network timeout occur" becomes unanswerable again. Both directions are asserted, because
+// breaking either is silent. Behavioural rather than a source-text guard: the default is directly
+// observable — the runner's own timer is what produces the FAILURE — so there is nothing the text could say
+// that the clock does not.
+test('the default timeout is 2000ms (Bible-owned; coupled to the 1800ms per-attempt deadline)', async () => {
+  vi.useFakeTimers();
+  try {
+    const run = createQueryRunner({
+      // Latency far past any plausible default, so ONLY the runner's own timer can end this run.
+      repo: createMockRepository('inStock', { latencyMs: 60_000 }),
+      cache: memCache(),
+      policy: defaultPolicy,
+      now: () => 8000,
+      // timeoutMs deliberately NOT injected — the default is the whole subject of this test.
+    });
+    let event: StoreEvent | undefined;
+    // The runner never rejects (it classifies every failure into an event), so nothing to handle here.
+    run.run(store, { keyword: '밀폐용기' }).then((ev) => {
+      event = ev;
+    });
+
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(event).toBeUndefined(); // a smaller default would have fired by now…
+    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(0); // drain the runner's own cache-classify microtasks
+    expect(event).toEqual({ type: 'FAILURE', cache: { kind: 'noCache' } }); // …and 2000 is when it must
+  } finally {
+    vi.useRealTimers();
+  }
 });
 test('a late repo rejection after the timeout already won registers no unhandled rejection', async () => {
   const onUnhandled = vi.fn();

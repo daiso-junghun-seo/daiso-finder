@@ -71,8 +71,13 @@ async function readErrorBody(res: object): Promise<string | undefined> {
 
 // A vendor answer AND a definitive `noMatch` are both WINS.
 //
-// `noMatch` means "this store does not carry it" — a truth no re-read can change — so it has to END the
-// race, not lose it. Modelling it as a fulfilment (the single-shot code threw) is exactly what buys that:
+// `noMatch` is a statement about the KEYWORD, not about the store: the proxy derives it from SearchGoods
+// alone (functions/api/availability.ts hands searchGoods no strCd), so it means "the keyword matched no
+// catalog product" — exactly what NoCatalogMatchError in domain/errors.ts says. Re-reading the same keyword
+// against the same catalogue is not expected to answer differently, which is what justifies ENDING the race
+// rather than losing it (§B30-18 ⑥). Honest limit: that rests on one upstream response shape — a 200 whose
+// body is not the expected search envelope also reduces to noMatch, and a re-read would not fix it either.
+// Modelling it as a fulfilment (the single-shot code threw) is what buys the short-circuit:
 // Promise.any short-circuits on the first fulfilment, so one noMatch cancels its siblings and is
 // re-thrown as NoCatalogMatchError below, preserving the NO_MATCH → Empty path unchanged. Had it stayed a
 // rejection, Promise.any would have collected three of them and rejected with an AggregateError — which
@@ -131,11 +136,18 @@ export function createDaisoStoreStockRepository(
 
         const started = now();
         let published = false;
+        // ONE entry per attempt, enforced HERE rather than at each call site. The per-attempt timer and the
+        // caller-abort listener stay armed across the body read, so an attempt that has already published an
+        // observed response can still be aborted mid-body (`json()` on a real Response rejects when its
+        // stream is errored) and reach the catch below. Whichever outcome was observed FIRST is the one that
+        // states a fact; a second entry would make one `#i/total` appear twice and break the partition the
+        // panel and bus.ts's NETWORK_LIMIT arithmetic both read.
         const publish = (
           status: number | 'error',
           outcome: NetworkOutcome,
           errorBody?: string,
         ): void => {
+          if (published) return;
           published = true;
           publishNetwork({
             path: endpoint,
@@ -173,11 +185,17 @@ export function createDaisoStoreStockRepository(
           const reason = reasons[index];
           if (reason === 'timeout') publish('error', 'timeout');
           // A cancelled duplicate — a race loser, or the caller cancelling the surface. Published so the
-          // race stays visible and its latency measurable, but NEVER as an error.
+          // race stays VISIBLE, and NEVER as an error. Its `ms` is the time to CANCELLATION, not this
+          // attempt's own vendor latency: all attempts capture `started` in the same synchronous tick and
+          // the losers are aborted only after the winner has settled, so the number is the winner's latency
+          // plus parse plus a few microtask hops — which is why real panel lines show the losers a couple of
+          // ms BEHIND the winner. It says nothing about how fast this attempt would have been.
           else if (reason) publish('error', 'aborted');
-          // Nothing has been published yet, so the transport itself failed. If something HAS been
-          // published (a non-ok status, or an ok response whose body would not map) that entry already
-          // states the observed fact and a second one would double-count it.
+          // Nothing has been published yet, so the transport itself failed. When something HAS been
+          // published — a non-ok status, or an ok response whose body then failed to arrive, parse or map —
+          // that entry already states the observed fact, and blaming the transport on top of it would
+          // misclassify the attempt. publish's own guard is what makes the second entry impossible; this
+          // condition keeps the classification explicit at the branch that would get it wrong.
           else if (!published) publish('error', 'networkError');
           throw err;
         } finally {
