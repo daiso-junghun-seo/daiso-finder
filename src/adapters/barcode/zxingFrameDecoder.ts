@@ -4,7 +4,8 @@
 // canvas produces an empty 0x0 capture and an exception that is not a retryable miss. The bitmap is
 // therefore assembled here from the three parts directly.
 //
-// This file's ONLY job is translating between the frame seam and zxing: bitmap assembly plus exception
+// This file's job is translating between the frame seam and zxing: bitmap assembly, the timing of that
+// assembly (see decodeFrame — it is not decoder cost and must not read as such), and exception
 // translation. It owns no loop, no stream and no timer — runFrameLoop owns all three, and stays
 // decoder-agnostic so stage 2 can swap what sits behind FrameDecoder without touching it.
 //
@@ -14,7 +15,8 @@
 // 417.38 kB, because the barrel drags in every 1D and 2D reader. browserScanner.test.ts guards this on
 // this file's source text, since both spellings resolve to working classes at runtime and only the
 // emitted chunk tells them apart.
-import type { FrameDecoder } from './frameLoop';
+import { publishScanner } from '../../diagnostics/bus';
+import { type FrameDecoder, monotonicNow } from './frameLoop';
 
 // zxing's own loop retries all three of these (BrowserCodeReader), and DataMatrixReader documents
 // throwing Format/Checksum for a code it cannot decode or whose error correction fails. Matched by
@@ -61,6 +63,9 @@ function isRetryableMiss(err: unknown): boolean {
 
 export async function loadZxingFrameDecoder(
   override?: ZxingFrameParts,
+  // Delta-only, like the loop's — see monotonicNow. Injectable so assembleMs is assertable without a
+  // real clock.
+  now: () => number = monotonicNow,
 ): Promise<FrameDecoder | null> {
   try {
     let parts = override;
@@ -83,18 +88,43 @@ export async function loadZxingFrameDecoder(
       };
     }
     const { assemble, decode } = parts;
+    // ASSEMBLY IS TIMED SEPARATELY because it is not decoder cost, and folding it into the loop's
+    // decodeBusyMs hid the cheapest lever available. `assemble` runs getImageData(0, 0, 1920, 1080) — an
+    // 8.3 MB CPU readback out of the canvas — then a 2.07-million-pixel greyscale pass and HybridBinarizer.
+    // The loop's drawMs times only the GPU-side drawImage and comes out small, so all of that
+    // resolution-proportional cost read as "the decoder is slow → migrate to wasm". But zxing-wasm consumes
+    // the same canvas through the same getImageData (spec D2), so it does not move this boundary at all,
+    // while cropping to the aiming brackets — roughly a tenth of the pixels — moves all of it. Neither
+    // could be ranked before this split.
+    let assembleMs = 0;
+    let frames = 0;
+    const timedAssemble = (canvas: HTMLCanvasElement): unknown => {
+      const start = now();
+      try {
+        return assemble(canvas);
+      } finally {
+        // In the finally for the same reason the loop's busy counter is: a throw's cost is still cost.
+        assembleMs += now() - start;
+        frames += 1;
+      }
+    };
     return {
       decodeFrame: async (canvas) => {
         try {
-          return decode(assemble(canvas)).getText();
+          return decode(timedAssemble(canvas)).getText();
         } catch (err) {
           if (isRetryableMiss(err)) return null;
           throw err;
         }
       },
       // The reader holds no stream or timer of its own — the loop owns both — so there is nothing to
-      // release. Kept to satisfy the seam, which stage 2's decoder will need.
-      dispose: () => {},
+      // release. What dispose does own is the ONE publish of this decoder's own segment: it runs exactly
+      // once per run, at teardown, which keeps the "never publish per attempt" discipline and keeps
+      // frameLoop.ts decoder-agnostic — the loop cannot know that a decoder assembles anything.
+      // null, not 0, when no frame was ever assembled: nothing was measured.
+      dispose: () => {
+        publishScanner({ assembleMs: frames === 0 ? null : Math.round(assembleMs) });
+      },
     };
   } catch {
     return null;

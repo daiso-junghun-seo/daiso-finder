@@ -1,8 +1,27 @@
+const flag = vi.hoisted(() => ({ enabled: true }));
+vi.mock('../../diagnostics/enabled', () => ({ isDiagnosticsEnabled: () => flag.enabled }));
+
+import { getSnapshot, resetDiagnostics } from '../../diagnostics/bus';
 import {
   RETRYABLE_ZXING_KINDS,
   importZxingFrameParts,
   loadZxingFrameDecoder,
 } from './zxingFrameDecoder';
+
+beforeEach(() => {
+  flag.enabled = true;
+  resetDiagnostics();
+});
+
+// A fixed +10 per read, so assembleMs is an exact number rather than a range: two reads per assembly
+// makes every frame cost exactly 10.
+function clock() {
+  let t = 0;
+  return () => {
+    t += 10;
+    return t;
+  };
+}
 
 // zxing retries NotFound, Checksum AND Format. DataMatrixReader throws the latter two on a code it
 // cannot decode or whose error correction fails — a blurry frame. Treating only NotFound as retryable
@@ -121,6 +140,51 @@ test('any other error propagates', async () => {
     },
   });
   await expect(decoder?.decodeFrame({} as HTMLCanvasElement)).rejects.toThrow('boom');
+});
+
+// THE ASSEMBLY COST, split out of decodeBusyMs. It is 8.3 MB of getImageData readback plus a
+// 2.07-million-pixel greyscale pass at 1920x1080 — resolution-proportional cost that a wasm decoder does
+// NOT remove (it consumes the same canvas the same way) and that cropping removes almost entirely. Folded
+// into 디코드 점유 it read as "the decoder is slow", which is the one conclusion it does not support.
+test('the bitmap assembly is timed and published once, on dispose', async () => {
+  const decoder = await loadZxingFrameDecoder(
+    { assemble: () => ({}) as never, decode: () => ({ getText: () => null }) as never },
+    clock(),
+  );
+  await decoder?.decodeFrame({} as HTMLCanvasElement);
+  await decoder?.decodeFrame({} as HTMLCanvasElement);
+  // Nothing published mid-run: publishing per attempt re-renders the whole diagnostics report, and the
+  // measured run is by definition a ?debug=1 run, so that cost would land inside the numbers compared.
+  expect(getSnapshot().scanner.assembleMs).toBeNull();
+  decoder?.dispose();
+  expect(getSnapshot().scanner.assembleMs).toBe(20);
+});
+
+// Same discipline as the loop's counters: a segment nothing was measured for is null, never 0.
+test('a decoder that assembled nothing publishes null, not zero', async () => {
+  const decoder = await loadZxingFrameDecoder(
+    { assemble: () => ({}) as never, decode: () => ({ getText: () => null }) as never },
+    clock(),
+  );
+  decoder?.dispose();
+  expect(getSnapshot().scanner.assembleMs).toBeNull();
+});
+
+// The accumulation sits in a finally for the same reason the loop's does: a frame whose assembly threw
+// still cost what it cost, and dropping it would understate exactly the segment being investigated.
+test('an assembly that throws still contributes its cost', async () => {
+  const decoder = await loadZxingFrameDecoder(
+    {
+      assemble: () => {
+        throw new Error('boom');
+      },
+      decode: () => ({ getText: () => null }) as never,
+    },
+    clock(),
+  );
+  await expect(decoder?.decodeFrame({} as HTMLCanvasElement)).rejects.toThrow('boom');
+  decoder?.dispose();
+  expect(getSnapshot().scanner.assembleMs).toBe(10);
 });
 
 test('a decoded result yields its text', async () => {
