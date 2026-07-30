@@ -53,6 +53,10 @@ export function ScannerOverlay({
   const closeRef = useRef<HTMLButtonElement>(null);
   const [outcome, setOutcome] = useState<ScanOutcome | null>(null);
   const [hinting, setHinting] = useState(false);
+  // Not "the scan started" — "frames are arriving". getUserMedia can be outstanding for a second or
+  // more on iOS because the permission prompt lives inside it, and the brackets must not claim to be
+  // reading anything during that window.
+  const [streaming, setStreaming] = useState(false);
 
   // The dialog must own focus while it is open (Interface §6); 닫기 is the safe landing target.
   useEffect(() => {
@@ -129,11 +133,15 @@ export function ScannerOverlay({
             playsInline
             muted
             autoPlay
+            onPlaying={() => setStreaming(true)}
           />
           {/* Aiming brackets, decoration only. Hidden once a notice lands: an aiming guide over a camera
               that failed is an instruction the app cannot honour. */}
           {!notice && (
-            <div className="scanner-overlay__aim" aria-hidden="true">
+            <div
+              className={`scanner-overlay__aim${streaming ? ' scanner-overlay__aim--live' : ''}`}
+              aria-hidden="true"
+            >
               <span />
               <span />
               <span />

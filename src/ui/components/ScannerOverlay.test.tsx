@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ScanOutcome, ScannerPort } from '../../domain/ports';
 import {
@@ -283,4 +283,31 @@ test('a decode landing after unmount does not surface as onDecoded or a crash', 
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(decoded).toEqual([]);
   expect(container).toBeEmptyDOMElement();
+});
+
+// THE WHOLE POINT OF GATING ON `playing`. scan() resolves the decoder, then calls getUserMedia — and on
+// iOS the permission prompt sits INSIDE that call, measured at 749-1005 ms (§B30-20 ⑤). Breathing from
+// mount would spend that whole second telling the shopper we are reading a camera that is not on yet,
+// which is the one proposition this motion is allowed to make.
+test('the brackets do not breathe before the camera delivers frames', () => {
+  const { container } = render(
+    <ScannerOverlay scanner={never} onDecoded={() => {}} onClose={() => {}} />,
+  );
+  expect(container.querySelector('.scanner-overlay__aim')).not.toHaveClass(
+    'scanner-overlay__aim--live',
+  );
+});
+
+// `playing` is the browser saying frames are flowing, which is exactly when the decode loop has frames
+// to consume. It is a DOM event the overlay already owns, so this costs no ScannerPort change.
+test('the brackets start breathing once the video reports it is playing', () => {
+  const { container } = render(
+    <ScannerOverlay scanner={never} onDecoded={() => {}} onClose={() => {}} />,
+  );
+  const video = container.querySelector('video');
+  if (!video) throw new Error('the overlay rendered no <video> to drive');
+  fireEvent.playing(video);
+  expect(container.querySelector('.scanner-overlay__aim')).toHaveClass(
+    'scanner-overlay__aim--live',
+  );
 });
