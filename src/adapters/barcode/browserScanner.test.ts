@@ -7,10 +7,6 @@ import { getSnapshot, resetDiagnostics } from '../../diagnostics/bus';
 import type { ScanTarget } from '../../domain/ports';
 import { SCAN_FORMATS, createBrowserScanner } from './browserScanner';
 import type { FrameDecoder } from './frameLoop';
-// The decoder's own SOURCE TEXT, via Vite's ?raw — the same idiom the styles/*.test.ts specs use on CSS,
-// and typed by vite/client's `*?raw` declaration. See the chunk-discipline guard below for why the text
-// and not the resolved modules, and why not node:fs (@types/node is not a dependency of this repo).
-import zxingFrameDecoderSource from './zxingFrameDecoder.ts?raw';
 
 function fakeTrack() {
   return {
@@ -90,26 +86,57 @@ test('only DataMatrix is scanned', () => {
 });
 
 // A barrel import would pull every 1D and 2D decoder into the lazy chunks: measured on this tree
-// (2026-07-30), the four deep specifiers total 76.31 kB and swapping just one for the bare barrel takes
-// that to 417.38 kB — which destroys the very baseline this stage measures against. @zxing/library
+// (2026-07-30), the four deep specifiers total 76.31 kB on disk and swapping just one for the bare barrel
+// takes that to 417.38 kB — which destroys the very baseline this stage measures against. @zxing/library
 // declares no sideEffects, so nothing in the barrel can be tree-shaken away. A guard on the SOURCE TEXT
-// rather than on the resolved modules, because the failure being prevented is a bundling failure: both a
-// barrel specifier
-// and a deep one resolve to working classes at runtime, so nothing observable at runtime tells them
-// apart — only the emitted chunk size does, and that is not visible from inside a test.
+// rather than on the resolved modules, because the failure being prevented is a bundling failure: a barrel
+// specifier and a deep one both resolve to working classes at runtime, so nothing observable at runtime
+// tells them apart — only the emitted chunk size does, and that is not visible from inside a test.
 //
 // The pattern deliberately matches `import(` as well as `from`: every zxing specifier in the decoder is a
 // DYNAMIC import, so a `from`-only pattern would find nothing and the guard would pass vacuously — which
-// is what the length assertion is here to catch. Verified by inverting it: swapping one deep path for the
-// bare barrel makes this fail with `expected '@zxing/library' to match /^@zxing\/library\/esm\//`.
-test('the zxing frame decoder imports only deep esm paths', () => {
-  const specifiers = [
-    ...zxingFrameDecoderSource.matchAll(/(?:from|import)\s*\(?\s*'(@zxing\/library[^']*)'/g),
-  ].map((m) => m[1]);
-  expect(specifiers.length).toBeGreaterThan(0);
-  for (const specifier of specifiers) {
-    expect(specifier).toMatch(/^@zxing\/library\/esm\//);
+// is what the count assertion is here to catch.
+//
+// STRENGTHENED (2026-07-30 whole-branch review). The old shape had two holes: `^@zxing/library/esm/` admits
+// `esm/index` (a 100-export barrel) and `esm/browser` (a barrel of every Browser*Reader — the likelier
+// typo of the two), and it read ONE file's text, so a barrel added anywhere else in src was invisible.
+// A real segment path is now required, and every non-test source file in src is swept.
+const DEEP_ZXING_PATH = /^@zxing\/library\/esm\/(?:core|browser)\/[^']+$/;
+const ZXING_SPECIFIER = /(?:from|import)\s*\(?\s*'(@zxing\/library[^']*)'/g;
+// Vite's eager raw glob — the repo idiom for source-text guards, and typed by vite/client rather than
+// node:fs, which is not a dependency here. Relative to this file, so `../../**` is all of src.
+const sourceFiles = import.meta.glob('../../**/*.{ts,tsx}', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
+
+// The rejection cases first, on literal strings: a guard whose regex is wrong would otherwise pass simply
+// because today's four specifiers happen to be fine.
+test('the deep-path guard rejects the bare barrel and both esm barrel spellings', () => {
+  expect('@zxing/library').not.toMatch(DEEP_ZXING_PATH);
+  expect('@zxing/library/esm/index').not.toMatch(DEEP_ZXING_PATH);
+  expect('@zxing/library/esm/browser').not.toMatch(DEEP_ZXING_PATH);
+  // And it still admits the real thing, one from each of the two segments in use.
+  expect('@zxing/library/esm/core/BinaryBitmap').toMatch(DEEP_ZXING_PATH);
+  expect('@zxing/library/esm/browser/HTMLCanvasElementLuminanceSource').toMatch(DEEP_ZXING_PATH);
+});
+
+test('nothing in src imports @zxing/library except by a deep esm path', () => {
+  let found = 0;
+  for (const [path, text] of Object.entries(sourceFiles)) {
+    // Test files are not shipped, and this file itself carries the barrel spellings above as data.
+    if (path.includes('.test.')) continue;
+    for (const match of String(text).matchAll(ZXING_SPECIFIER)) {
+      found += 1;
+      expect(`${path}: ${match[1]}`).toMatch(
+        /: @zxing\/library\/esm\/(?:core|browser)\/[^']+$/, // DEEP_ZXING_PATH, with the file named on failure
+      );
+    }
   }
+  // The four in zxingFrameDecoder.ts and nowhere else. An exact count, so neither a vacuous sweep (glob
+  // returning nothing) nor a fifth import slipping in unreviewed can pass.
+  expect(found).toBe(4);
 });
 
 // The old test here — `importBundledDatamatrixReader` hands back BrowserDatamatrixCodeReader, whose
@@ -665,6 +692,15 @@ describe('diagnostics instrumentation', () => {
     expect(s.decodeAttempts).toBeGreaterThanOrEqual(1);
     expect(s.outcome).toBe('decoded');
     expect(s.startedAt).not.toBeNull();
+    // FALLBACK-ONLY, and nothing pinned it before this: the five durations must stay null here. The
+    // native loop is a setInterval that does not await the previous detect(), so attempts overlap and
+    // their sum can exceed real time — a per-attempt average would be meaningless and a number on this
+    // line would read as one. `decodeAttempts` is the deliberate exception: both paths count.
+    expect(s.decodeBusyMs).toBeNull();
+    expect(s.assembleMs).toBeNull();
+    expect(s.drawMs).toBeNull();
+    expect(s.loopIdleMs).toBeNull();
+    expect(s.warmupMs).toBeNull();
   });
 
   // REWRITTEN, and its assertion inverted. The old version pinned decodeAttempts to null on this path

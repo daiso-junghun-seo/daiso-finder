@@ -4,9 +4,13 @@ vi.mock('../../diagnostics/enabled', () => ({ isDiagnosticsEnabled: () => flag.e
 import { getSnapshot, resetDiagnostics } from '../../diagnostics/bus';
 import {
   RETRYABLE_ZXING_KINDS,
+  ZXING_DO_AUTO_INVERT,
   importZxingFrameParts,
   loadZxingFrameDecoder,
 } from './zxingFrameDecoder';
+// This module's own source text, via Vite's ?raw — see the doAutoInvert test for why the flag can only be
+// pinned this way.
+import decoderSource from './zxingFrameDecoder.ts?raw';
 
 beforeEach(() => {
   flag.enabled = true;
@@ -75,11 +79,29 @@ test('the real assembly decodes a blank frame as a miss rather than an error', a
   await expect(decoder?.decodeFrame(canvas)).resolves.toBeNull();
 });
 
-// Legacy parity (owner decision, 2026-07-30): the stream path tried an inverted read on alternating
-// frames, so a light-on-dark print could still decode. This pins that the real assembly still does —
-// and it pins it through the LIBRARY's own static toggle, which is the only thing that makes it happen.
-// Alternating the argument ourselves would cancel that toggle and silently disable inversion forever.
-test('the real assembly alternates normal and inverted reads across attempts', async () => {
+// THE PRODUCTION WIRING, which nothing pinned before: the flag was an inline literal and the test below
+// builds its own luminance source, so reverting `true` to `false` — the one behaviour-changing decision in
+// this stage, on the only decode path iOS ever takes — left the entire suite green.
+//
+// Pinned on the source text (the repo idiom, see browserScanner.test.ts's chunk guard) because the flag's
+// effect is a static toggle inside the library that no seam here exposes: `assemble` is built from
+// dynamically imported classes, and injecting doubles for them cannot be typed without the casts this
+// repo forbids. Two assertions, so both mutations are caught — flipping the constant, and re-inlining a
+// literal at the call site.
+test('the production assembly passes the doAutoInvert constant, not an inline literal', () => {
+  expect(ZXING_DO_AUTO_INVERT).toBe(true);
+  expect(decoderSource).toMatch(
+    /new HTMLCanvasElementLuminanceSource\(\s*canvas,\s*ZXING_DO_AUTO_INVERT,?\s*\)/,
+  );
+});
+
+// THE LIBRARY'S MECHANISM, not our wiring — and deliberately kept, because it is the evidence for WHY the
+// value must be a constant rather than something we alternate ourselves: zxing flips a static FRAME_INDEX
+// on every buffer it builds, so a constant `true` already yields normal, inverted, normal, … Alternating
+// the argument ourselves would cancel that toggle and disable inversion forever. This test constructs the
+// luminance source itself, so it says nothing about what the production assembly passes — the test above
+// is what pins that.
+test('the library alternates normal and inverted reads while the flag stays on', async () => {
   const width = 8;
   const height = 8;
   // Deliberately asymmetric: a uniform frame would grayscale identically inverted or not, and the

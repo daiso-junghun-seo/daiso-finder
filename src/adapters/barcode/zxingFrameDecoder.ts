@@ -28,6 +28,19 @@ export const RETRYABLE_ZXING_KINDS = new Set([
   'FormatException',
 ]);
 
+// THE ONE BEHAVIOUR-CHANGING DECISION IN THIS STAGE (owner decision, 2026-07-30), lifted out of the
+// assembly below so a test can pin the value that actually ships. It was an inline literal, and the only
+// test near it built its own luminance source — so reverting this to false left the whole suite green on
+// the single decode path iOS ever takes.
+//
+// TRUE restores the stream path's parity: that path passed true for every HTMLVideoElement, so a
+// light-on-dark print still had a chance. The alternation is the LIBRARY's, not ours —
+// HTMLCanvasElementLuminanceSource flips a static FRAME_INDEX on every buffer it builds and inverts only
+// when that flag is false AND doAutoInvert is true, so a constant true yields normal, inverted, normal, …
+// across attempts. Do NOT alternate this value as well: the two toggles then cancel and nothing is ever
+// inverted. Verified against HTMLCanvasElementLuminanceSource.js:36-39 in 0.21.3.
+export const ZXING_DO_AUTO_INVERT = true;
+
 export async function importZxingFrameParts() {
   // Export shapes verified against the installed 0.21.3: three default exports, but
   // HTMLCanvasElementLuminanceSource is a NAMED export (`export { HTMLCanvasElementLuminanceSource }`).
@@ -73,17 +86,12 @@ export async function loadZxingFrameDecoder(
       const { BinaryBitmap, HybridBinarizer, HTMLCanvasElementLuminanceSource, reader } =
         await importZxingFrameParts();
       parts = {
-        // TRUE, restoring the stream path's parity (owner decision, 2026-07-30): that path passed true
-        // for every HTMLVideoElement, so a light-on-dark print still had a chance. Passing false made
-        // this — the only decode path iOS ever takes — unable to read one at all.
-        //
-        // The alternation is the LIBRARY's, not ours: HTMLCanvasElementLuminanceSource flips a static
-        // FRAME_INDEX on every buffer it builds and inverts only when that flag is false AND
-        // doAutoInvert is true, so a constant true yields normal, inverted, normal, … across attempts.
-        // Do NOT alternate this argument as well — the two toggles then cancel and nothing is ever
-        // inverted. Verified against HTMLCanvasElementLuminanceSource.js:36-39 in 0.21.3.
+        // The flag is the exported constant, never an inline literal — see ZXING_DO_AUTO_INVERT for why
+        // it must be, and for the library toggle that makes a constant true alternate.
         assemble: (canvas) =>
-          new BinaryBitmap(new HybridBinarizer(new HTMLCanvasElementLuminanceSource(canvas, true))),
+          new BinaryBitmap(
+            new HybridBinarizer(new HTMLCanvasElementLuminanceSource(canvas, ZXING_DO_AUTO_INVERT)),
+          ),
         decode: (bitmap) => reader.decode(bitmap as never),
       };
     }
