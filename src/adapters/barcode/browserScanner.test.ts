@@ -5,7 +5,7 @@ vi.mock('../../diagnostics/enabled', () => ({ isDiagnosticsEnabled: () => flag.e
 
 import { getSnapshot, resetDiagnostics } from '../../diagnostics/bus';
 import type { ScanTarget } from '../../domain/ports';
-import { SCAN_FORMATS, createBrowserScanner } from './browserScanner';
+import { SCAN_FORMATS, type ScannerDeps, createBrowserScanner } from './browserScanner';
 import type { FrameDecoder } from './frameLoop';
 
 function fakeTrack() {
@@ -1014,6 +1014,74 @@ describe('diagnostics instrumentation', () => {
     expect(capabilities).not.toHaveProperty('torch');
   });
 
+  // THE OTHER HALF of that distinction, and the half that was pinned by nothing. A platform that NAMES torch
+  // and reports it unsupported has measured a negative, and the adapter has to be able to put that on the
+  // bus — a truthiness check (`if (capabilities.torch) …`) would silently drop it. report.test.ts's
+  // "including an explicit false as a measured fact" does not close this: it hand-builds the fact, so it
+  // proves only that a `false` RENDERS once it reaches the bus, never that the producer can produce one.
+  test('a platform that names torch and reports it false publishes the measured false', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () =>
+          fakeStreamWithCapabilities({ width: 640, height: 480 }, () => ({ torch: false })),
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
+    });
+    await scanner.scan(fakeTarget(), new AbortController().signal);
+    // Key present, value the measured `false` — not an absent key, and not a fabricated `true`.
+    expect(getSnapshot().scanner.track?.imageCaptureCapabilities).toEqual({ torch: false });
+  });
+
+  // ONE THROWING QUERY MUST COST ONLY ITS OWN FIELD. Both capability queries are documented as degrading to
+  // null for themselves, but the only catch used to be the one wrapping the whole of readTrackFacts — so a
+  // single throw discarded width/height/frameRate/facingMode/deviceId that getSettings() had already
+  // answered, and the panel would print `트랙: 없음` for a live, scanning camera.
+  test('a getCapabilities that throws nulls only that field and keeps the settings the track reported', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () =>
+          fakeStreamWithCapabilities({ width: 1920, height: 1080, deviceId: 'cam-1' }, () => {
+            throw new Error('this camera refuses to describe itself');
+          }),
+        getSupportedConstraints: () =>
+          ({ zoom: true }) as unknown as MediaTrackSupportedConstraints,
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
+    });
+    await scanner.scan(fakeTarget(), new AbortController().signal);
+    const track = getSnapshot().scanner.track;
+    expect(track).toMatchObject({ width: 1920, height: 1080, deviceId: 'cam-1' });
+    expect(track?.imageCaptureCapabilities).toBeNull();
+    // And the independently-queried sibling field is untouched by the other one's failure.
+    expect(track?.supportedImageCaptureConstraints).toEqual(['zoom']);
+  });
+
+  // The mirror image, so the symmetric guard is not left to inference. A non-object return is covered by the
+  // same wrapper: `supported[key]` on a null would throw a TypeError rather than reporting a capability.
+  test('a getSupportedConstraints that throws nulls only that field and keeps the rest of the facts', async () => {
+    const scanner = createBrowserScanner({
+      mediaDevices: {
+        getUserMedia: async () =>
+          fakeStreamWithCapabilities({ width: 640, height: 480 }, () => ({ torch: true })),
+        getSupportedConstraints: () => {
+          throw new Error('this platform refuses to enumerate its constraints');
+        },
+      },
+      createNativeDetector: async () => null,
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
+    });
+    await scanner.scan(fakeTarget(), new AbortController().signal);
+    const track = getSnapshot().scanner.track;
+    expect(track).toMatchObject({ width: 640, height: 480 });
+    expect(track?.supportedImageCaptureConstraints).toBeNull();
+    expect(track?.imageCaptureCapabilities).toEqual({ torch: true });
+  });
+
   // A track that can be asked ABOUT zoom and asked TO zoom. The three surfaces are deliberately
   // independent, because on a real device they are: a camera can report a zoom range, accept the request,
   // and still name no zoom in its settings — and the adapter must publish only what it can read back.
@@ -1049,13 +1117,17 @@ describe('diagnostics instrumentation', () => {
     };
   }
 
-  function zoomScanner(stream: MediaStream, now?: () => number) {
+  // The defaults route through the ZXING path, because that is the platform the zoom lever was written for
+  // (WebKit ships no BarcodeDetector at all). `extra` is spread last so a test can override any of them —
+  // and one below overrides createNativeDetector specifically, because a helper that hardcoded
+  // `async () => null` would leave the native path's zoom pinned by nothing at all.
+  function zoomScanner(stream: MediaStream, extra: ScannerDeps = {}) {
     return createBrowserScanner({
       mediaDevices: { getUserMedia: async () => stream },
       createNativeDetector: async () => null,
       loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
       frameLoop: frameLoopStub(),
-      ...(now ? { now } : {}),
+      ...extra,
     });
   }
 
@@ -1165,11 +1237,73 @@ describe('diagnostics instrumentation', () => {
       zoom: { min: 0.5, max: 10 },
       settings: { width: 1920, height: 1080, zoom: 2 },
     });
-    await zoomScanner(stream, now).scan(fakeTarget(), new AbortController().signal);
+    await zoomScanner(stream, { now }).scan(fakeTarget(), new AbortController().signal);
     const s = getSnapshot().scanner;
     expect(s.cameraMs).toBe(5);
     expect(s.zoomMs).toBe(5);
     expect(s.decodeMs).toBe(35);
+  });
+
+  // THE ZOOM LEVER REACHES BOTH DECODER PATHS, and nothing else in this file says so. Every other
+  // applyConstraints assertion goes through zoomScanner's default `createNativeDetector: async () => null`,
+  // and every native-path test elsewhere uses fakeStreamWithSettings, whose track has no getCapabilities —
+  // so zoomTarget() returns null there and no native run in the suite ever reaches applyConstraints. Moving
+  // `await applyScanZoom(stream, now)` below the native dispatch would therefore make zoom inert on
+  // Chrome/Android — the very platform this adapter documents as able to install the Play Services barcode
+  // module mid-session — with the whole suite still green.
+  test('a native-detector run applies the same capped zoom as the fallback path', async () => {
+    const { stream, requests } = fakeZoomStream({
+      zoom: { min: 0.5, max: 10, step: 0.1 },
+      settings: { width: 1920, height: 1080, zoom: 2 },
+    });
+    const scanner = zoomScanner(stream, {
+      createNativeDetector: async () => ({ detect: async () => [{ rawValue: '19987' }] }),
+      pollIntervalMs: 1,
+    });
+    await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
+      kind: 'decoded',
+      value: '19987',
+    });
+    expect(requests).toEqual([{ advanced: [{ zoom: 2 }] }]);
+    const s = getSnapshot().scanner;
+    // Guards against a vacuous pass: if the run had quietly gone down the fallback path, the request above
+    // would be satisfied by the very code path the other zoom tests already cover.
+    expect(s.decoderPath).toBe('native');
+    expect(s.appliedZoom).toBe(2);
+  });
+
+  // THE ZOOM AWAIT IS A SUSPENSION POINT between runScan's aborted guard and attach(), and this is the
+  // window it opened: a shopper who closes the overlay while the capture session is reconfiguring must not
+  // end up with the stream bound to a <video> nobody is looking at and play() called on it. The outcome
+  // alone cannot catch that — the decode loops re-check the signal, so the run reports `cancelled` either
+  // way; only the binding tells the two apart.
+  test('an abort landing inside the zoom await never binds the stream to the video', async () => {
+    const controller = new AbortController();
+    let playCalls = 0;
+    const video = {
+      srcObject: null,
+      play: async () => {
+        playCalls += 1;
+      },
+      videoWidth: 640,
+      videoHeight: 480,
+    } as unknown as HTMLVideoElement;
+    const { stream, requests, stopped } = fakeZoomStream({
+      zoom: { min: 0.5, max: 10 },
+      settings: { width: 1920, height: 1080 },
+      onApply: async () => {
+        controller.abort();
+      },
+    });
+    await expect(zoomScanner(stream).scan({ video }, controller.signal)).resolves.toEqual({
+      kind: 'cancelled',
+    });
+    // The abort landed INSIDE the reconfiguration, not before it — otherwise the earlier guard would have
+    // returned first and this test would prove nothing about the zoom await.
+    expect(requests).toHaveLength(1);
+    expect(video.srcObject).toBeNull();
+    expect(playCalls).toBe(0);
+    expect(stopped()).toBe(true);
   });
 
   test('nothing is published while diagnostics are disabled', async () => {

@@ -29,11 +29,13 @@ export interface FrameDecoder {
 // itself was 4.4% of it. The replaced @zxing/library stream loop used `_timeBetweenDecodingAttempts = 0`
 // (back-to-back), so 200 — introduced by this branch for metric hygiene, not chosen for pacing — cut the
 // sampling rate roughly fivefold against the code it replaced. At 0 the loop's only pacing is the
-// requestAnimationFrame wait (see `remaining` below, which is now always <= 0). This value is ALSO a
-// diagnostic: the next real-device run tells apart sample-limited (attempts near 22, wall clock collapses
-// toward ~1.5 s — a prediction, not yet observed) from time-limited (attempts balloon toward 80-100, wall
-// clock stays near the prior ~5.5 s — camera zoom becomes the next lever, not sampling). See
-// open-questions.md §B30-16.
+// requestAnimationFrame wait (see `remaining` below, which is now always <= 0). The diagnostic this value
+// also served has ANSWERED: run C measured 150 attempts in a 3135 ms scan — a 42% wall-clock drop against
+// the 5366 ms prior at roughly 12x the sampling rate — so the run is TIME-LIMITED, not sample-limited.
+// Sampling was a real but partial lever; the decoder itself is ~5.4 ms per attempt, so CPU is not the bound,
+// and camera zoom became the next lever. Stays 0 regardless: nothing about that outcome argues for
+// re-slowing the loop. See open-questions.md §B30-16 (why 0 shipped) and §B30-17 ① / §B30-19 ② (what the
+// run showed).
 export const FRAME_LOOP_MIN_INTERVAL_MS = 0;
 
 // DELTA-ONLY, which is why the adapter's epoch requirement does not apply here: ScannerDeps.now must be

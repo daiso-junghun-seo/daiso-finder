@@ -156,13 +156,20 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
       // Note the resolution on the 해상도 line was stamped in the publish above, i.e. BEFORE this — so it
       // reports the track settings as acquired, not as reconfigured.
       await applyScanZoom(stream, now);
+      // THE ZOOM AWAIT'S OWN GUARD, not a duplicate of the one above it. applyScanZoom suspends — an abort
+      // can land while the capture session is reconfiguring — so without this an abandoned run would go on
+      // to bind the stream to a <video> nobody is looking at and call play() on it. The outcome would still
+      // be `cancelled` (both decode loops re-check the signal) and the camera would still be stopped by the
+      // finally, which is exactly why only the binding, not the outcome, can catch its absence. This is also
+      // what keeps scanWithNative's already-aborted branch unreachable through this path — see the note there.
+      if (signal.aborted) return { kind: 'cancelled' };
       // BOTH paths need this now. The old stream-level fallback bound the stream itself, inside
       // zxing's decodeOnceFromStream -> attachStreamToVideo; runFrameLoop does not, because it only
       // ever copies frames OUT of a <video> somebody else fed. Without this the camera would be on
       // with no frames reaching the canvas — and no unit test would catch it, since they all inject
-      // decoder doubles. Placed after the aborted guard so an abandoned run never binds a stream, and
-      // with nothing suspending between here and either path's abort listener, so the ordering
-      // scanWithNative depends on is unchanged.
+      // decoder doubles. Placed after the post-zoom aborted guard so an abandoned run never binds a
+      // stream, and with nothing suspending between here and either path's abort listener, so the
+      // ordering scanWithNative depends on is unchanged.
       attach(target.video, stream);
       if (native) return await scanWithNative(native, target, signal, pollMs);
       // Narrowed by the `!native && !fallback` guard above — reaching here means fallback is set.
@@ -279,10 +286,18 @@ function readSupportedImageCaptureConstraints(
   media: ScannerMediaDevices | undefined,
 ): string[] | null {
   if (typeof media?.getSupportedConstraints !== 'function') return null;
-  const supported: ExtendedSupportedConstraints = media.getSupportedConstraints();
-  // Per spec a supported constraint name maps to `true`; unsupported ones are simply absent, never `false`.
-  // The `=== true` check mirrors that rather than trusting truthiness of a value the spec never defines.
-  return IMAGE_CAPTURE_KEYS.filter((key) => supported[key] === true);
+  // Caught HERE rather than left to readTrackFacts's outer catch, so a throw costs this field alone. The
+  // outer one discards the whole TrackFacts object — including the width/height/frameRate/facingMode/deviceId
+  // getSettings() already answered — and the panel would then print `트랙: 없음` for a live, scanning camera.
+  // A non-object return is covered by the same wrapper: `supported[key]` on a null throws a TypeError.
+  try {
+    const supported: ExtendedSupportedConstraints = media.getSupportedConstraints();
+    // Per spec a supported constraint name maps to `true`; unsupported ones are simply absent, never `false`.
+    // The `=== true` check mirrors that rather than trusting truthiness of a value the spec never defines.
+    return IMAGE_CAPTURE_KEYS.filter((key) => supported[key] === true);
+  } catch {
+    return null;
+  }
 }
 
 // null = getCapabilities is absent on this track, or the call threw — "we don't know", not a measured
@@ -290,21 +305,28 @@ function readSupportedImageCaptureConstraints(
 // an absent key here means the platform did not name it, and must stay absent rather than become `false`.
 function readImageCaptureCapabilities(track: MediaStreamTrack): CaptureCapabilityFacts | null {
   if (typeof track.getCapabilities !== 'function') return null;
-  const capabilities: ExtendedCapabilities = track.getCapabilities();
-  const facts: CaptureCapabilityFacts = {};
-  if ('focusMode' in capabilities && capabilities.focusMode)
-    facts.focusMode = capabilities.focusMode;
-  if ('focusDistance' in capabilities && capabilities.focusDistance) {
-    facts.focusDistance = toRangeFacts(capabilities.focusDistance);
+  // Wrapped for the same reason as its sibling above: one camera that refuses to describe itself must not
+  // take the settings-derived facts down with it. A non-object return lands here too — `'focusMode' in null`
+  // throws a TypeError.
+  try {
+    const capabilities: ExtendedCapabilities = track.getCapabilities();
+    const facts: CaptureCapabilityFacts = {};
+    if ('focusMode' in capabilities && capabilities.focusMode)
+      facts.focusMode = capabilities.focusMode;
+    if ('focusDistance' in capabilities && capabilities.focusDistance) {
+      facts.focusDistance = toRangeFacts(capabilities.focusDistance);
+    }
+    if ('zoom' in capabilities && capabilities.zoom) facts.zoom = toRangeFacts(capabilities.zoom);
+    // torch is a plain boolean capability (not a range), and a platform that names it CAN legitimately name
+    // it `false` — that is a measured negative, distinct from the key being absent altogether.
+    if ('torch' in capabilities) facts.torch = Boolean(capabilities.torch);
+    // pointsOfInterest has no meaningful range — the spec reports it as `{}` when supported — so naming it
+    // at all is the entire fact worth keeping; `!= null` treats an explicit null the same as absence.
+    if (capabilities.pointsOfInterest != null) facts.pointsOfInterest = true;
+    return facts;
+  } catch {
+    return null;
   }
-  if ('zoom' in capabilities && capabilities.zoom) facts.zoom = toRangeFacts(capabilities.zoom);
-  // torch is a plain boolean capability (not a range), and a platform that names it CAN legitimately name
-  // it `false` — that is a measured negative, distinct from the key being absent altogether.
-  if ('torch' in capabilities) facts.torch = Boolean(capabilities.torch);
-  // pointsOfInterest has no meaningful range — the spec reports it as `{}` when supported — so naming it
-  // at all is the entire fact worth keeping; `!= null` treats an explicit null the same as absence.
-  if (capabilities.pointsOfInterest != null) facts.pointsOfInterest = true;
-  return facts;
 }
 
 function toRangeFacts(range: MediaSettingsRange): CaptureRangeFacts {
@@ -481,9 +503,11 @@ function scanWithNative(
     }, pollMs);
     // addEventListener never fires for a signal that was ALREADY aborted, so without this an abort that
     // landed before the dispatch would leave a run polling forever. In today's call graph the branch is
-    // UNREACHABLE — runScan checks `signal.aborted` a few statements earlier and nothing between there and
-    // here suspends (attach() does not await play()), so the signal cannot become aborted in between.
-    // Kept as defence-in-depth against a future await appearing on that path, not as a live guard.
+    // UNREACHABLE, but no longer because that path never suspends — it does, on applyScanZoom. What makes it
+    // unreachable is the POST-ZOOM `signal.aborted` guard: runScan re-checks the signal on the far side of
+    // that await, and nothing between that check and here suspends (attach() does not await play()). Kept as
+    // defence-in-depth against a future await appearing AFTER that check — which is precisely what the zoom
+    // await was until that guard was added, so the case is a real one — and not as a live guard.
     if (signal.aborted) finish({ kind: 'cancelled' });
   });
 }
