@@ -14,6 +14,11 @@ export const QUERY_FAILED = '질의 실패';
 export const SUPPORTS_NONE = '지원 없음';
 export const NOT_STARTED = '스캔 전';
 export const IN_PROGRESS = '진행 중';
+// A request that outran its own deadline, and a request that was cancelled as a duplicate. Both had to be
+// named: the existing markers cover capability probes, and neither of these is a 질의 실패 — a timeout is a
+// deadline we chose, and a cancellation is a success elsewhere in the same race.
+export const TIMED_OUT = '시간 초과';
+export const CANCELLED = '취소';
 
 export interface EnvironmentFacts {
   buildMode: 'PROD' | 'DEV';
@@ -115,9 +120,38 @@ function trackLines(track: TrackFacts | null): string[] {
   ];
 }
 
+// The status segment. `status` stays the primary fact — a number when a response arrived, 'error' when
+// none did — and the outcome only ADDS the distinction a number cannot carry: without it a 502, a timeout
+// and a cancelled duplicate all read the same, and a cancelled duplicate reads as a failure it is not.
+// An unclassified entry (outcome absent, e.g. from createDiagnosticFetch) renders the bare status, so the
+// panel never states an outcome nobody observed.
+function networkStatus(entry: NetworkEntry): string {
+  switch (entry.outcome) {
+    case 'timeout':
+      return TIMED_OUT;
+    case 'aborted':
+      return CANCELLED;
+    // Both are failures; `status` is what tells them apart — a real code for one, 'error' for the other.
+    case 'httpError':
+    case 'networkError':
+      return `${entry.status} ${QUERY_FAILED}`;
+    // 'ok' and an unclassified entry alike: the status code already says it, and adding a marker to a 200
+    // would be noise on the line a tester reads most often.
+    default:
+      return String(entry.status);
+  }
+}
+
 function networkLines(entries: NetworkEntry[]): string[] {
   if (entries.length === 0) return ['  (없음)'];
-  return entries.map((e) => `  ${e.path} · ${e.status} · ${e.ms}ms`);
+  return entries.map((e) => {
+    // `#2/3` groups one lookup's raced requests so three entries read as one lookup rather than three.
+    const attempt = e.attempt ? ` #${e.attempt.index}/${e.attempt.total}` : '';
+    // Appended LAST, and already flattened + capped by the publisher (ERROR_BODY_MAX_CHARS), so a long
+    // body cannot push the path, outcome or duration off the readable start of the line.
+    const body = e.errorBody ? ` · ${e.errorBody}` : '';
+    return `  ${e.path}${attempt} · ${networkStatus(e)} · ${e.ms}ms${body}`;
+  });
 }
 
 export function buildReport(

@@ -5,10 +5,12 @@ import type { DiagnosticsSnapshot, TrackFacts } from './bus';
 import { getSnapshot, publishNetwork, resetDiagnostics } from './bus';
 import {
   type AppFacts,
+  CANCELLED,
   type EnvironmentFacts,
   NOT_STARTED,
   QUERY_FAILED,
   SUPPORTS_NONE,
+  TIMED_OUT,
   UNREPORTED,
   buildReport,
   collectEnvironment,
@@ -367,6 +369,149 @@ test('query strings published to the bus are stripped before reaching the report
   expect(report).toContain('/api/search');
   expect(report).not.toContain('?');
   expect(report).not.toContain('xyz-secret-789');
+});
+
+// ---------------------------------------------------------------------------------------------------
+// Network lines: every outcome kind must render distinguishably (§B30-18)
+// ---------------------------------------------------------------------------------------------------
+
+function networkReport(network: DiagnosticsSnapshot['network']): string[] {
+  const report = buildReport(env, { ...snapshotWith({}), network }, app, 2000);
+  const start = report.indexOf('[네트워크]');
+  return report
+    .slice(start)
+    .split('\n')
+    .slice(1)
+    .filter((line) => line !== '');
+}
+
+test('a successful raced attempt renders its index, status and duration', () => {
+  expect(
+    networkReport([
+      {
+        path: '/api/availability',
+        status: 200,
+        ms: 977,
+        attempt: { index: 2, total: 3 },
+        outcome: 'ok',
+      },
+    ]),
+  ).toEqual(['  /api/availability #2/3 · 200 · 977ms']);
+});
+
+test('a non-ok status renders the code AND a failure marker, with its error body', () => {
+  expect(
+    networkReport([
+      {
+        path: '/api/availability',
+        status: 502,
+        ms: 214,
+        attempt: { index: 1, total: 3 },
+        outcome: 'httpError',
+        errorBody: '{"error":"upstream_unavailable"}',
+      },
+    ]),
+  ).toEqual([
+    '  /api/availability #1/3 · 502 질의 실패 · 214ms · {"error":"upstream_unavailable"}',
+  ]);
+});
+
+// A timeout is not a 질의 실패 and carries no status code — it is a deadline WE chose.
+test('a timeout renders as 시간 초과 and never as a status code', () => {
+  const lines = networkReport([
+    {
+      path: '/api/availability',
+      status: 'error',
+      ms: 1801,
+      attempt: { index: 3, total: 3 },
+      outcome: 'timeout',
+    },
+  ]);
+  expect(lines).toEqual([`  /api/availability #3/3 · ${TIMED_OUT} · 1801ms`]);
+  expect(lines[0]).not.toContain(QUERY_FAILED);
+  expect(lines[0]).not.toContain('error');
+});
+
+// The single most important rendering guarantee: a cancelled duplicate must not look like a failure.
+test('a cancelled race loser renders as 취소 and carries no failure marker', () => {
+  const lines = networkReport([
+    {
+      path: '/api/availability',
+      status: 'error',
+      ms: 981,
+      attempt: { index: 1, total: 3 },
+      outcome: 'aborted',
+    },
+  ]);
+  expect(lines).toEqual([`  /api/availability #1/3 · ${CANCELLED} · 981ms`]);
+  expect(lines[0]).not.toContain(QUERY_FAILED);
+  expect(lines[0]).not.toContain(TIMED_OUT);
+  expect(lines[0]).not.toContain('error');
+});
+
+test('a transport failure renders a failure marker without inventing a status code', () => {
+  const lines = networkReport([
+    {
+      path: '/api/availability',
+      status: 'error',
+      ms: 43,
+      attempt: { index: 2, total: 3 },
+      outcome: 'networkError',
+    },
+  ]);
+  expect(lines).toEqual([`  /api/availability #2/3 · error ${QUERY_FAILED} · 43ms`]);
+  expect(lines[0]).not.toContain(TIMED_OUT);
+  expect(lines[0]).not.toContain(CANCELLED);
+});
+
+// An unclassified entry (createDiagnosticFetch, which cannot tell a timeout from an abort) must render the
+// bare status exactly as before — the panel may never state an outcome nobody observed.
+test('an unraced, unclassified entry renders the bare status with no attempt label', () => {
+  expect(networkReport([{ path: '/api/stores', status: 200, ms: 318 }])).toEqual([
+    '  /api/stores · 200 · 318ms',
+  ]);
+});
+
+test('an unclassified transport failure still renders only what was observed', () => {
+  const lines = networkReport([{ path: '/api/stores', status: 'error', ms: 2002 }]);
+  expect(lines).toEqual(['  /api/stores · error · 2002ms']);
+  expect(lines[0]).not.toContain(TIMED_OUT);
+  expect(lines[0]).not.toContain(CANCELLED);
+  expect(lines[0]).not.toContain(QUERY_FAILED);
+});
+
+// Three entries for one lookup have to read AS one lookup: the owner has already misread a
+// session-accumulated list as a single lookup's requests.
+test("one lookup's three attempts render as three labelled, distinguishable lines", () => {
+  expect(
+    networkReport([
+      {
+        path: '/api/availability',
+        status: 'error',
+        ms: 1190,
+        attempt: { index: 1, total: 3 },
+        outcome: 'aborted',
+      },
+      {
+        path: '/api/availability',
+        status: 200,
+        ms: 442,
+        attempt: { index: 2, total: 3 },
+        outcome: 'ok',
+      },
+      {
+        path: '/api/availability',
+        status: 'error',
+        ms: 1190,
+        attempt: { index: 3, total: 3 },
+        outcome: 'aborted',
+      },
+    ]),
+  ).toEqual([
+    `  /api/availability #1/3 · ${CANCELLED} · 1190ms`,
+    '  /api/availability #2/3 · 200 · 442ms',
+    `  /api/availability #3/3 · ${CANCELLED} · 1190ms`,
+  ]);
 });
 
 test('collectEnvironment reads the live globals without throwing', () => {

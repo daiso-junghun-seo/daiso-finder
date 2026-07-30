@@ -18,9 +18,10 @@ import { createMockProductSearch } from './mock/productSearch';
 import { createMockScanner } from './mock/scanner';
 import { createMockStoreDirectory, mockStores } from './mock/storeDirectory';
 
-// The widest of the four vendor FetchLike shapes: the optional `signal` and the concrete `Response`
-// make one implementation assignable to all of them (see the task note). Declared here rather than
-// imported so composition.ts does not depend on one adapter's type for all four.
+// The widest of the vendor FetchLike shapes: the optional `signal` and the concrete `Response` make one
+// implementation assignable to all of them (see the task note). Declared here rather than imported so
+// composition.ts does not depend on one adapter's type for the rest. Used by stores/nearby/search — the
+// availability adapter instruments itself instead (see createStoreStockRepository below).
 type DiagnosticFetch = (
   url: string,
   init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal },
@@ -44,10 +45,12 @@ export function createDiagnosticFetch(now: () => number = Date.now): DiagnosticF
 
 const diagnosticFetch = createDiagnosticFetch();
 
+// Deliberately NOT wrapped in createDiagnosticFetch: this adapter races AVAILABILITY_ATTEMPTS identical
+// reads and publishes its OWN per-attempt entries (attempt index, timeout vs cancelled-duplicate, error
+// body) — facts the generic wrapper cannot see, since it observes only url/status/duration and cannot tell
+// a timeout from a loser's abort. Wrapping it as well would double-log every attempt.
 export function createStoreStockRepository(): StoreStockRepository {
-  return import.meta.env.PROD
-    ? createDaisoStoreStockRepository({ fetchImpl: diagnosticFetch })
-    : createKeywordMockRepository();
+  return import.meta.env.PROD ? createDaisoStoreStockRepository() : createKeywordMockRepository();
 }
 
 export function createStoreDirectory(): StoreDirectoryPort {

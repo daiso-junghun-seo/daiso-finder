@@ -115,10 +115,39 @@ export interface ScannerDiagnostics {
   outcome: ScanOutcome['kind'] | null;
 }
 
+// Which of a lookup's raced requests an entry belongs to, 1-based. Present ONLY for a request that really
+// was one of several — a single unraced request (stores/search/nearby) leaves this absent rather than
+// claiming a fabricated 1/1. The label exists because three entries per lookup are otherwise unreadable:
+// a session-accumulated list has already been misread as one lookup's requests.
+export interface NetworkAttempt {
+  index: number;
+  total: number;
+}
+
+// How a request ENDED, as classified by whoever observed it.
+//   'ok'           — a response arrived and it was ok
+//   'httpError'    — a response arrived and it was not ok (status carries the code)
+//   'timeout'      — the request outran its own deadline; no response ever arrived
+//   'aborted'      — a CANCELLED DUPLICATE: a race loser, or the caller cancelling the surface. This is
+//                    NOT a failure and must never be counted or rendered as an error — misreporting it
+//                    would corrupt the very measurement this log exists to make.
+//   'networkError' — the transport itself failed (offline, DNS, TLS)
+// Absent (undefined) = the publisher did not classify the outcome. The renderer then shows the raw status
+// and asserts nothing, so an unclassified entry can never imply a distinction nobody observed.
+export type NetworkOutcome = 'ok' | 'httpError' | 'timeout' | 'aborted' | 'networkError';
+
 export interface NetworkEntry {
   path: string; // pathname only
+  // 'error' = no HTTP status was observed (the request never produced a response). It is NOT itself a
+  // claim that something went wrong — a cancelled duplicate carries it too — which is why `outcome`
+  // exists and is what the panel renders on.
   status: number | 'error';
   ms: number;
+  attempt?: NetworkAttempt;
+  outcome?: NetworkOutcome;
+  // The body of a FAILED response only, whitespace-flattened and length-capped by the publisher before it
+  // ever reaches here (see ERROR_BODY_MAX_CHARS). Absent = none was read, never an empty-string stand-in.
+  errorBody?: string;
 }
 
 export interface DiagnosticsSnapshot {
@@ -126,7 +155,13 @@ export interface DiagnosticsSnapshot {
   network: NetworkEntry[];
 }
 
-export const NETWORK_LIMIT = 5;
+// Raised from 5: an availability lookup now races AVAILABILITY_ATTEMPTS (3) requests, so 5 held under two
+// lookups and the oldest was gone before a tester could read it. 12 = four consecutive 3-attempt lookups,
+// which is what it takes to compare one lookup against the next on a real device. It stays phone-readable:
+// twelve short lines still scroll in one flick inside the panel's 40vh textarea, and the `#i/total` label
+// keeps each lookup's group visible. Deliberately NOT imported from the adapter — diagnostics must not
+// depend on what it observes — so the two numbers are related only by this comment.
+export const NETWORK_LIMIT = 12;
 
 function emptyScanner(): ScannerDiagnostics {
   return {

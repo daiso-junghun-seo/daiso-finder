@@ -78,6 +78,31 @@ test('the network log keeps only the most recent NETWORK_LIMIT entries, newest l
   expect(network[network.length - 1]?.path).toBe(`/api/${NETWORK_LIMIT + 2}`);
 });
 
+// An availability lookup races 3 requests (AVAILABILITY_ATTEMPTS), so the old limit of 5 held under two
+// lookups. The limit has to hold enough history to compare one lookup against the next on a real device.
+test('the network limit holds at least four 3-attempt lookups', () => {
+  expect(NETWORK_LIMIT).toBeGreaterThanOrEqual(3 * 4);
+});
+
+test('an entry keeps the attempt label, outcome and error body it was published with', () => {
+  publishNetwork({
+    path: '/api/availability',
+    status: 502,
+    ms: 214,
+    attempt: { index: 2, total: 3 },
+    outcome: 'httpError',
+    errorBody: '{"error":"upstream_unavailable"}',
+  });
+  expect(getSnapshot().network[0]).toEqual({
+    path: '/api/availability',
+    status: 502,
+    ms: 214,
+    attempt: { index: 2, total: 3 },
+    outcome: 'httpError',
+    errorBody: '{"error":"upstream_unavailable"}',
+  });
+});
+
 // Defence in depth at the single choke point: even if a caller hands over a full URL, a query string
 // can carry a search term or identifier and must never reach a copyable report.
 test('publishNetwork stores the pathname only, stripping any query string', () => {

@@ -237,7 +237,11 @@ describe('diagnostic fetch', () => {
     }
   });
 
-  test('the PROD availability adapter routes through the instrumented fetch', async () => {
+  // The availability adapter is NOT wrapped in createDiagnosticFetch — it races several reads and
+  // publishes its own per-attempt entries instead. This pins that it is still instrumented (a bare fetch
+  // would publish nothing) and that it is instrumented ONCE: the wrapper plus the adapter would double-log
+  // every attempt.
+  test('the PROD availability adapter publishes its own per-attempt entries, exactly once each', async () => {
     vi.stubEnv('PROD', true);
     const original = globalThis.fetch;
     globalThis.fetch = (async () =>
@@ -246,7 +250,12 @@ describe('diagnostic fetch', () => {
       await createStoreStockRepository()
         .query({ strCd: '1', strNm: 'x' }, { keyword: 'x' })
         .catch(() => {});
-      expect(getSnapshot().network.some((e) => e.path === '/api/availability')).toBe(true);
+      const entries = getSnapshot().network.filter((e) => e.path === '/api/availability');
+      expect(entries.length).toBeGreaterThan(0);
+      // Every entry carries an attempt label, and no label repeats — one publish per attempt.
+      const labels = entries.map((e) => `${e.attempt?.index}/${e.attempt?.total}`);
+      expect(labels).not.toContain('undefined/undefined');
+      expect(new Set(labels).size).toBe(labels.length);
     } finally {
       globalThis.fetch = original;
       vi.unstubAllEnvs();
