@@ -5,11 +5,12 @@ vi.mock('../../diagnostics/enabled', () => ({ isDiagnosticsEnabled: () => flag.e
 
 import { getSnapshot, resetDiagnostics } from '../../diagnostics/bus';
 import type { ScanTarget } from '../../domain/ports';
-import {
-  SCAN_FORMATS,
-  createBrowserScanner,
-  importBundledDatamatrixReader,
-} from './browserScanner';
+import { SCAN_FORMATS, createBrowserScanner } from './browserScanner';
+import type { FrameDecoder } from './frameLoop';
+// The decoder's own SOURCE TEXT, via Vite's ?raw — the same idiom the styles/*.test.ts specs use on CSS,
+// and typed by vite/client's `*?raw` declaration. See the chunk-discipline guard below for why the text
+// and not the resolved modules, and why not node:fs (@types/node is not a dependency of this repo).
+import zxingFrameDecoderSource from './zxingFrameDecoder.ts?raw';
 
 function fakeTrack() {
   return {
@@ -22,10 +23,45 @@ function fakeTrack() {
 function fakeStream(track: { stop: () => void }) {
   return { getTracks: () => [track] } as unknown as MediaStream;
 }
+// Every path now goes through attach(), so play() must exist on BOTH paths — it used to be needed only
+// by the native one. videoWidth/videoHeight are here for the same reason: the fallback path runs the real
+// runFrameLoop, which SKIPS a frame with no dimensions and would otherwise spin forever without ever
+// calling the injected decoder.
 function fakeTarget(): ScanTarget {
   // jsdom has no real media playback; play() must resolve for attach() to proceed.
-  const video = { srcObject: null, play: async () => {} } as unknown as HTMLVideoElement;
+  const video = {
+    srcObject: null,
+    play: async () => {},
+    videoWidth: 640,
+    videoHeight: 480,
+  } as unknown as HTMLVideoElement;
   return { video };
+}
+
+// The frame-level replacement for the old `{ decode, cancel }` stream-level double: one canvas in, a
+// value or a miss out, with the retrying now owned by runFrameLoop rather than by the decoder.
+function frameDecoder(decodeFrame: () => Promise<string | null>, dispose = () => {}): FrameDecoder {
+  return { decodeFrame, dispose };
+}
+
+// Every fallback-path test below drives the REAL runFrameLoop, and jsdom has no canvas: getContext()
+// returns null and ALSO prints a "Not implemented" error to stderr on every single attempt. So the loop's
+// frame plumbing is injected here, exactly as frameLoop.test.ts injects it — the difference being that
+// there it is the subject and here it is scenery. What these tests are for is the ADAPTER's wiring: that
+// the loop is reached at all, that the stream is attached before it, that its outcomes and its counters
+// come back out. The loop's own pacing, metric arithmetic and abort contracts are pinned in
+// frameLoop.test.ts against an injected clock, and are deliberately not re-asserted here.
+//
+// minIntervalMs 0 and a synchronous nextFrame keep a retrying test from spending 200 ms of wall clock per
+// attempt. `now` is deliberately NOT injected: two tests below pin exact read counts on the SCANNER's
+// clock, and the loop keeping its own Date.now is what makes those counts stable.
+function frameLoopStub() {
+  return {
+    minIntervalMs: 0,
+    nextFrame: (cb: () => void) => cb(),
+    copyFrame: () => {},
+    createCanvas: () => ({ width: 0, height: 0 }) as HTMLCanvasElement,
+  };
 }
 
 // The tests below exercise the DEFAULT native-detector resolution (createNativeDetector left out of the
@@ -45,34 +81,35 @@ test('only DataMatrix is scanned', () => {
   expect(SCAN_FORMATS).toEqual(['data_matrix']);
 });
 
-test('the bundled fallback pulls the DataMatrix reader itself, not another zxing reader', async () => {
-  // This calls the PRODUCTION import site rather than repeating its module path, so there is exactly
-  // one place the path is written. Two ways this could break silently, both fatal to the guarantee
-  // above: (a) a package upgrade moves the deep path — loadBundledDecoder's catch would turn that into
-  // `unsupported` on every iOS device, no error anywhere; (b) someone swaps the import for another
-  // valid zxing reader, say BrowserMultiFormatReader, which decodes 1D again and hands back the
-  // packaging's EAN as if it were a pdNo. The assertions below catch both: (a) makes this very await
-  // reject, and (b) changes both the wrapper's name and the core reader it wires.
-  const Reader = await importBundledDatamatrixReader();
-  const reader = new Reader();
-  expect(Reader.name).toBe('BrowserDatamatrixCodeReader');
-  // The decisive one. Every Browser*CodeReader shares the same wrapper API, so the wrapper's own name
-  // proves little on its own — what decides which symbologies get decoded is the core Reader the
-  // wrapper constructs itself and keeps in `.reader`. BrowserDatamatrixCodeReader wires a
-  // DataMatrixReader; BrowserMultiFormatReader would wire a MultiFormatReader and read 1D again.
-  // Constructor NAMES, not `toBe` identity against the '@zxing/library' barrel. Measured under this
-  // repo's Vitest setup (2026-07-26): the bare specifier resolves to the package's CJS build — the
-  // barrel's export is `===` the one from cjs/index.js and NOT `===` the one from esm/index.js — while
-  // the loader deep-imports the ESM build, so the two are separate class objects (cross-`instanceof`
-  // is false too). A POSITIVE `expect(Reader).toBe(barrel.BrowserDatamatrixCodeReader)` would
-  // therefore FAIL on perfectly correct code; it is the NEGATIVE `not.toBe` that would pass vacuously,
-  // proving nothing. Names survive that split, which is why names are what these assert.
-  expect((reader as unknown as { reader: object }).reader.constructor.name).toBe(
-    'DataMatrixReader',
-  );
-  expect(typeof reader.decodeOnceFromStream).toBe('function');
-  expect(typeof reader.reset).toBe('function');
+// A barrel import would pull every 1D and 2D decoder into the lazy chunks: measured on this tree
+// (2026-07-30), the four deep specifiers total 76.31 kB and swapping just one for the bare barrel takes
+// that to 417.38 kB — which destroys the very baseline this stage measures against. @zxing/library
+// declares no sideEffects, so nothing in the barrel can be tree-shaken away. A guard on the SOURCE TEXT
+// rather than on the resolved modules, because the failure being prevented is a bundling failure: both a
+// barrel specifier
+// and a deep one resolve to working classes at runtime, so nothing observable at runtime tells them
+// apart — only the emitted chunk size does, and that is not visible from inside a test.
+//
+// The pattern deliberately matches `import(` as well as `from`: every zxing specifier in the decoder is a
+// DYNAMIC import, so a `from`-only pattern would find nothing and the guard would pass vacuously — which
+// is what the length assertion is here to catch. Verified by inverting it: swapping one deep path for the
+// bare barrel makes this fail with `expected '@zxing/library' to match /^@zxing\/library\/esm\//`.
+test('the zxing frame decoder imports only deep esm paths', () => {
+  const specifiers = [
+    ...zxingFrameDecoderSource.matchAll(/(?:from|import)\s*\(?\s*'(@zxing\/library[^']*)'/g),
+  ].map((m) => m[1]);
+  expect(specifiers.length).toBeGreaterThan(0);
+  for (const specifier of specifiers) {
+    expect(specifier).toMatch(/^@zxing\/library\/esm\//);
+  }
 });
+
+// The old test here — `importBundledDatamatrixReader` hands back BrowserDatamatrixCodeReader, whose
+// `.reader` is a DataMatrixReader and not a MultiFormatReader that would decode 1D again — went with
+// that function. Its guarantee did not: zxingFrameDecoder.test.ts's 'the zxing parts load and are
+// constructible' now asserts the same two things about the same production import site (the await
+// rejects if a package upgrade moves the deep path; `parts.reader.constructor.name` changes if someone
+// swaps in a reader that reads the packaging's EAN as if it were a pdNo).
 
 test('a native detector that cannot read DataMatrix is not used — the bundled decoder is', async () => {
   const track = fakeTrack();
@@ -89,7 +126,8 @@ test('a native detector that cannot read DataMatrix is not used — the bundled 
   installNativeBarcodeDetector(OneDimensionalOnlyDetector);
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
-    loadFallbackDecoder: async () => ({ decode: async () => '1031166', cancel: () => {} }),
+    loadFallbackDecoder: async () => frameDecoder(async () => '1031166'),
+    frameLoop: frameLoopStub(),
     pollIntervalMs: 1,
   });
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
@@ -143,7 +181,8 @@ test('a native detector whose support query rejects falls back instead of throwi
   installNativeBarcodeDetector(BrokenDetector);
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
-    loadFallbackDecoder: async () => ({ decode: async () => '1031166', cancel: () => {} }),
+    loadFallbackDecoder: async () => frameDecoder(async () => '1031166'),
+    frameLoop: frameLoopStub(),
   });
   // Unknown support is not usable support: the port never throws, it degrades to the bundled decoder.
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
@@ -195,8 +234,10 @@ test('closing the overlay during the native support check cancels, with no camer
     createNativeDetector: () => new Promise(() => {}),
     loadFallbackDecoder: async () => {
       fallbackLoads += 1;
-      return { decode: async () => '1031166', cancel: () => {} };
+      return frameDecoder(async () => '1031166');
     },
+    // No frameLoop stub: this run aborts before the decoder is even loaded, so the loop is never reached
+    // and a stub here would be dead configuration pretending to matter.
   });
   const pending = scanner.scan(fakeTarget(), controller.signal);
   await Promise.resolve(); // let scan() reach the await on the support check
@@ -250,13 +291,49 @@ test('falls back to the bundled decoder when no native detector exists', async (
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
     createNativeDetector: async () => null,
-    loadFallbackDecoder: async () => ({ decode: async () => '1031166', cancel: () => {} }),
+    loadFallbackDecoder: async () => frameDecoder(async () => '1031166'),
+    frameLoop: frameLoopStub(),
   });
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
     kind: 'decoded',
     value: '1031166',
   });
   expect(track.stopped).toBe(true);
+});
+
+// THE ONE THING THIS REWIRING COULD BREAK WITH EVERY OTHER TEST STILL GREEN. The stream-level fallback
+// bound the stream itself, deep inside zxing (decodeOnceFromStream -> attachStreamToVideo); runFrameLoop
+// does not, because it only copies frames out of a <video> somebody else fed. Every other fallback test
+// in this file injects a decoder double that answers from a closure and never looks at its canvas, so all
+// of them would keep passing with attach() deleted — while a real iPhone would show a live camera whose
+// frames never reach the decoder, and a scan that simply never resolves. So the binding is asserted
+// directly, on the fallback path, rather than inferred from an outcome.
+test('the fallback path attaches the stream to the video, or the loop copies nothing', async () => {
+  const track = fakeTrack();
+  const stream = fakeStream(track);
+  let playCalls = 0;
+  const video = {
+    srcObject: null,
+    play: async () => {
+      playCalls += 1;
+    },
+    videoWidth: 640,
+    videoHeight: 480,
+  } as unknown as HTMLVideoElement;
+  const scanner = createBrowserScanner({
+    mediaDevices: { getUserMedia: async () => stream },
+    createNativeDetector: async () => null,
+    loadFallbackDecoder: async () => frameDecoder(async () => '1031166'),
+    frameLoop: frameLoopStub(),
+  });
+  await expect(scanner.scan({ video }, new AbortController().signal)).resolves.toEqual({
+    kind: 'decoded',
+    value: '1031166',
+  });
+  expect(video.srcObject).toBe(stream);
+  // Playback matters as much as the binding: a paused <video> has dimensions but hands drawImage the
+  // same frozen first frame forever.
+  expect(playCalls).toBe(1);
 });
 
 test('an unloadable fallback decoder reports unsupported without ever opening the camera', async () => {
@@ -278,11 +355,11 @@ test('an unloadable fallback decoder reports unsupported without ever opening th
   expect(getUserMediaCalls).toBe(0);
 });
 
-// The iOS Safari path, and the reason the decoder is resolved BEFORE the camera. The ~92 kB @zxing
-// chunk can take seconds on a cold cache; a shopper who closes the overlay during it aborts a scan that
+// The iOS Safari path, and the reason the decoder is resolved BEFORE the camera. The ~76 kB of @zxing
+// chunks can take seconds on a cold cache; a shopper who closes the overlay during it aborts a scan that
 // has not yet touched getUserMedia. Under a camera-first ordering this run would leave the camera on
 // until the import settled — here there is no camera to leave on, and the abort is heard immediately
-// instead of only after the chunk lands.
+// instead of only after the chunks land.
 test('closing the overlay while the decoder is still loading cancels and never starts the camera', async () => {
   const controller = new AbortController();
   let getUserMediaCalls = 0;
@@ -385,13 +462,20 @@ test('a transient detect() failure keeps scanning instead of failing the run', a
   });
 });
 
-test('abort cancels an in-progress fallback scan via decoder.cancel() and stops the camera', async () => {
+// REWRITTEN for the frame seam, not renamed. The old test asserted that cancel() REJECTS the in-flight
+// decode, which is how the stream-level reader was interrupted. That mechanism no longer exists:
+// dispose() interrupts nothing, cancellation happens between attempts, and an in-flight decodeFrame runs
+// to completion regardless. So the thing worth pinning is the opposite of the old one — the decode is
+// deliberately released with a REAL value AFTER the abort, and the loop's post-decode aborted re-check is
+// the only thing standing between a closed overlay and a `decoded` that would fire an availability
+// lookup for a scanner nobody is looking at.
+test('an abort during an in-flight fallback decode is cancelled even when that decode then succeeds', async () => {
   const track = fakeTrack();
   const controller = new AbortController();
-  let cancelCalled = false;
-  let rejectDecode!: (err: unknown) => void;
-  const decodePromise = new Promise<string>((_resolve, reject) => {
-    rejectDecode = reject;
+  let disposeCalls = 0;
+  let releaseDecode!: (value: string) => void;
+  const pendingDecode = new Promise<string>((resolve) => {
+    releaseDecode = resolve;
   });
   let resolveDecodeStarted!: () => void;
   const decodeStarted = new Promise<void>((resolve) => {
@@ -400,25 +484,27 @@ test('abort cancels an in-progress fallback scan via decoder.cancel() and stops 
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
     createNativeDetector: async () => null,
-    loadFallbackDecoder: async () => ({
-      decode: async () => {
-        resolveDecodeStarted();
-        return decodePromise;
-      },
-      cancel: () => {
-        cancelCalled = true;
-        const err = new Error('cancelled by abort');
-        rejectDecode(err);
-      },
-    }),
+    loadFallbackDecoder: async () =>
+      frameDecoder(
+        async () => {
+          resolveDecodeStarted();
+          return pendingDecode;
+        },
+        () => {
+          disposeCalls += 1;
+        },
+      ),
+    frameLoop: frameLoopStub(),
   });
   const pending = scanner.scan(fakeTarget(), controller.signal);
-  // scanWithFallback registers its abort listener before calling decode(), so waiting for decode() to
+  // runFrameLoop registers its abort listener before the first attempt, so waiting for decodeFrame to
   // start guarantees the listener is already live when we abort below.
   await decodeStarted;
   controller.abort();
+  releaseDecode('1031166'); // the frame decodes fine — it just landed too late to matter
   await expect(pending).resolves.toEqual({ kind: 'cancelled' });
-  expect(cancelCalled).toBe(true);
+  // dispose() is still the teardown contract, it just no longer interrupts anything.
+  expect(disposeCalls).toBe(1);
   expect(track.stopped).toBe(true);
 });
 
@@ -427,12 +513,11 @@ test('a fallback decoder rejection reports failed and stops the camera', async (
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
     createNativeDetector: async () => null,
-    loadFallbackDecoder: async () => ({
-      decode: async () => {
+    loadFallbackDecoder: async () =>
+      frameDecoder(async () => {
         throw new Error('decode error');
-      },
-      cancel: () => {},
-    }),
+      }),
+    frameLoop: frameLoopStub(),
   });
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
     kind: 'failed',
@@ -442,38 +527,54 @@ test('a fallback decoder rejection reports failed and stops the camera', async (
 
 test('a successful fallback decode still releases the decoder', async () => {
   const track = fakeTrack();
-  let cancelCalls = 0;
+  let disposeCalls = 0;
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
     createNativeDetector: async () => null,
-    loadFallbackDecoder: async () => ({
-      decode: async () => '1031166',
-      cancel: () => {
-        cancelCalls += 1;
-      },
-    }),
+    loadFallbackDecoder: async () =>
+      frameDecoder(
+        async () => '1031166',
+        () => {
+          disposeCalls += 1;
+        },
+      ),
+    frameLoop: frameLoopStub(),
   });
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
     kind: 'decoded',
     value: '1031166',
   });
-  // Success is a teardown too: without this the zxing reader keeps its listeners on a video element the
-  // overlay is about to unmount.
-  expect(cancelCalls).toBe(1);
+  // Success is a teardown too, and exactly once: the loop's abort listener and its finally must not
+  // double-dispose a decoder that a future stage may back with a wasm instance.
+  expect(disposeCalls).toBe(1);
 });
 
-test('an empty fallback decode is failed, never a decoded empty value', async () => {
+// REWRITTEN too, and its outcome inverted. Under the stream seam an empty decode was terminal —
+// `failed` — because the library's own retry loop had already given up by the time it answered. Under
+// the frame seam an empty string is one frame's miss, indistinguishable from the `null` the contract
+// asks for, so the loop keeps the camera open and tries the next frame (Bible: a decode failure keeps
+// the camera open). What must NEVER happen is unchanged: '' handed upward as a decoded value would run
+// an availability lookup for nothing at all.
+test('an empty fallback decode is retried, never handed up as a decoded empty value', async () => {
   const track = fakeTrack();
+  let calls = 0;
   const scanner = createBrowserScanner({
     mediaDevices: { getUserMedia: async () => fakeStream(track) },
     createNativeDetector: async () => null,
-    loadFallbackDecoder: async () => ({ decode: async () => '', cancel: () => {} }),
+    loadFallbackDecoder: async () =>
+      frameDecoder(async () => {
+        calls += 1;
+        return calls < 2 ? '' : '1031166';
+      }),
+    frameLoop: frameLoopStub(),
   });
-  // The native path already skips empty results; an empty string handed upward would run availability
-  // for nothing at all. Mirror it here rather than fabricating a query.
   await expect(scanner.scan(fakeTarget(), new AbortController().signal)).resolves.toEqual({
-    kind: 'failed',
+    kind: 'decoded',
+    value: '1031166',
   });
+  // The decisive assertion: had '' ended the run, this would be 1 and the outcome above would have been
+  // `{ kind: 'decoded', value: '' }`.
+  expect(calls).toBe(2);
   expect(track.stopped).toBe(true);
 });
 
@@ -544,10 +645,10 @@ describe('diagnostics instrumentation', () => {
       createNativeDetector: async () => ({ detect }),
       pollIntervalMs: 1,
     });
-    // fakeTarget(), not a bare `{} as HTMLVideoElement`: this is the only test in this block that
-    // reaches attach(), and attach() calls video.play(). A bare object has none, so the TypeError would
-    // reject scanWithNative's executor and runScan's catch would report `failed` — measuring the stub,
-    // not the instrumentation. The other tests here take the zxing path, which never touches the video.
+    // fakeTarget(), not a bare `{} as HTMLVideoElement`: attach() calls video.play(), and a bare object
+    // has none, so the TypeError would reach runScan's catch and report `failed` — measuring the stub,
+    // not the instrumentation. Every test in this block needs it now: attach() runs on the fallback path
+    // too, and that path additionally reads videoWidth/videoHeight to decide there is a frame to copy.
     const outcome = await scanner.scan(fakeTarget(), new AbortController().signal);
     expect(outcome).toEqual({ kind: 'decoded', value: '19987' });
     const s = getSnapshot().scanner;
@@ -558,19 +659,38 @@ describe('diagnostics instrumentation', () => {
     expect(s.startedAt).not.toBeNull();
   });
 
-  // The zxing reader retries inside the library, so decodeAttempts must stay null rather than report 0.
-  test('the zxing path publishes its decoder and leaves the poll count unmeasured', async () => {
+  // REWRITTEN, and its assertion inverted. The old version pinned decodeAttempts to null on this path
+  // and explained why: the zxing reader retried inside the library, so there was no attempt count to
+  // report and reporting 0 would have been a fabrication. That premise is gone — runFrameLoop owns the
+  // retrying now, so the count is a measured fact on the fallback path and null would be the
+  // fabrication. This is the whole point of the stage, so it is asserted here on the adapter's own
+  // wiring and not left to frameLoop.test.ts: a rewiring that dropped the loop would still pass every
+  // outcome assertion in this file, and only the count would notice.
+  test('the zxing path publishes its decoder and now counts its attempts too', async () => {
+    let calls = 0;
     const scanner = createBrowserScanner({
       mediaDevices: {
         getUserMedia: async () => fakeStreamWithSettings({ width: 640, height: 480 }),
       },
       createNativeDetector: async () => null,
-      loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
+      loadFallbackDecoder: async () =>
+        frameDecoder(async () => {
+          calls += 1;
+          return '19987';
+        }),
+      frameLoop: frameLoopStub(),
     });
-    await scanner.scan({ video: {} as HTMLVideoElement }, new AbortController().signal);
+    await scanner.scan(fakeTarget(), new AbortController().signal);
     const s = getSnapshot().scanner;
     expect(s.decoderPath).toBe('zxing');
-    expect(s.decodeAttempts).toBeNull();
+    expect(s.decodeAttempts).toBe(calls);
+    expect(s.decodeAttempts).toBeGreaterThan(0);
+    // The three fallback-only durations come with it. Exact values belong to frameLoop.test.ts; what
+    // this pins is that they are measured AT ALL once the adapter is wired to the loop — with the old
+    // stream-level decoder all three stayed null.
+    expect(s.decodeBusyMs).not.toBeNull();
+    expect(s.drawMs).not.toBeNull();
+    expect(s.loopIdleMs).not.toBeNull();
     expect(s.track).toMatchObject({ width: 640, height: 480 });
   });
 
@@ -600,8 +720,9 @@ describe('diagnostics instrumentation', () => {
       createNativeDetector: async () => null,
       loadFallbackDecoder: async () => {
         now(); // resolving the decoder is not free — this tick must land inside decoderReadyMs
-        return { decode: async () => '19987', cancel: () => {} };
+        return frameDecoder(async () => '19987');
       },
+      frameLoop: frameLoopStub(),
       now,
     });
     await scanner.scan(fakeTarget(), new AbortController().signal);
@@ -631,7 +752,8 @@ describe('diagnostics instrumentation', () => {
         getUserMedia: async () => fakeStreamWithSettings({ width: 640, height: 480 }),
       },
       createNativeDetector: async () => null,
-      loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
       now,
     });
     await scanner.scan(fakeTarget(), new AbortController().signal);
@@ -653,7 +775,8 @@ describe('diagnostics instrumentation', () => {
         },
       },
       createNativeDetector: async () => null,
-      loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
     });
     const outcome = await scanner.scan(fakeTarget(), new AbortController().signal);
     const s = getSnapshot().scanner;
@@ -713,12 +836,10 @@ describe('diagnostics instrumentation', () => {
           ({ getTracks: () => [{ stop: () => {} }] }) as unknown as MediaStream,
       },
       createNativeDetector: async () => null,
-      loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
     });
-    const outcome = await scanner.scan(
-      { video: {} as HTMLVideoElement },
-      new AbortController().signal,
-    );
+    const outcome = await scanner.scan(fakeTarget(), new AbortController().signal);
     expect(outcome).toEqual({ kind: 'decoded', value: '19987' });
     expect(getSnapshot().scanner.track).toBeNull();
   });
@@ -730,9 +851,10 @@ describe('diagnostics instrumentation', () => {
         getUserMedia: async () => fakeStreamWithSettings({ width: 640, height: 480 }),
       },
       createNativeDetector: async () => null,
-      loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
     });
-    await scanner.scan({ video: {} as HTMLVideoElement }, new AbortController().signal);
+    await scanner.scan(fakeTarget(), new AbortController().signal);
     expect(getSnapshot().scanner.startedAt).toBeNull();
   });
 
@@ -775,9 +897,10 @@ describe('diagnostics instrumentation', () => {
         },
       },
       createNativeDetector: async () => null,
-      loadFallbackDecoder: async () => ({ decode: async () => '19987', cancel: () => {} }),
+      loadFallbackDecoder: async () => frameDecoder(async () => '19987'),
+      frameLoop: frameLoopStub(),
     });
-    await scanner.scan({ video: {} as HTMLVideoElement }, new AbortController().signal);
+    await scanner.scan(fakeTarget(), new AbortController().signal);
     const video = requested?.video as MediaTrackConstraints;
     expect(video.facingMode).toBe('environment');
     expect(video.width).toEqual({ ideal: 1920 });

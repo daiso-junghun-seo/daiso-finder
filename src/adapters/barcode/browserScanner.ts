@@ -8,12 +8,14 @@
 // construction. globalThis.BarcodeDetector is read — and its DataMatrix support re-queried — on EVERY
 // scan, because that answer is not a constant: Chrome on Android answers from the Play Services barcode
 // module, which can install mid-session, so a first scan's "no data_matrix" can legitimately become
-// "yes" minutes later. Caching the first answer would pin such a device to the ~92 kB zxing fallback for
+// "yes" minutes later. Caching the first answer would pin such a device to the ~76 kB zxing fallback for
 // the rest of the session; the query is cheap, so it is repeated rather than memoised. Do not "optimise"
 // it into a module-level cache.
 // Decode-only: no image recognition (Bible, Engineering/in-store-navigation §dependencies).
 import { type TrackFacts, beginScannerRun, publishScanner } from '../../diagnostics/bus';
 import type { ScanOutcome, ScanTarget, ScannerPort } from '../../domain/ports';
+import { type FrameDecoder, type FrameLoopDeps, runFrameLoop } from './frameLoop';
+import { loadZxingFrameDecoder } from './zxingFrameDecoder';
 
 // DataMatrix ONLY — and the exclusivity is correctness, not scope. DAISO packaging carries a 2D
 // DataMatrix whose payload is exactly the 품번 (pdNo) and nothing else, so it is the one symbology that
@@ -27,19 +29,21 @@ export interface NativeDetector {
   detect(source: HTMLVideoElement): Promise<Array<{ rawValue: string }>>;
 }
 
-// The bundled fallback, shaped so the adapter never imports @zxing types at module scope (keeps the
-// dynamic import a separate chunk).
-export interface FallbackDecoder {
-  decode(stream: MediaStream, video: HTMLVideoElement): Promise<string>;
-  cancel(): void;
-}
-
 export interface ScannerDeps {
   mediaDevices?: Pick<MediaDevices, 'getUserMedia'> | undefined;
   // Async because the platform's DataMatrix support can only be learned from the asynchronous static
   // BarcodeDetector.getSupportedFormats() — see defaultNativeDetector.
   createNativeDetector?: () => Promise<NativeDetector | null>;
-  loadFallbackDecoder?: () => Promise<FallbackDecoder | null>;
+  // A FRAME decoder, not a stream decoder: the retry loop is runFrameLoop's, so what this hands back
+  // decodes exactly one canvas per call. That is what makes the attempt count and the three durations
+  // observable at all — inside zxing's own decodeOnce they were not.
+  loadFallbackDecoder?: () => Promise<FrameDecoder | null>;
+  // Handed straight to runFrameLoop, unread here. Production passes nothing and the loop uses its own
+  // defaults; this exists because the loop's frame plumbing cannot run under jsdom at all — getContext()
+  // returns null AND prints a "Not implemented" error per attempt — so without a way through, every
+  // fallback-path test in this adapter would either measure a canvas that never got drawn on or drown
+  // the run in stderr. Same discipline as the four seams above: injectable, defaulted, never branched on.
+  frameLoop?: FrameLoopDeps;
   pollIntervalMs?: number;
   // Injectable so decoderReadyMs is assertable without a real clock. Must be epoch-compatible
   // (Date.now-based): the diagnostics panel stamps startedAt from this clock but computes 경과 against
@@ -55,7 +59,7 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
         ? undefined
         : navigator.mediaDevices;
   const createNative = deps.createNativeDetector ?? defaultNativeDetector;
-  const loadFallback = deps.loadFallbackDecoder ?? loadBundledDecoder;
+  const loadFallback = deps.loadFallbackDecoder ?? loadZxingFrameDecoder;
   const pollMs = deps.pollIntervalMs ?? 200;
   const now = deps.now ?? Date.now;
 
@@ -65,14 +69,14 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
     if (!media?.getUserMedia) return { kind: 'unsupported' };
     if (signal.aborted) return { kind: 'cancelled' };
     // DECODER FIRST, CAMERA SECOND. Deciding native-vs-fallback — the platform's async DataMatrix
-    // support query, and then the fallback's dynamic import of the ~92 kB @zxing chunk, which on a
+    // support query, and then the fallback's dynamic import of the ~76 kB of @zxing chunks, which on a
     // cold iOS Safari cache can take seconds — before touching getUserMedia buys two guarantees the
     // reverse order cannot: (a) a device with no way to decode never has its camera switched on at
     // all, and (b) a shopper who closes the overlay while either is in flight aborts a run that owns
     // no camera, so nothing can outlive the overlay.
     const decoderStart = now();
     let native: NativeDetector | null = null;
-    let fallback: FallbackDecoder | null = null;
+    let fallback: FrameDecoder | null = null;
     try {
       // Neither wait is cancellable in itself, but the WAIT for each is: untilAbort settles the moment
       // the signal fires instead of parking until the support query answers or the chunk lands.
@@ -125,9 +129,17 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
     };
     try {
       if (signal.aborted) return { kind: 'cancelled' };
-      if (native) return await scanWithNative(native, stream, target, signal, pollMs);
+      // BOTH paths need this now. The old stream-level fallback bound the stream itself, inside
+      // zxing's decodeOnceFromStream -> attachStreamToVideo; runFrameLoop does not, because it only
+      // ever copies frames OUT of a <video> somebody else fed. Without this the camera would be on
+      // with no frames reaching the canvas — and no unit test would catch it, since they all inject
+      // decoder doubles. Placed after the aborted guard so an abandoned run never binds a stream, and
+      // with nothing suspending between here and either path's abort listener, so the ordering
+      // scanWithNative depends on is unchanged.
+      attach(target.video, stream);
+      if (native) return await scanWithNative(native, target, signal, pollMs);
       // Narrowed by the `!native && !fallback` guard above — reaching here means fallback is set.
-      return await scanWithFallback(fallback as FallbackDecoder, stream, target, signal);
+      return await runFrameLoop(fallback as FrameDecoder, target, signal, deps.frameLoop);
     } catch {
       return { kind: 'failed' };
     } finally {
@@ -229,9 +241,11 @@ function attach(video: HTMLVideoElement, stream: MediaStream): void {
   });
 }
 
+// The stream is bound by the caller now (see attach() at the dispatch site), so this takes no
+// MediaStream. Nothing else about this path moved: the same setInterval cadence, the same detect() call,
+// the same outcomes — only its counter was renamed, in Task 1.
 function scanWithNative(
   detector: NativeDetector,
-  stream: MediaStream,
   target: ScanTarget,
   signal: AbortSignal,
   pollMs: number,
@@ -247,14 +261,14 @@ function scanWithNative(
       resolve(outcome);
     };
     const onAbort = () => finish({ kind: 'cancelled' });
-    // Registered before attach() — nothing between here and the interval below can suspend, so an abort
-    // can never land while this run is unable to hear it (Finding 4: a hung play() must not be a gap).
+    // Registered first, with nothing suspending between the caller's attach() and here, so an abort can
+    // never land while this run is unable to hear it (Finding 4: a hung play() must not be a gap).
     signal.addEventListener('abort', onAbort);
     // The timer is created here, with nothing in between, so `timer` is always initialised before any
     // path can reach finish(): the already-aborted guard below would otherwise call clearInterval() on a
     // handle still in its temporal dead zone, turning an honest `cancelled` into a `failed`. Starting the
     // interval one statement early is free — its first tick cannot run until this executor returns, by
-    // which point attach() has already bound the stream.
+    // which point the caller's attach() has long since bound the stream.
     const timer = setInterval(() => {
       polls += 1;
       publishScanner({ decodeAttempts: polls });
@@ -269,75 +283,16 @@ function scanWithNative(
           // failure and the overlay shows a hint instead (Engineering §5).
         });
     }, pollMs);
-    if (signal.aborted) {
-      finish({ kind: 'cancelled' });
-      return;
-    }
-    attach(target.video, stream);
+    // addEventListener never fires for a signal that was ALREADY aborted, so this is the only thing
+    // standing between an abort landing just before the dispatch and a run that polls forever.
+    if (signal.aborted) finish({ kind: 'cancelled' });
   });
 }
 
-async function scanWithFallback(
-  decoder: FallbackDecoder,
-  stream: MediaStream,
-  target: ScanTarget,
-  signal: AbortSignal,
-): Promise<ScanOutcome> {
-  if (signal.aborted) return { kind: 'cancelled' };
-  // Released exactly once, on every exit path including success: without it the zxing reader keeps its
-  // listeners bound to a <video> the overlay is about to unmount. Idempotent so the abort path (which
-  // cancels to interrupt the pending decode) and the finally below cannot double-reset the reader.
-  let released = false;
-  const release = () => {
-    if (released) return;
-    released = true;
-    decoder.cancel();
-  };
-  signal.addEventListener('abort', release);
-  try {
-    const value = await decoder.decode(stream, target.video);
-    if (signal.aborted) return { kind: 'cancelled' };
-    // An empty decode is not a value: the native path already skips empty results, and handing '' up
-    // would run availability for nothing at all.
-    return value ? { kind: 'decoded', value } : { kind: 'failed' };
-  } catch {
-    return signal.aborted ? { kind: 'cancelled' } : { kind: 'failed' };
-  } finally {
-    signal.removeEventListener('abort', release);
-    release();
-  }
-}
-
-// THE ONLY PLACE THE BUNDLED READER IS NAMED. Exported so the test asserts what this very call hands
-// back instead of repeating the path and proving nothing about production — a swap to another valid
-// zxing reader (BrowserMultiFormatReader decodes 1D again) or a path moved by a package upgrade would
-// otherwise both pass a duplicated guard, the first reintroducing wrong-product decodes and the second
-// hiding inside loadBundledDecoder's catch as a silent `unsupported` on every iOS device.
-//
-// The dedicated reader, not BrowserMultiFormatReader narrowed by a POSSIBLE_FORMATS hint: the
-// multi-format reader links every 1D and 2D decoder into the chunk whatever the hints say. Deep path,
-// not the '@zxing/library' barrel: the package declares no `sideEffects`, so nothing in the barrel can
-// be tree-shaken and the lazy chunk stays 415.76 kB instead of 91.96 kB. Rollup needs a literal here,
-// which is why this is a shared FUNCTION and not a shared path constant.
-export async function importBundledDatamatrixReader() {
-  const { BrowserDatamatrixCodeReader } = await import(
-    '@zxing/library/esm/browser/BrowserDatamatrixCodeReader'
-  );
-  return BrowserDatamatrixCodeReader;
-}
-
-// Dynamic import: @zxing stays out of the initial PWA chunk and loads only on a device with no native
-// DataMatrix-capable BarcodeDetector (iOS Safari) whose shopper actually opened the scanner. Bundled —
-// never a CDN.
-async function loadBundledDecoder(): Promise<FallbackDecoder | null> {
-  try {
-    const BrowserDatamatrixCodeReader = await importBundledDatamatrixReader();
-    const reader = new BrowserDatamatrixCodeReader();
-    return {
-      decode: async (stream, video) => (await reader.decodeOnceFromStream(stream, video)).getText(),
-      cancel: () => reader.reset(),
-    };
-  } catch {
-    return null;
-  }
-}
+// The stream-level fallback that used to live here — a FallbackDecoder over
+// BrowserDatamatrixCodeReader.decodeOnceFromStream, plus loadBundledDecoder and
+// importBundledDatamatrixReader — is gone. It owned its own retry loop inside the library, which is
+// exactly why the attempt count and the three per-attempt durations were unobservable. Its replacement
+// is loadZxingFrameDecoder (one canvas per call) driven by runFrameLoop (the loop, the pacing and the
+// metrics). The deep-esm-path discipline the old comment here defended now lives in
+// zxingFrameDecoder.ts, guarded on that file's source text by browserScanner.test.ts.
