@@ -22,7 +22,19 @@ export interface FrameDecoder {
 // structurally opposite: the native one fires on a fixed period with a cheap async detect(), this one
 // waits a minimum interval AFTER a costly synchronous decode returns. Tuning one for the other's
 // benefit makes both worse.
-export const FRAME_LOOP_MIN_INTERVAL_MS = 200;
+//
+// SHIPPED AS 0 (2026-07-30), measured. Two real-device runs (iPhone iOS 18.7 / Safari 26.5.2, product
+// 965923434, permission granted) put real work — frame copy + assembly + decode — at ~42.6 / 48.8 ms per
+// attempt against a prior 200 ms floor, so the loop slept 75% / 64% of the whole scan and the decoder
+// itself was 4.4% of it. The replaced @zxing/library stream loop used `_timeBetweenDecodingAttempts = 0`
+// (back-to-back), so 200 — introduced by this branch for metric hygiene, not chosen for pacing — cut the
+// sampling rate roughly fivefold against the code it replaced. At 0 the loop's only pacing is the
+// requestAnimationFrame wait (see `remaining` below, which is now always <= 0). This value is ALSO a
+// diagnostic: the next real-device run tells apart sample-limited (attempts near 22, wall clock collapses
+// toward ~1.5 s — a prediction, not yet observed) from time-limited (attempts balloon toward 80-100, wall
+// clock stays near the prior ~5.5 s — camera zoom becomes the next lever, not sampling). See
+// open-questions.md §B30-16.
+export const FRAME_LOOP_MIN_INTERVAL_MS = 0;
 
 // DELTA-ONLY, which is why the adapter's epoch requirement does not apply here: ScannerDeps.now must be
 // Date.now-based because the panel stamps startedAt from it and recomputes 경과 against its own

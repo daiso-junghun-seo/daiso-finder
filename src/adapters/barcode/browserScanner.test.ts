@@ -48,9 +48,11 @@ function frameDecoder(decodeFrame: () => Promise<string | null>, dispose = () =>
 // come back out. The loop's own pacing, metric arithmetic and abort contracts are pinned in
 // frameLoop.test.ts against an injected clock, and are deliberately not re-asserted here.
 //
-// minIntervalMs 0 keeps a retrying test from spending 200 ms of wall clock per attempt. `now` is
-// deliberately NOT injected: two tests below pin exact read counts on the SCANNER's clock, and the loop
-// keeping its own clock (monotonicNow, not the scanner's) is what makes those counts stable.
+// minIntervalMs 0 matches the shipped FRAME_LOOP_MIN_INTERVAL_MS default (see frameLoop.ts), and is
+// spelled out explicitly rather than relied on so a retrying test does not silently pick up wall-clock
+// pacing if that default ever changes. `now` is deliberately NOT injected: two tests below pin exact read
+// counts on the SCANNER's clock, and the loop keeping its own clock (monotonicNow, not the scanner's) is
+// what makes those counts stable.
 //
 // nextFrame MUST yield to a macrotask. A synchronous callback plus minIntervalMs 0 gives the loop no
 // path back to the macrotask queue at all, so a decoder double that keeps missing starves vitest's own

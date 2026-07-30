@@ -3,7 +3,7 @@ vi.mock('../../diagnostics/enabled', () => ({ isDiagnosticsEnabled: () => flag.e
 
 import { getSnapshot, resetDiagnostics, subscribe } from '../../diagnostics/bus';
 import type { ScanTarget } from '../../domain/ports';
-import { type FrameDecoder, runFrameLoop } from './frameLoop';
+import { FRAME_LOOP_MIN_INTERVAL_MS, type FrameDecoder, runFrameLoop } from './frameLoop';
 
 beforeEach(() => {
   flag.enabled = true;
@@ -39,6 +39,46 @@ function harness(overrides: Partial<Parameters<typeof runFrameLoop>[3]> = {}) {
 function target(videoWidth = 640, videoHeight = 480): ScanTarget {
   return { video: { videoWidth, videoHeight } as HTMLVideoElement };
 }
+
+// THE GAP THAT LET A CONSTANT REVERT PASS GREEN BEFORE (§B30-16, same shape as the doAutoInvert hole
+// §B30-15 ④): harness() above passes minIntervalMs: 0 explicitly, and so does every fallback test in
+// browserScanner.test.ts, so nothing in this suite exercised what happens when the caller omits it and
+// the loop falls back to FRAME_LOOP_MIN_INTERVAL_MS itself. These two tests close that — one pins the
+// shipped value directly, the other proves the DEFAULT costs nothing beyond the frame wait, without
+// relying on the harness's override.
+test('the shipped minimum interval is 0ms — paced only by the frame wait', () => {
+  expect(FRAME_LOOP_MIN_INTERVAL_MS).toBe(0);
+});
+
+test('a loop given no minIntervalMs adds no wait beyond the frame wait', async () => {
+  // Deliberately real timers and no injected clock: the point is to observe the ACTUAL default the
+  // module falls back to, not an injected-clock arithmetic trick that would pass regardless of what
+  // FRAME_LOOP_MIN_INTERVAL_MS is set to. nextFrame/copyFrame/createCanvas are still injected — jsdom has
+  // no canvas — but minIntervalMs and now are not, which is the whole point of this test.
+  const canvas = { width: 0, height: 0 } as HTMLCanvasElement;
+  let calls = 0;
+  const decoder: FrameDecoder = {
+    decodeFrame: async () => {
+      calls += 1;
+      return calls < 3 ? null : '19987'; // two misses, so a non-zero interval would pace TWICE
+    },
+    dispose: () => {},
+  };
+  const start = Date.now();
+  const outcome = await runFrameLoop(decoder, target(), new AbortController().signal, {
+    nextFrame: (cb) => setTimeout(cb, 0),
+    copyFrame: () => {},
+    createCanvas: () => canvas,
+    // minIntervalMs and now: NOT provided. That is the seam under test.
+  });
+  const elapsed = Date.now() - start;
+  expect(outcome).toEqual({ kind: 'decoded', value: '19987' });
+  expect(calls).toBe(3);
+  // A 200ms floor would cost at least 2 * 200ms across the two misses, well over 400ms; the frame wait
+  // alone (three setTimeout(cb, 0) macrotask hops) settles in a small fraction of that. 150ms is generous
+  // headroom above realistic macrotask jitter and far below what any non-zero shipped interval would add.
+  expect(elapsed).toBeLessThan(150);
+});
 
 test('a decoded frame ends the loop with its value', async () => {
   const decoder: FrameDecoder = { decodeFrame: async () => '19987', dispose: () => {} };
@@ -177,8 +217,10 @@ test('an abort settles the loop even if no frame ever arrives', async () => {
 });
 
 // The pacing wait needs the same race for a plainer reason: a shopper who closes the overlay mid-interval
-// must not wait out the remainder of it, and the shipped interval is 200ms per miss. The interval here is
-// 10s, far beyond vitest's timeout, so an unraced wait cannot pass by being merely slow.
+// must not wait out the remainder of it. The shipped interval is 0ms per miss (see
+// FRAME_LOOP_MIN_INTERVAL_MS), so this test injects an artificially large one via minIntervalMs — without
+// it there would be no pacing wait to abort during. The interval here is 10s, far beyond vitest's
+// timeout, so an unraced wait cannot pass by being merely slow.
 test('an abort during the pacing wait settles at once, not after the interval', async () => {
   const controller = new AbortController();
   let attempted: () => void = () => {};
