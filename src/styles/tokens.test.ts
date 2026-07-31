@@ -69,6 +69,17 @@ test('search-bar demotion and status color utility classes exist', () => {
 test('the global reduced-motion rule turns animations off, which is what the scanner brackets rely on', () => {
   const start = css.indexOf('@media (prefers-reduced-motion: reduce)');
   expect(start).toBeGreaterThan(-1);
+
+  // The rule must be top-level (depth 0), not nested inside another at-rule. If the rule were
+  // wrapped in `@media print`, it would apply only when printing, and a motion-sensitive shopper
+  // seeing the app on their phone would lose protection.
+  let depthBeforeRule = 0;
+  for (let i = 0; i < start; i += 1) {
+    if (css[i] === '{') depthBeforeRule += 1;
+    else if (css[i] === '}') depthBeforeRule -= 1;
+  }
+  expect(depthBeforeRule).toBe(0);
+
   let depth = 0;
   let end = -1;
   for (let i = css.indexOf('{', start); i < css.length; i += 1) {
@@ -86,4 +97,8 @@ test('the global reduced-motion rule turns animations off, which is what the sca
   // `!important` is not decoration here: it is what lets this beat the animation shorthand that
   // `.scanner-overlay__aim--live` declares directly on the element.
   expect(block).toMatch(/animation:\s*none\s*!important/);
+  // The declaration must sit inside the universal selector `*`, not a narrower one like
+  // `input, button`. If it applied only to inputs and buttons, `.scanner-overlay__aim--live`
+  // (a `<div>`) would lose protection.
+  expect(block).toMatch(/\*\s*\{[^}]*animation:\s*none\s*!important/);
 });
