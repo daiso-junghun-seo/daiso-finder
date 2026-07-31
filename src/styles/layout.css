@@ -153,8 +153,8 @@ input {
 
 /* ANIMATED ONLY WHILE FRAMES ARE ARRIVING. ScannerOverlay adds this class on the <video>'s `playing`
    event, never at mount: getUserMedia can be outstanding for a second or more on iOS because the
-   permission prompt is inside it (749-1005 ms measured, §B30-20 ⑤), and the motion's single
-   proposition is "the camera is delivering frames".
+   permission prompt is inside it (749 ms measured in §B30-20 ⑤, 1005 ms cold-start in §B30-19 ①), and
+   the motion's single proposition is "the camera is delivering frames".
 
    transform and opacity ONLY, and the test next door pins that. The decode loop runs its own
    requestAnimationFrame at 96.7% main-thread occupancy (§B30-20 ⑥), so anything costing layout or
@@ -164,7 +164,14 @@ input {
 
    NO local prefers-reduced-motion block: tokens.css kills every animation globally with `!important`,
    and this rule declares no opacity of its own, so a reduced-motion shopper gets exactly the fully
-   opaque static brackets the design asks for. tokens.test.ts pins that global rule. */
+   opaque static brackets the design asks for. tokens.test.ts pins that global rule.
+
+   will-change here does NOT "guarantee compositor layer promotion" — narrowed from an earlier, inflated
+   claim. It cannot hint ahead of the animation starting, because it is declared in the SAME rule as the
+   animation it applies to; an accelerated animation on transform/opacity already gets its own layer
+   without the hint. And a layer is not a compositor ANIMATION — will-change cannot guarantee that either.
+   Kept anyway: it is cheap, documents intent, and is the first thing to remove if a real-device run shows
+   a regression. */
 .scanner-overlay__aim--live {
   animation: aim-breathe var(--aim-breathe-duration) ease-in-out infinite;
   will-change: transform, opacity;
