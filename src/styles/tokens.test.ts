@@ -60,3 +60,30 @@ test('search-bar demotion and status color utility classes exist', () => {
     expect(css).toContain(cls);
   }
 });
+
+// LOAD-BEARING FOR ACCESSIBILITY, and pinned by nothing until now. layout.css deliberately ships no
+// local prefers-reduced-motion block for the scanner's breathing brackets because this global rule
+// already turns every animation off with `!important`. That makes deleting this block a silent
+// accessibility regression: a motion-sensitive shopper would get a pulsing overlay and the whole suite
+// would stay green.
+test('the global reduced-motion rule turns animations off, which is what the scanner brackets rely on', () => {
+  const start = css.indexOf('@media (prefers-reduced-motion: reduce)');
+  expect(start).toBeGreaterThan(-1);
+  let depth = 0;
+  let end = -1;
+  for (let i = css.indexOf('{', start); i < css.length; i += 1) {
+    if (css[i] === '{') depth += 1;
+    else if (css[i] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+  expect(end).toBeGreaterThan(start);
+  const block = css.slice(start, end);
+  // `!important` is not decoration here: it is what lets this beat the animation shorthand that
+  // `.scanner-overlay__aim--live` declares directly on the element.
+  expect(block).toMatch(/animation:\s*none\s*!important/);
+});
