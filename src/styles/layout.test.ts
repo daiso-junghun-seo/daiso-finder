@@ -91,3 +91,21 @@ test('@keyframes aim-breathe animates transform and opacity only', () => {
   expect(declared.length).toBeGreaterThan(0);
   expect(new Set(declared)).toEqual(new Set(['transform', 'opacity']));
 });
+
+// The whitelist above proves only which PROPERTY NAMES appear, never that their VALUES move: a future
+// edit could flatten the 50% stop to the same transform and opacity as 0%,100% — a fully static
+// "animation" — and that test would still pass. Checked on BOTH properties, not just one, because a
+// guard that compared only `transform` would still pass a flattened `opacity`, and vice versa.
+test('@keyframes aim-breathe changes value at the 50% stop, not just repeats the same declarations', () => {
+  const block = blockFor('@keyframes aim-breathe');
+  // Anchored to line-start so this finds the "50% {" stop selector, not the "-50%" inside
+  // `translate(-50%, -50%)`, which appears in every stop's transform value.
+  const midStart = block.search(/^\s*50%\s*\{/m);
+  expect(midStart).toBeGreaterThan(-1);
+  const restStop = block.slice(0, midStart);
+  const midStop = block.slice(midStart);
+  const declaredValue = (text: string, property: string) =>
+    text.match(new RegExp(`${property}:\\s*([^;]+);`))?.[1];
+  expect(declaredValue(midStop, 'transform')).not.toBe(declaredValue(restStop, 'transform'));
+  expect(declaredValue(midStop, 'opacity')).not.toBe(declaredValue(restStop, 'opacity'));
+});
