@@ -41,8 +41,11 @@ export interface FrameDecoder {
 // most of the scan. At pacing 0 the decoder's share is 16-26% of a per-attempt cost that is itself
 // continuous, and run F measured 19.17 ms of real work at 50.5 attempts/sec = 96.7% MAIN-THREAD OCCUPANCY.
 // That saturation is why any scan animation must be GPU-composite only (transform/opacity, never a JS
-// requestAnimationFrame loop, which would contend with this one) and why the bracket crop is now argued for
-// on main-thread budget. Stays 0 regardless: nothing about that outcome argues for re-slowing the loop.
+// requestAnimationFrame loop, which would contend with this one). The bracket crop was briefly argued for
+// on that same animation's main-thread budget; that argument does NOT hold and is retracted, not just
+// corrected in place here: a GPU-composite animation runs on the compositor thread and does not spend
+// main-thread budget, so the crop is not a precondition for it (docs/notes/open-questions.md §B30-22 ③).
+// Stays 0 regardless: nothing about that outcome argues for re-slowing the loop.
 // See open-questions.md §B30-16 (why 0 shipped), §B30-17 ① / §B30-19 ② (what the run showed) and §B30-20
 // (the occupancy measurement that bounds what else can run on this thread).
 export const FRAME_LOOP_MIN_INTERVAL_MS = 0;
