@@ -67,7 +67,13 @@ test('search-bar demotion and status color utility classes exist', () => {
 // accessibility regression: a motion-sensitive shopper would get a pulsing overlay and the whole suite
 // would stay green.
 test('the global reduced-motion rule turns animations off, which is what the scanner brackets rely on', () => {
-  const start = css.indexOf('@media (prefers-reduced-motion: reduce)');
+  // Strip comments so that quoted selectors (e.g., `/* * {` as documentation) or prose that names
+  // the selector while documenting its absence do not trick the tests. This also makes the depth
+  // counter trustworthy: with comments present, counting braces would be confounded by braces
+  // inside prose (e.g., `/* selector { … } was removed */`).
+  const cssNoComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  const start = cssNoComments.indexOf('@media (prefers-reduced-motion: reduce)');
   expect(start).toBeGreaterThan(-1);
 
   // The rule must be top-level (depth 0), not nested inside another at-rule. If the rule were
@@ -75,16 +81,16 @@ test('the global reduced-motion rule turns animations off, which is what the sca
   // seeing the app on their phone would lose protection.
   let depthBeforeRule = 0;
   for (let i = 0; i < start; i += 1) {
-    if (css[i] === '{') depthBeforeRule += 1;
-    else if (css[i] === '}') depthBeforeRule -= 1;
+    if (cssNoComments[i] === '{') depthBeforeRule += 1;
+    else if (cssNoComments[i] === '}') depthBeforeRule -= 1;
   }
   expect(depthBeforeRule).toBe(0);
 
   let depth = 0;
   let end = -1;
-  for (let i = css.indexOf('{', start); i < css.length; i += 1) {
-    if (css[i] === '{') depth += 1;
-    else if (css[i] === '}') {
+  for (let i = cssNoComments.indexOf('{', start); i < cssNoComments.length; i += 1) {
+    if (cssNoComments[i] === '{') depth += 1;
+    else if (cssNoComments[i] === '}') {
       depth -= 1;
       if (depth === 0) {
         end = i + 1;
@@ -93,12 +99,13 @@ test('the global reduced-motion rule turns animations off, which is what the sca
     }
   }
   expect(end).toBeGreaterThan(start);
-  const block = css.slice(start, end);
+  const block = cssNoComments.slice(start, end);
   // `!important` is not decoration here: it is what lets this beat the animation shorthand that
   // `.scanner-overlay__aim--live` declares directly on the element.
   expect(block).toMatch(/animation:\s*none\s*!important/);
   // The declaration must sit inside the universal selector `*`, not a narrower one like
   // `input, button`. If it applied only to inputs and buttons, `.scanner-overlay__aim--live`
-  // (a `<div>`) would lose protection.
-  expect(block).toMatch(/\*\s*\{[^}]*animation:\s*none\s*!important/);
+  // (a `<div>`) would lose protection. The `[{}]` anchor ensures `*` is a whole selector, not part
+  // of a descendant combinator like `.a *`.
+  expect(block).toMatch(/[{}]\s*\*\s*\{[^}]*animation:\s*none\s*!important/);
 });
