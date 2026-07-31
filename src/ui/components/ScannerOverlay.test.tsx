@@ -286,9 +286,9 @@ test('a decode landing after unmount does not surface as onDecoded or a crash', 
 });
 
 // THE WHOLE POINT OF GATING ON `playing`. scan() resolves the decoder, then calls getUserMedia — and on
-// iOS the permission prompt sits INSIDE that call, measured at 749-1005 ms (§B30-20 ⑤). Breathing from
-// mount would spend that whole second telling the shopper we are reading a camera that is not on yet,
-// which is the one proposition this motion is allowed to make.
+// iOS the permission prompt sits INSIDE that call, measured at 749 ms (§B30-20 ⑤) to 1005 ms cold-start
+// (§B30-19 ①). Breathing from mount would spend that whole second telling the shopper we are reading a
+// camera that is not on yet, which is the one proposition this motion is allowed to make.
 test('the brackets do not breathe before the camera delivers frames', () => {
   const { container } = render(
     <ScannerOverlay scanner={never} onDecoded={() => {}} onClose={() => {}} />,
@@ -308,6 +308,26 @@ test('the brackets start breathing once the video reports it is playing', () => 
   if (!video) throw new Error('the overlay rendered no <video> to drive');
   fireEvent.playing(video);
   expect(container.querySelector('.scanner-overlay__aim')).toHaveClass(
+    'scanner-overlay__aim--live',
+  );
+});
+
+// THE OUTCOME ENUMERATION IS INCOMPLETE WITHOUT THIS. The design justified having no teardown by listing
+// terminal outcomes only (notice/success/cancel), which misses frames stopping mid-scan without one — an
+// iOS app switch, an incoming call, or another app taking the camera. `pause` is the symmetric case to
+// `playing` above: the brackets must stop claiming frames are arriving the moment they stop arriving.
+test('the brackets stop breathing if the video pauses without a terminal outcome', () => {
+  const { container } = render(
+    <ScannerOverlay scanner={never} onDecoded={() => {}} onClose={() => {}} />,
+  );
+  const video = container.querySelector('video');
+  if (!video) throw new Error('the overlay rendered no <video> to drive');
+  fireEvent.playing(video);
+  expect(container.querySelector('.scanner-overlay__aim')).toHaveClass(
+    'scanner-overlay__aim--live',
+  );
+  fireEvent.pause(video);
+  expect(container.querySelector('.scanner-overlay__aim')).not.toHaveClass(
     'scanner-overlay__aim--live',
   );
 });

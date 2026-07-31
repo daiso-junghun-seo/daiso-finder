@@ -134,6 +134,16 @@ export function ScannerOverlay({
             muted
             autoPlay
             onPlaying={() => setStreaming(true)}
+            // The design enumerated terminal outcomes as the only reason frames stop (a notice unmounts
+            // the brackets; success and cancel unmount the whole overlay) and concluded no teardown was
+            // needed. That enumeration is complete for outcomes but not for frames stopping WITHOUT one:
+            // an iOS app switch, an incoming call, or another app taking the camera can suspend capture
+            // while scan() is still pending, and without this handler `streaming` stayed true — the
+            // brackets kept asserting "the camera is delivering frames", the one claim this motion is
+            // allowed to make, after it stopped being true. `playing` fires again on resume, so this
+            // costs nothing on recovery; a platform that never fires `pause` for such an interruption
+            // behaves exactly as it did before this line existed.
+            onPause={() => setStreaming(false)}
           />
           {/* Aiming brackets, decoration only. Hidden once a notice lands: an aiming guide over a camera
               that failed is an instruction the app cannot honour. */}
