@@ -58,7 +58,7 @@ Append to `src/ui/components/ScannerOverlay.test.tsx`. `never` is the existing m
 
 ```tsx
 // THE WHOLE POINT OF GATING ON `playing`. scan() resolves the decoder, then calls getUserMedia — and on
-// iOS the permission prompt sits INSIDE that call, measured at 749-1005 ms (§B30-20 ⑤). Breathing from
+// iOS the permission prompt sits INSIDE that call, measured at 749-1005 ms (749 ms = §B30-20 ⑤; the 1005 ms cold start = §B30-19 ①). Breathing from
 // mount would spend that whole second telling the shopper we are reading a camera that is not on yet,
 // which is the one proposition this motion is allowed to make.
 test('the brackets do not breathe before the camera delivers frames', () => {
@@ -159,7 +159,7 @@ git commit -m "feat(scan): mark the brackets live only while the video is playin
 
 The motion this class will drive asserts one thing -- the camera is delivering
 frames -- so it is gated on the video's own \`playing\` event rather than on mount.
-On iOS the permission prompt sits inside getUserMedia (749-1005 ms measured), so
+On iOS the permission prompt sits inside getUserMedia (749 ms measured, §B30-20 ⑤; 1005 ms cold, §B30-19 ①), so
 mount is up to a second before any frame exists.
 
 A DOM event the overlay already owns, so ScannerPort is unchanged. No teardown:
@@ -263,7 +263,7 @@ Then add these two blocks immediately after that rule, before `.scanner-overlay_
 ```css
 /* ANIMATED ONLY WHILE FRAMES ARE ARRIVING. ScannerOverlay adds this class on the <video>'s `playing`
    event, never at mount: getUserMedia can be outstanding for a second or more on iOS because the
-   permission prompt is inside it (749-1005 ms measured, §B30-20 ⑤), and the motion's single
+   permission prompt is inside it (749 ms measured, §B30-20 ⑤; 1005 ms cold, §B30-19 ①), and the motion's single
    proposition is "the camera is delivering frames".
 
    transform and opacity ONLY, and the test next door pins that. The decode loop runs its own
