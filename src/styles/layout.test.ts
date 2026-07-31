@@ -56,6 +56,16 @@ test('.scanner-overlay__aim is a square sized from the preview height, per §B30
   expect(rule).toMatch(/\bwidth:\s*auto/);
 });
 
+// The reduced-motion fallback ("fully opaque static brackets", §4.2 of the design) depends on this rule
+// declaring no opacity of its own: with the animation killed by tokens.css's global rule, there is no
+// opacity declaration left to apply, so the initial value (1, fully opaque) wins. layout.css asserts this
+// in a comment, but nothing checked it before this test — someone adding `opacity: 0.32` to this base
+// rule would permanently dim the brackets for motion-sensitive shoppers with the suite green.
+test('.scanner-overlay__aim declares no opacity of its own — the reduced-motion fallback depends on it', () => {
+  const rule = ruleFor('.scanner-overlay__aim');
+  expect(rule).not.toContain('opacity');
+});
+
 test('each aim-guide corner span draws a solid border and zeroes exactly two sides, making a bracket rather than a closed box', () => {
   // Without the positive half, deleting the border declaration takes the brackets off the screen while
   // every "no closed box" assertion below still passes.
@@ -81,15 +91,40 @@ test('.scanner-overlay__aim--live actually declares the breathing animation', ()
   expect(ruleFor('.scanner-overlay__aim--live')).toMatch(/animation:\s*aim-breathe/);
 });
 
+// `infinite` is load-bearing on its own: without it the brackets breathe once and stop, which is the
+// exact "looks stopped" symptom this branch exists to remove — and the assertion above only checks that
+// the shorthand names `aim-breathe`, so it would still pass with `infinite` dropped.
+test('.scanner-overlay__aim--live animates infinitely, not once', () => {
+  expect(ruleFor('.scanner-overlay__aim--live')).toMatch(
+    /animation:\s*aim-breathe[^;]*\binfinite\b/,
+  );
+});
+
 // THE GPU-COMPOSITE CONSTRAINT, pinned. The decode loop runs its own requestAnimationFrame at 96.7%
 // main-thread occupancy (§B30-20 ⑥), so a keyframe that animated a layout or paint property would
 // compete with the very work this motion advertises — and it would do so invisibly, since nothing about
 // the rendered result is observable from a unit test.
 test('@keyframes aim-breathe animates transform and opacity only', () => {
   const block = blockFor('@keyframes aim-breathe');
+  // Anchored to line-start (the `m` flag), so this assumes one declaration per line. It is the Biome CSS
+  // formatter — not this test — that actually holds that assumption for this file: a same-line injection
+  // (`color: red; height: 61%;`) is caught by `biome check .`, not here (verified: Biome 1.9.4 splits it
+  // onto two lines).
   const declared = [...block.matchAll(/^\s*([a-z-]+):/gm)].map((m) => m[1]);
   expect(declared.length).toBeGreaterThan(0);
   expect(new Set(declared)).toEqual(new Set(['transform', 'opacity']));
+});
+
+// layout.css comments that `translate(-50%, -50%)` is repeated in BOTH stops "deliberately" — which is
+// exactly the wording that invites a future tidy-up to fold it into one shared declaration. Deleting it
+// from the 50% stop passes both guards above (the property whitelist still sees `transform`, and nothing
+// here checked the centring translate specifically), while the real consequence is severe and visible:
+// transform is a single property, so without the translate the centring offset is gone and the brackets
+// jump off-centre by half their own size every cycle.
+test('translate(-50%, -50%) appears exactly twice inside @keyframes aim-breathe — once per stop', () => {
+  const block = blockFor('@keyframes aim-breathe');
+  const matches = block.match(/translate\(-50%, -50%\)/g) ?? [];
+  expect(matches).toHaveLength(2);
 });
 
 // The whitelist above proves only which PROPERTY NAMES appear, never that their VALUES move: a future
@@ -106,6 +141,17 @@ test('@keyframes aim-breathe changes value at the 50% stop, not just repeats the
   const midStop = block.slice(midStart);
   const declaredValue = (text: string, property: string) =>
     text.match(new RegExp(`${property}:\\s*([^;]+);`))?.[1];
-  expect(declaredValue(midStop, 'transform')).not.toBe(declaredValue(restStop, 'transform'));
-  expect(declaredValue(midStop, 'opacity')).not.toBe(declaredValue(restStop, 'opacity'));
+  // Both sides must be PRESENT before they are compared: `.not.toBe` alone is satisfied just as well by
+  // `undefined !== 'some value'` as by two genuinely different declared values, so a DELETED declaration
+  // (declaredValue returns undefined) would trivially pass the comparison below and this test would say
+  // nothing about it.
+  const assertChanges = (property: string) => {
+    const midValue = declaredValue(midStop, property);
+    const restValue = declaredValue(restStop, property);
+    expect(midValue).toBeDefined();
+    expect(restValue).toBeDefined();
+    expect(midValue).not.toBe(restValue);
+  };
+  assertChanges('transform');
+  assertChanges('opacity');
 });
