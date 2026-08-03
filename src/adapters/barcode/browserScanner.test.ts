@@ -1239,6 +1239,26 @@ describe('diagnostics instrumentation', () => {
     expect(s.appliedZoom).toBeNull();
   });
 
+  // THE ORDERING GUARANTEE ITSELF: this is the camera from the test directly above, which takes
+  // applyScanZoom's SECOND early return (target === null, after zoomTarget's getCapabilities check fails)
+  // before any zoom-specific work runs. If the publish sat below either early return — the natural place a
+  // future reader would group it with the other zoom publishing — this run would leave zoomRequested null,
+  // and "the override did not parse" would render identically to "this camera has no zoom", which is the
+  // exact confusion this task exists to prevent.
+  test('a debug override is reported even when the camera offers no zoom range, so a bad URL is never mistaken for an incapable camera', async () => {
+    const { stream, requests } = fakeZoomStream({ settings: { width: 1920, height: 1080 } });
+    await zoomScanner(stream, { zoomOverride: 1 }).scan(fakeTarget(), new AbortController().signal);
+    expect(requests).toEqual([]);
+    const s = getSnapshot().scanner;
+    // The override was requested of the RUN, proving the publish happened even though nothing was
+    // requested of the camera.
+    expect(s.zoomRequested).toBe(1);
+    // Same run, same camera as the test above: nothing was actually applied or attempted, so those stay
+    // null — the early-return path must not be made to claim a zoom was applied.
+    expect(s.appliedZoom).toBeNull();
+    expect(s.zoomMs).toBeNull();
+  });
+
   test('a rejected applyConstraints leaves the scan working and still stops the camera', async () => {
     const { stream, stopped } = fakeZoomStream({
       zoom: { min: 0.5, max: 10 },
