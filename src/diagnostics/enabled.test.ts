@@ -120,13 +120,17 @@ function extractMaxScanZoom(source: string): number {
   return Number(match[1]);
 }
 
-// Pins the claim in the MAX_ZOOM_OVERRIDE comment: the two caps must actually AGREE, not merely both
-// happen to read 2 today. Compared against this parser's OBSERVABLE boundary (accepted at the adapter's
-// declared cap, rejected just above it) rather than against MAX_ZOOM_OVERRIDE directly, so that constant
-// does not have to be exported purely to satisfy a test. The two assertions catch drift in either
-// direction: the first fails if this module's cap is now LOWER than the adapter's (it would reject a
-// value the adapter still allows), the second fails if it is now HIGHER (it would accept a value past
-// the adapter's lens-switch bound).
+// Pins the claim in the MAX_ZOOM_OVERRIDE comment, but only to the precision this fixed-epsilon probe
+// actually has — not to "the two caps cannot silently drift apart" in the unqualified sense that phrase
+// suggests. Compared against this parser's OBSERVABLE boundary (accepted at the adapter's declared cap,
+// rejected just above it) rather than against MAX_ZOOM_OVERRIDE directly, so that constant does not have
+// to be exported purely to satisfy a test. The two assertions do NOT have the same precision: the first
+// fails the instant this module's cap drops even slightly BELOW the adapter's (it asserts acceptance at
+// exactly adapterMax, so any shortfall rejects), while the second only fails once this module's cap rises
+// 0.0001 OR MORE above the adapter's — a rise smaller than that epsilon still passes both assertions. So
+// what this test guarantees is "the two caps cannot rise apart by 0.0001 or more, and cannot fall apart at
+// all, without this test catching it" — a bounded window on one side, not proof the two are identical to
+// arbitrary precision.
 test("the override cap agrees with the scanner adapter's MAX_SCAN_ZOOM", () => {
   const adapterMax = extractMaxScanZoom(scannerSource);
   expect(resolveZoomOverride(`?zoom=${adapterMax}`, true)).toBe(adapterMax);

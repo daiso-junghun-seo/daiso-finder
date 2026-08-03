@@ -1239,12 +1239,16 @@ describe('diagnostics instrumentation', () => {
     expect(s.appliedZoom).toBeNull();
   });
 
-  // THE ORDERING GUARANTEE ITSELF: this is the camera from the test directly above, which takes
-  // applyScanZoom's SECOND early return (target === null, after zoomTarget's getCapabilities check fails)
-  // before any zoom-specific work runs. If the publish sat below either early return — the natural place a
-  // future reader would group it with the other zoom publishing — this run would leave zoomRequested null,
-  // and "the override did not parse" would render identically to "this camera has no zoom", which is the
-  // exact confusion this task exists to prevent.
+  // THE SECOND EARLY RETURN'S ordering guarantee — target === null, after zoomTarget's getCapabilities
+  // check fails — NOT the first. This is the camera from the test directly above: fakeZoomStream's track
+  // (see the fixture) always supplies applyConstraints, so every run built from it clears the FIRST early
+  // return (`!track || typeof track.applyConstraints !== 'function'`) and only ever exercises this second
+  // one. If the publish sat below THIS early return — the natural place a future reader would group it
+  // with the other zoom publishing — this run would leave zoomRequested null, and "the override did not
+  // parse" would render identically to "this camera has no zoom", which is the exact confusion this task
+  // exists to prevent. The FIRST early return has its own test directly below ("...no usable video
+  // track") — no fakeZoomStream-built fixture can reach it, precisely because that fixture always supports
+  // applyConstraints.
   test('a debug override is reported even when the camera offers no zoom range, so a bad URL is never mistaken for an incapable camera', async () => {
     const { stream, requests } = fakeZoomStream({ settings: { width: 1920, height: 1080 } });
     await zoomScanner(stream, { zoomOverride: 1 }).scan(fakeTarget(), new AbortController().signal);
@@ -1255,6 +1259,27 @@ describe('diagnostics instrumentation', () => {
     expect(s.zoomRequested).toBe(1);
     // Same run, same camera as the test above: nothing was actually applied or attempted, so those stay
     // null — the early-return path must not be made to claim a zoom was applied.
+    expect(s.appliedZoom).toBeNull();
+    expect(s.zoomMs).toBeNull();
+  });
+
+  // THE FIRST EARLY RETURN, which nothing above reaches: fakeZoomStream's track always carries
+  // applyConstraints, so `getVideoTracks: () => []` (no track at all) is what it takes to clear that
+  // return early. Also the value-forwarding pin the file was missing: every OTHER zoomRequested assertion
+  // here (and report.test.ts's) uses the literal 1, so a `publishScanner({ zoomRequested: 1 })` hardcode
+  // would have passed the whole suite. 1.5 is deliberately none of the default (null), the cap (2), or
+  // that literal.
+  test('a debug override is reported even when the stream has no usable video track', async () => {
+    const stream = {
+      getTracks: () => [],
+      getVideoTracks: () => [],
+    } as unknown as MediaStream;
+    await zoomScanner(stream, { zoomOverride: 1.5 }).scan(
+      fakeTarget(),
+      new AbortController().signal,
+    );
+    const s = getSnapshot().scanner;
+    expect(s.zoomRequested).toBe(1.5);
     expect(s.appliedZoom).toBeNull();
     expect(s.zoomMs).toBeNull();
   });
@@ -1415,6 +1440,20 @@ describe('diagnostics instrumentation', () => {
     });
     await zoomScanner(stream, { zoomOverride: 2 }).scan(fakeTarget(), new AbortController().signal);
     expect(requests).toEqual([{ advanced: [{ zoom: 1.5 }] }]);
+  });
+
+  // THE NO-CEILING BRANCH, WITH AN OVERRIDE PRESENT. `zoomTarget`'s `capabilities.zoom ? wanted : null`
+  // branch (a reported range with `min` but no `max`) was never exercised with a non-null override, so
+  // reverting it to `MAX_SCAN_ZOOM` there survived the whole suite. On exactly such a device that bug
+  // would make the panel show `줌 요청: 1` (what the tester asked for) while the camera was actually asked
+  // for 2 — the one case where the panel's request line would misreport what happened.
+  test('a camera whose reported range has no ceiling is asked for the override, not the cap', async () => {
+    const { stream, requests } = fakeZoomStream({
+      zoom: { min: 0.5 },
+      settings: { width: 1920, height: 1080 },
+    });
+    await zoomScanner(stream, { zoomOverride: 1 }).scan(fakeTarget(), new AbortController().signal);
+    expect(requests).toEqual([{ advanced: [{ zoom: 1 }] }]);
   });
 
   test('nothing is published while diagnostics are disabled', async () => {

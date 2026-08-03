@@ -593,8 +593,12 @@ test('collectEnvironment reads the live globals without throwing', () => {
 // zoom does not change symbol size" — the inverse of the truth.
 test('an override that was honoured is reported as a REQUEST, beside what the camera confirmed', () => {
   const report = renderFor({ zoomRequested: 1, appliedZoom: 1 });
-  expect(report).toContain('줌 요청: 1');
-  expect(report).toContain('줌 적용: 1');
+  // Newline-anchored, not a bare substring: '줌 요청: 1' is a PREFIX of '줌 요청: 1.5' and '줌 요청: 12', so a
+  // bare toContain would pass for either and this test would stop pinning the actual requested value.
+  // Each zoom line is followed by another line (줌 적용 comes right after), so the line's own '\n' is
+  // always present to anchor against.
+  expect(report).toContain('줌 요청: 1\n');
+  expect(report).toContain('줌 적용: 1\n');
 });
 
 // No override is the production case, and the panel must look exactly as it did before this parameter
