@@ -1,4 +1,9 @@
 import { DEBUG_STORAGE_KEY, resolveDebugEnabled, resolveZoomOverride } from './enabled';
+// browserScanner.ts's own source text, via Vite's ?raw — the repo idiom for source-text guards (see
+// storeStockRepository.test.ts, zxingFrameDecoder.test.ts). This module must not IMPORT the adapter (a
+// URL parser has no business depending on a camera module), but a test may read both and check them
+// against each other, which is what closes the drift risk a plain duplicated literal cannot.
+import scannerSource from '../adapters/barcode/browserScanner.ts?raw';
 
 function memoryStorage(seed: Record<string, string> = {}): Storage {
   const map = new Map(Object.entries(seed));
@@ -101,4 +106,29 @@ test('the override is honoured only while diagnostics is on, whatever turned it 
   expect(resolveZoomOverride('?zoom=1', false)).toBeNull();
   expect(resolveZoomOverride('?debug=1&zoom=1', false)).toBeNull();
   expect(resolveZoomOverride('?zoom=1', true)).toBe(1);
+});
+
+// Fails loudly rather than vacuously: a regex that silently matched nothing would let the guard below
+// pass no matter what either constant says, which is the failure mode this exists to avoid.
+function extractMaxScanZoom(source: string): number {
+  const match = /const MAX_SCAN_ZOOM = ([\d.]+);/.exec(source);
+  if (match === null) {
+    throw new Error(
+      'MAX_SCAN_ZOOM declaration not found in browserScanner.ts — the regex above needs updating',
+    );
+  }
+  return Number(match[1]);
+}
+
+// Pins the claim in the MAX_ZOOM_OVERRIDE comment: the two caps must actually AGREE, not merely both
+// happen to read 2 today. Compared against this parser's OBSERVABLE boundary (accepted at the adapter's
+// declared cap, rejected just above it) rather than against MAX_ZOOM_OVERRIDE directly, so that constant
+// does not have to be exported purely to satisfy a test. The two assertions catch drift in either
+// direction: the first fails if this module's cap is now LOWER than the adapter's (it would reject a
+// value the adapter still allows), the second fails if it is now HIGHER (it would accept a value past
+// the adapter's lens-switch bound).
+test("the override cap agrees with the scanner adapter's MAX_SCAN_ZOOM", () => {
+  const adapterMax = extractMaxScanZoom(scannerSource);
+  expect(resolveZoomOverride(`?zoom=${adapterMax}`, true)).toBe(adapterMax);
+  expect(resolveZoomOverride(`?zoom=${adapterMax + 0.0001}`, true)).toBeNull();
 });

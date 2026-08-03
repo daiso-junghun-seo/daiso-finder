@@ -6,9 +6,9 @@ export const DEBUG_STORAGE_KEY = 'daiso-finder:debug';
 export const ZOOM_PARAM = 'zoom';
 
 // The upper bound is the adapter's MAX_SCAN_ZOOM, deliberately duplicated as a literal rather than
-// imported: this module parses URLs and must not depend on a camera module. The duplication is
-// recorded in the design (§0) and pinned by the test next door. Raising one without the other is
-// caught there.
+// imported: this module parses URLs and must not depend on a camera module. The test next door reads
+// browserScanner.ts's own source text and asserts this parser's accepted boundary against the number
+// declared there, so the two constants cannot silently drift apart even though neither imports the other.
 const MAX_ZOOM_OVERRIDE = 2;
 
 function safeGet(storage: Storage | null): string | null {
