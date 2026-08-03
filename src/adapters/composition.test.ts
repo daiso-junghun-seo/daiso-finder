@@ -1,5 +1,8 @@
 const flag = vi.hoisted(() => ({ enabled: true }));
-vi.mock('../diagnostics/enabled', () => ({ isDiagnosticsEnabled: () => flag.enabled }));
+vi.mock('../diagnostics/enabled', () => ({
+  isDiagnosticsEnabled: () => flag.enabled,
+  resolveZoomOverride: () => null,
+}));
 
 import { getSnapshot, resetDiagnostics } from '../diagnostics/bus';
 import {

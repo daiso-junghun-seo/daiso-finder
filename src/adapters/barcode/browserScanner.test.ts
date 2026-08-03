@@ -1375,6 +1375,28 @@ describe('diagnostics instrumentation', () => {
     expect(stopped()).toBe(true);
   });
 
+  // THE WHOLE POINT OF THE PARAMETER: the sweep needs a `zoom != 2` sample, and until now every run
+  // requested the cap. 1 is the baseline the record has never had (open-questions §B30-19 ④).
+  test('a debug zoom override is what gets requested, in place of the cap', async () => {
+    const { stream, requests } = fakeZoomStream({
+      zoom: { min: 0.5, max: 10, step: 0.1 },
+      settings: { width: 1920, height: 1080 },
+    });
+    await zoomScanner(stream, { zoomOverride: 1 }).scan(fakeTarget(), new AbortController().signal);
+    expect(requests).toEqual([{ advanced: [{ zoom: 1 }] }]);
+  });
+
+  // The device ceiling still wins. An override is a request for LESS than the cap, never a way around a
+  // camera's own limit — the clamp that already governs the cap governs the override identically.
+  test('a camera whose ceiling is below the override is asked for its ceiling', async () => {
+    const { stream, requests } = fakeZoomStream({
+      zoom: { min: 1, max: 1.5, step: 0.1 },
+      settings: { width: 1920, height: 1080, zoom: 1.5 },
+    });
+    await zoomScanner(stream, { zoomOverride: 2 }).scan(fakeTarget(), new AbortController().signal);
+    expect(requests).toEqual([{ advanced: [{ zoom: 1.5 }] }]);
+  });
+
   test('nothing is published while diagnostics are disabled', async () => {
     flag.enabled = false;
     const scanner = createBrowserScanner({

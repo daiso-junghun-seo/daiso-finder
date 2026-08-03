@@ -1,6 +1,7 @@
 // src/adapters/composition.ts — single production wiring point. PROD builds the real /api adapters; DEV/test
 // keep the mocks so `vite dev` + Vitest + the Playwright dev sweep run without a live /api server.
 import { publishNetwork } from '../diagnostics/bus';
+import { isDiagnosticsEnabled, resolveZoomOverride } from '../diagnostics/enabled';
 import type {
   GeolocationPort,
   ProductSearchPort,
@@ -73,5 +74,14 @@ export function createProductSearch(): ProductSearchPort {
 }
 
 export function createScanner(): ScannerPort {
-  return import.meta.env.PROD ? createBrowserScanner() : createMockScanner();
+  return import.meta.env.PROD
+    ? createBrowserScanner({
+        // Read HERE, not in the adapter: this is the only place in the app that knows about the URL,
+        // and the adapter's whole discipline is that every capability arrives through ScannerDeps.
+        zoomOverride:
+          typeof window === 'undefined'
+            ? null
+            : resolveZoomOverride(window.location.search, isDiagnosticsEnabled()),
+      })
+    : createMockScanner();
 }

@@ -58,6 +58,11 @@ export interface ScannerDeps {
   // the run in stderr. Same discipline as the four seams above: injectable, defaulted, never branched on.
   frameLoop?: FrameLoopDeps;
   pollIntervalMs?: number;
+  // DIAGNOSTICS ONLY, and null in every production run. The composition root resolves it from
+  // `?debug=1&zoom=N`; this module never reads a URL. It replaces the cap as the factor to request but
+  // can never exceed it — resolveZoomOverride rejects anything above MAX_SCAN_ZOOM, so the lens-switch
+  // bound the cap exists to enforce holds whether or not an override is present.
+  zoomOverride?: number | null;
   // Injectable so decoderReadyMs is assertable without a real clock. Must be epoch-compatible
   // (Date.now-based): the diagnostics panel stamps startedAt from this clock but computes 경과 against
   // its own Date.now(), so a non-epoch clock (e.g. performance.now) would render nonsense elapsed times.
@@ -74,6 +79,7 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
   const createNative = deps.createNativeDetector ?? defaultNativeDetector;
   const loadFallback = deps.loadFallbackDecoder ?? loadZxingFrameDecoder;
   const pollMs = deps.pollIntervalMs ?? 200;
+  const zoomOverride = deps.zoomOverride ?? null;
   const now = deps.now ?? Date.now;
   // Captured here like the five above, rather than read as deps.frameLoop at the call site: one place
   // where the deps object stops mattering, so a caller mutating it after construction cannot change what
@@ -155,7 +161,7 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
       //
       // Note the resolution on the 해상도 line was stamped in the publish above, i.e. BEFORE this — so it
       // reports the track settings as acquired, not as reconfigured.
-      await applyScanZoom(stream, now);
+      await applyScanZoom(stream, now, zoomOverride);
       // THE ZOOM AWAIT'S OWN GUARD, not a duplicate of the one above it. applyScanZoom suspends — an abort
       // can land while the capture session is reconfiguring — so without this an abandoned run would go on
       // to bind the stream to a <video> nobody is looking at and call play() on it. The outcome would still
@@ -367,10 +373,14 @@ const MAX_SCAN_ZOOM = 2;
 //
 // Whether it works is NOT asserted here, it is measured: symbolSidePx (see zxingFrameDecoder) is the
 // instrument, and the decision rule for the next real-device run is in docs/HANDOFF.md.
-async function applyScanZoom(stream: MediaStream, now: () => number): Promise<void> {
+async function applyScanZoom(
+  stream: MediaStream,
+  now: () => number,
+  override: number | null,
+): Promise<void> {
   const track = stream.getVideoTracks?.()[0];
   if (!track || typeof track.applyConstraints !== 'function') return;
-  const target = zoomTarget(track);
+  const target = zoomTarget(track, override);
   // Nothing to ask for. zoomMs stays null rather than 0: we did not attempt a reconfiguration, and 0 would
   // claim we did and that it was free.
   if (target === null) return;
@@ -393,20 +403,23 @@ async function applyScanZoom(stream: MediaStream, now: () => number): Promise<vo
   }
 }
 
-// The factor to request: the cap, additionally clamped DOWN to whatever ceiling this camera reported.
-// null = this camera named no zoom range at all, so there is nothing to ask it for. A camera whose minimum
-// exceeds the cap is deliberately still asked for the cap — `advanced` drops an unsatisfiable set, and
-// raising the request to reach such a minimum would breach the lens-switch bound above.
-function zoomTarget(track: MediaStreamTrack): number | null {
+// The factor to request: the override (when present) or the cap, additionally clamped DOWN to whatever
+// ceiling this camera reported. null = this camera named no zoom range at all, so there is nothing to ask
+// it for. A camera whose minimum exceeds what we want is deliberately still asked for what we want —
+// `advanced` drops an unsatisfiable set, and raising the request to reach such a minimum would breach the
+// lens-switch bound above.
+function zoomTarget(track: MediaStreamTrack, override: number | null): number | null {
   if (typeof track.getCapabilities !== 'function') return null;
+  // The override replaces the cap as what we ASK for; it can never exceed it, because
+  // resolveZoomOverride rejects anything above MAX_SCAN_ZOOM before it reaches this module.
+  const wanted = override ?? MAX_SCAN_ZOOM;
   try {
     const capabilities: ExtendedCapabilities = track.getCapabilities();
     const max = capabilities.zoom?.max;
-    // A reported range with no max is a range whose ceiling we do not know. Ask for the cap and let
+    // A reported range with no max is a range whose ceiling we do not know. Ask for what we want and let
     // `advanced` drop it if the device cannot honour it, rather than inventing a ceiling.
-    if (typeof max !== 'number' || !Number.isFinite(max))
-      return capabilities.zoom ? MAX_SCAN_ZOOM : null;
-    return Math.min(MAX_SCAN_ZOOM, max);
+    if (typeof max !== 'number' || !Number.isFinite(max)) return capabilities.zoom ? wanted : null;
+    return Math.min(wanted, max);
   } catch {
     return null;
   }
