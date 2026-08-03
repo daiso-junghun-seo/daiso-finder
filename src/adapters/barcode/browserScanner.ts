@@ -81,7 +81,7 @@ export function createBrowserScanner(deps: ScannerDeps = {}): ScannerPort {
   const pollMs = deps.pollIntervalMs ?? 200;
   const zoomOverride = deps.zoomOverride ?? null;
   const now = deps.now ?? Date.now;
-  // Captured here like the five above, rather than read as deps.frameLoop at the call site: one place
+  // Captured here like the six above, rather than read as deps.frameLoop at the call site: one place
   // where the deps object stops mattering, so a caller mutating it after construction cannot change what
   // a run in flight uses.
   const frameLoopDeps = deps.frameLoop;

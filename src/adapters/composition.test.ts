@@ -1,10 +1,19 @@
-const flag = vi.hoisted(() => ({ enabled: true }));
+const flag = vi.hoisted(() => ({ enabled: true, zoomOverride: null as number | null }));
 vi.mock('../diagnostics/enabled', () => ({
   isDiagnosticsEnabled: () => flag.enabled,
-  resolveZoomOverride: () => null,
+  resolveZoomOverride: () => flag.zoomOverride,
 }));
+// Spies on the real factory rather than replacing it, so the existing "PROD build wires the browser
+// scanner" test still gets genuine createBrowserScanner behaviour (a real getUserMedia call, a real
+// permissionDenied outcome) — only the call arguments are additionally recorded, for the composition-seam
+// test below that proves what createScanner() resolved actually reaches this factory.
+vi.mock('./barcode/browserScanner', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./barcode/browserScanner')>();
+  return { ...actual, createBrowserScanner: vi.fn(actual.createBrowserScanner) };
+});
 
 import { getSnapshot, resetDiagnostics } from '../diagnostics/bus';
+import { createBrowserScanner } from './barcode/browserScanner';
 import {
   createDiagnosticFetch,
   createGeolocation,
@@ -187,6 +196,26 @@ test('PROD build wires the browser scanner (camera requested, no mock value)', a
     expect(outcome).toEqual({ kind: 'permissionDenied' });
   } finally {
     nav.mediaDevices = original;
+    vi.unstubAllEnvs();
+  }
+});
+
+// THE COMPOSITION SEAM ITSELF, not the adapter. browserScanner.test.ts's zoom-override tests only prove
+// createBrowserScanner honours zoomOverride when handed it directly; nothing there touches createScanner
+// at all. 1.7 is deliberately not null (the default), not 2 (MAX_SCAN_ZOOM, what a hardcoded fallback
+// would produce), and not a value either function could emit by accident — so this fails the moment
+// `zoomOverride:` is deleted from createScanner(), because `deps.zoomOverride ?? null` would then silently
+// read as "no override" and the spy would never see 1.7.
+test('the value resolveZoomOverride returns is what reaches createBrowserScanner', () => {
+  flag.zoomOverride = 1.7;
+  vi.stubEnv('PROD', true);
+  try {
+    createScanner();
+    expect(vi.mocked(createBrowserScanner)).toHaveBeenCalledWith(
+      expect.objectContaining({ zoomOverride: 1.7 }),
+    );
+  } finally {
+    flag.zoomOverride = null;
     vi.unstubAllEnvs();
   }
 });
