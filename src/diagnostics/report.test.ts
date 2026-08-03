@@ -69,6 +69,7 @@ function snapshotWith(scanner: Partial<DiagnosticsSnapshot['scanner']>): Diagnos
       outcome: null,
       cameraMs: null,
       appliedZoom: null,
+      zoomRequested: null,
       zoomMs: null,
       symbolSidePx: null,
       decodeMs: null,
@@ -89,6 +90,12 @@ function trackWith(overrides: Partial<TrackFacts>): TrackFacts {
     imageCaptureCapabilities: null,
     ...overrides,
   };
+}
+
+// Thin wrapper over snapshotWith/buildReport for tests that only care about the rendered string — reused
+// rather than sitting beside a second snapshot-building helper.
+function renderFor(scanner: Partial<DiagnosticsSnapshot['scanner']>): string {
+  return buildReport(env, snapshotWith(scanner), app, 2000);
 }
 
 test('summaryLine reports the decoder, resolution, elapsed time and status', () => {
@@ -579,4 +586,19 @@ test('collectEnvironment reads the live globals without throwing', () => {
   expect(facts.buildMode).toBe('DEV'); // Vitest runs the DEV env
   expect(facts.adapters).toBe('mock');
   expect(typeof facts.userAgent).toBe('string');
+});
+
+// THE FEEDBACK THAT MAKES THE PARAMETER USABLE. Without it a mistyped URL is indistinguishable from a
+// working one: the tester records a 2.0 run believing it was 1.0, and the sweep concludes "changing
+// zoom does not change symbol size" — the inverse of the truth.
+test('an override that was honoured is reported as a REQUEST, beside what the camera confirmed', () => {
+  const report = renderFor({ zoomRequested: 1, appliedZoom: 1 });
+  expect(report).toContain('줌 요청: 1');
+  expect(report).toContain('줌 적용: 1');
+});
+
+// No override is the production case, and the panel must look exactly as it did before this parameter
+// existed — an absent line, not `줌 요청: 미보고`, which would be noise about something nobody asked for.
+test('with no override the request line is absent entirely', () => {
+  expect(renderFor({ zoomRequested: null })).not.toContain('줌 요청');
 });

@@ -185,6 +185,10 @@ export function buildReport(
     ...trackLines(s.track),
     `  경과: ${elapsed}`,
     `  카메라 승인: ${s.cameraMs === null ? UNREPORTED : `${s.cameraMs}ms`}`,
+    // Only when a diagnostics session actually asked. Absent — not 미보고 — when nobody did: an
+    // unreported marker here would be noise about a bound nobody claimed, the same rule the capability
+    // ranges follow. Placed above 줌 적용 so the pair reads request-then-confirmation.
+    ...(s.zoomRequested === null ? [] : [`  줌 요청: ${s.zoomRequested}`]),
     // What the camera CONFIRMED, read back from its settings — never the factor that was requested. `=== null`
     // rather than a truthiness check on purpose: a confirmed 1 is the single most interesting answer this
     // line can give (asked for 2, got none of it) and must not render as 미보고.

@@ -100,6 +100,10 @@ export interface ScannerDiagnostics {
   // would be a fabrication (the panel would claim a 2x sensor crop on a camera that quietly ignored it).
   // zoomMs is what tells the two cases apart: a number there means the request was made and awaited.
   appliedZoom: number | null;
+  // What we INTENDED to ask for, and only ever set by a diagnostics session's ?zoom=N. null in every
+  // production run. Kept separate from appliedZoom because they answer different questions: this one
+  // says the parameter parsed, that one says the camera confirmed.
+  zoomRequested: number | null;
   // Wall-clock around the zoom applyConstraints await ALONE, deliberately kept out of cameraMs. WebKit
   // routes a zoom change through setSessionSizeFrameRateAndZoom — the same path as a resolution change — so
   // applying it can reconfigure the whole capture session and cost real time. Folded into cameraMs that
@@ -181,6 +185,7 @@ function emptyScanner(): ScannerDiagnostics {
     warmupMs: null,
     cameraMs: null,
     appliedZoom: null,
+    zoomRequested: null,
     zoomMs: null,
     decodeMs: null,
     outcome: null,

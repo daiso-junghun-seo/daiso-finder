@@ -378,6 +378,11 @@ async function applyScanZoom(
   now: () => number,
   override: number | null,
 ): Promise<void> {
+  // Published BEFORE any early return, deliberately. It is a fact about this RUN's configuration, not
+  // about the camera, so it must appear even when the track names no zoom range and nothing is
+  // requested — otherwise "the override did not parse" and "this camera has no zoom" would collapse
+  // into the same blank line, and the tester could not tell a bad URL from an incapable device.
+  if (override !== null) publishScanner({ zoomRequested: override });
   const track = stream.getVideoTracks?.()[0];
   if (!track || typeof track.applyConstraints !== 'function') return;
   const target = zoomTarget(track, override);
