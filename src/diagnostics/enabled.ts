@@ -3,6 +3,13 @@
 // only exist in PROD builds — `npm run dev:live` and real devices, where no console is available.
 export const DEBUG_PARAM = 'debug';
 export const DEBUG_STORAGE_KEY = 'daiso-finder:debug';
+export const ZOOM_PARAM = 'zoom';
+
+// The upper bound is the adapter's MAX_SCAN_ZOOM, deliberately duplicated as a literal rather than
+// imported: this module parses URLs and must not depend on a camera module. The duplication is
+// recorded in the design (§0) and pinned by the test next door. Raising one without the other is
+// caught there.
+const MAX_ZOOM_OVERRIDE = 2;
 
 function safeGet(storage: Storage | null): string | null {
   try {
@@ -62,4 +69,27 @@ const enabled =
 
 export function isDiagnosticsEnabled(): boolean {
   return enabled;
+}
+
+/**
+ * The sweep parameter, or null when there is nothing to honour.
+ *
+ * PURE, and the signature is the point: no `Storage` parameter, so a zoom cannot persist the way the
+ * debug flag does. A sticky zoom would ride a later run the tester had forgotten about — the sweep tool
+ * corrupting the sweep.
+ *
+ * Out of range is REJECTED rather than clamped. Clamping would let `?zoom=3` record a 2.0 run under a
+ * URL that claims 3, which is exactly the mis-attribution this parameter exists to avoid.
+ */
+export function resolveZoomOverride(
+  search: string,
+  diagnosticsEnabled: boolean,
+): number | null {
+  if (!diagnosticsEnabled) return null;
+  const raw = new URLSearchParams(search).get(ZOOM_PARAM);
+  if (raw === null || raw.trim() === '') return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return null;
+  if (value <= 0 || value > MAX_ZOOM_OVERRIDE) return null;
+  return value;
 }
