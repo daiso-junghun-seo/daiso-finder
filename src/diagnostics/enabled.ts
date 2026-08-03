@@ -81,10 +81,7 @@ export function isDiagnosticsEnabled(): boolean {
  * Out of range is REJECTED rather than clamped. Clamping would let `?zoom=3` record a 2.0 run under a
  * URL that claims 3, which is exactly the mis-attribution this parameter exists to avoid.
  */
-export function resolveZoomOverride(
-  search: string,
-  diagnosticsEnabled: boolean,
-): number | null {
+export function resolveZoomOverride(search: string, diagnosticsEnabled: boolean): number | null {
   if (!diagnosticsEnabled) return null;
   const raw = new URLSearchParams(search).get(ZOOM_PARAM);
   if (raw === null || raw.trim() === '') return null;

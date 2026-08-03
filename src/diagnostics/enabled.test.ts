@@ -1,9 +1,9 @@
-import { DEBUG_STORAGE_KEY, resolveDebugEnabled, resolveZoomOverride } from './enabled';
 // browserScanner.ts's own source text, via Vite's ?raw — the repo idiom for source-text guards (see
 // storeStockRepository.test.ts, zxingFrameDecoder.test.ts). This module must not IMPORT the adapter (a
 // URL parser has no business depending on a camera module), but a test may read both and check them
 // against each other, which is what closes the drift risk a plain duplicated literal cannot.
 import scannerSource from '../adapters/barcode/browserScanner.ts?raw';
+import { DEBUG_STORAGE_KEY, resolveDebugEnabled, resolveZoomOverride } from './enabled';
 
 function memoryStorage(seed: Record<string, string> = {}): Storage {
   const map = new Map(Object.entries(seed));
