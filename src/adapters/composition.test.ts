@@ -1,7 +1,14 @@
 const flag = vi.hoisted(() => ({ enabled: true, zoomOverride: null as number | null }));
 vi.mock('../diagnostics/enabled', () => ({
   isDiagnosticsEnabled: () => flag.enabled,
-  resolveZoomOverride: () => flag.zoomOverride,
+  // A vi.fn, not a plain arrow that ignores its arguments — a mock that answers the same regardless of
+  // what it was called with cannot tell "createScanner reads the real gate" from "createScanner deleted
+  // the gate and hardcoded `true`"; both produce the same return value and the same green suite. The
+  // return behaviour still honours `diagnosticsEnabled` (mirroring the real function's own gate) so the
+  // existing return-value test below stays meaningful, but the tests further down assert the CALL itself.
+  resolveZoomOverride: vi.fn((_search: string, diagnosticsEnabled: boolean) =>
+    diagnosticsEnabled ? flag.zoomOverride : null,
+  ),
 }));
 // Spies on the real factory rather than replacing it, so the existing "PROD build wires the browser
 // scanner" test still gets genuine createBrowserScanner behaviour (a real getUserMedia call, a real
@@ -13,6 +20,7 @@ vi.mock('./barcode/browserScanner', async (importOriginal) => {
 });
 
 import { getSnapshot, resetDiagnostics } from '../diagnostics/bus';
+import { resolveZoomOverride } from '../diagnostics/enabled';
 import { createBrowserScanner } from './barcode/browserScanner';
 import {
   createDiagnosticFetch,
@@ -216,6 +224,44 @@ test('the value resolveZoomOverride returns is what reaches createBrowserScanner
     );
   } finally {
     flag.zoomOverride = null;
+    vi.unstubAllEnvs();
+  }
+});
+
+// THE GATE ITSELF. The test above proves the RETURN VALUE reaches createBrowserScanner; it says nothing
+// about what createScanner PASSES to resolveZoomOverride — a mock that ignores its arguments cannot
+// distinguish `resolveZoomOverride(window.location.search, isDiagnosticsEnabled())` from a rewrite that
+// hardcodes `resolveZoomOverride(window.location.search, true)`, and the latter deletes the diagnostics
+// gate outright (a shopper who never opted into diagnostics would still get an override). pushState gives
+// the search string a value distinctive enough that a mutation replacing the first argument with a
+// literal cannot coincidentally match (jsdom's default search is '').
+test('createScanner forwards the current URL search string and the resolved diagnostics flag to resolveZoomOverride', () => {
+  flag.enabled = true;
+  vi.stubEnv('PROD', true);
+  window.history.pushState({}, '', '/?debug=1&zoom=1.5');
+  try {
+    createScanner();
+    expect(vi.mocked(resolveZoomOverride)).toHaveBeenCalledWith('?debug=1&zoom=1.5', true);
+  } finally {
+    window.history.pushState({}, '', '/');
+    vi.unstubAllEnvs();
+  }
+});
+
+// THE DISABLED CASE, SPECIFICALLY — the gate's whole purpose. If createScanner ever stopped reading
+// isDiagnosticsEnabled() and passed a literal `true` instead, this is the test that would catch it: the
+// test above alone cannot, because flag.enabled defaults to true and a hardcoded `true` would satisfy it
+// by coincidence.
+test('createScanner forwards diagnostics-disabled to resolveZoomOverride — the gate is not hardcoded true', () => {
+  flag.enabled = false;
+  vi.stubEnv('PROD', true);
+  window.history.pushState({}, '', '/?debug=1&zoom=1.5');
+  try {
+    createScanner();
+    expect(vi.mocked(resolveZoomOverride)).toHaveBeenCalledWith('?debug=1&zoom=1.5', false);
+  } finally {
+    flag.enabled = true;
+    window.history.pushState({}, '', '/');
     vi.unstubAllEnvs();
   }
 });
