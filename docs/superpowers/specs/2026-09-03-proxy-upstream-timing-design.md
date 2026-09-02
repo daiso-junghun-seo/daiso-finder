@@ -59,16 +59,22 @@ export function createUpstreamTimer(enabled: boolean, now?: () => number): Upstr
 - **분기는 생성 시점 한 곳뿐이다.** `enabled === false`면 `leg()`는 thunk를 그대로 돌리고 아무것도 기록하지 않으며 `header()`가 `null`을 반환한다 — 호출부는 무조건부이고 **동작 변화가 0**이다.
 - 주입 가능한 시계(`now`)를 받는다 — `decoderReadyMs`를 고정한 것과 같은 이유로, 테스트가 실제 지연에 의존하지 않는다.
 
-### 붙이는 자리: `jsonResponse()` 단일 관문
+### 붙이는 자리: 핸들러당 부착점 하나
 
-`daisoUpstream.ts`의 `jsonResponse()`가 **세 핸들러와 `badGateway()`가 공유하는 유일한 응답 생성점**이다. 여기에 타이머를 넘겨 헤더를 붙인다:
+**⚠️ 2026-09-03 플랜 작성 중 정정.** 이 절은 원래 `jsonResponse(body, status, timer?)`로 타이머를 넘기고 "모든 종료 경로에 테스트를 거는 것이 유일한 방어"라고 적었다. 종료 경로를 실제로 세어 보니 **세 핸들러 합쳐 22곳**(`stores` 9 · `search` 6 · `availability` 7)이고, 그중 하나에서 인자를 빠뜨리면 **조용히 실패**한다 — 그 줄은 `상류`가 없을 뿐이고 §6의 읽는 규칙상 그것은 "플래그가 꺼짐"과 **구분되지 않는다.** 테스트로 22경로를 지키는 것보다 **실패 양식 자체를 없애는 것**이 낫다.
+
+각 핸들러의 본체를 내부 함수로 두고 바깥에서 **한 번** 감싼다:
 
 ```ts
-export function jsonResponse(body: unknown, status = 200, timer?: UpstreamTimer): Response;
-export function badGateway(timer?: UpstreamTimer): Response;
+export function withTiming(response: Response, timer: UpstreamTimer): Response;
+
+export async function onRequestPost(context: Ctx): Promise<Response> {
+  const timer = createUpstreamTimer(diagTimingEnabled(context.env));
+  return withTiming(await handle(context, timer), timer);
+}
 ```
 
-인자를 빠뜨린 반환 경로는 계측을 조용히 잃는다. **핸들러별로 모든 종료 경로(200 · 400 · 502 · `noMatch`)에 테스트를 건다** — 이것이 그 위험에 대한 유일한 방어다.
+`jsonResponse()`·`badGateway()`의 시그니처는 **불변**이고 22개 return문도 **전부 그대로**다. 부착점이 하나뿐이라 빠뜨릴 경로가 없다. 종료 경로 테스트(200 · 400 · 502 · `noMatch`)는 **여전히 건다** — 다만 이제 그것은 유일한 방어가 아니라 확인이다.
 
 ### CORS 노출 헤더
 
