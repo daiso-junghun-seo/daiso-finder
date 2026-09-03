@@ -152,16 +152,26 @@ function networkStatus(entry: NetworkEntry): string {
 // Korean labels for the legs the proxy emits today (functions/api/*.ts). An unknown name falls
 // through to itself: the panel reports what the server said, and a label map that has not caught up
 // must not make a measured leg disappear.
-const LEG_LABELS: Record<string, string> = {
-  search: '검색',
-  str: '매장',
-  auth: '인증',
-  disp: '진열',
-  stck: '재고',
-};
+// A Map, not a plain object: a plain object literal inherits Object.prototype, so a leg named
+// `toString` would look up a FUNCTION (not undefined) and `??` would not fire -- the panel would
+// render the function's source text; a leg named `__proto__` would render `[object Object]`.
+// Unreachable today (the proxy only emits five literal leg names), but this file promises an
+// unknown name falls through to itself, not to a prototype member. A Map has no prototype chain
+// over its keys, so `.get()` returns undefined for any name that was never `.set()`.
+const LEG_LABELS = new Map<string, string>([
+  ['search', '검색'],
+  ['str', '매장'],
+  ['auth', '인증'],
+  ['disp', '진열'],
+  ['stck', '재고'],
+]);
+
+function legLabel(name: string): string {
+  return LEG_LABELS.get(name) ?? name;
+}
 
 function legText(legs: ReadonlyArray<UpstreamLeg>): string {
-  return legs.map((leg) => `${LEG_LABELS[leg.name] ?? leg.name} ${leg.ms}`).join(' · ');
+  return legs.map((leg) => `${legLabel(leg.name)} ${leg.ms}`).join(' · ');
 }
 
 function networkLines(entries: NetworkEntry[]): string[] {
@@ -169,9 +179,10 @@ function networkLines(entries: NetworkEntry[]): string[] {
   return entries.flatMap((e) => {
     // `#2/3` groups one lookup's raced requests so three entries read as one lookup rather than three.
     const attempt = e.attempt ? ` #${e.attempt.index}/${e.attempt.total}` : '';
-    // The SERVER's wall clock, never a sum of the legs below: disp and stck run in parallel, so a sum
-    // exceeds it and would make the residual (this line's ms minus 상류) go negative. `== null` and
-    // not a truthiness check, so a measured 0 still renders.
+    // The SERVER's wall clock, never a sum of the legs below: wave 1 (search, str, auth) always fires
+    // concurrently on both the direct and franchise branches, so a sum always exceeds it and would
+    // make the residual (this line's ms minus 상류) go negative. (disp/stck are also parallel, but
+    // only on the direct branch.) `== null` and not a truthiness check, so a measured 0 still renders.
     const upstream = e.upstream?.totalMs == null ? '' : ` · 상류 ${e.upstream.totalMs}ms`;
     // Appended LAST, and already flattened + capped by the publisher (ERROR_BODY_MAX_CHARS), so a long
     // body cannot push the path, outcome or duration off the readable start of the line.

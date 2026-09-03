@@ -733,5 +733,12 @@ test('a double without headers publishes no upstream field', async () => {
     fetchImpl: async () => ok({ data: observationFixtures.inStock }),
   });
   await repo.query(store, { keyword: '밀폐용기' });
-  expect(getSnapshot().network.find((e) => e.outcome === 'ok')?.upstream).toBeUndefined();
+  const entry = getSnapshot().network.find((e) => e.outcome === 'ok');
+  // The presence assertion proves an 'ok' entry was actually published — without it, a regression
+  // that dropped the publish entirely would leave `entry` undefined and the assertion below green
+  // for the wrong reason (undefined?.upstream is also undefined). composition.test.ts closed the
+  // identical hole for createDiagnosticFetch's publisher; this makes this adapter's own publisher
+  // symmetric with it.
+  expect(entry).toBeDefined();
+  expect(entry?.upstream).toBeUndefined();
 });

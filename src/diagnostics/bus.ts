@@ -171,6 +171,12 @@ export interface DiagnosticsSnapshot {
 // twelve short lines still scroll in one flick inside the panel's 40vh textarea, and the `#i/total` label
 // keeps each lookup's group visible. Deliberately NOT imported from the adapter — diagnostics must not
 // depend on what it observes — so the two numbers are related only by this comment.
+// With DIAG_TIMING on (report.ts), every entry that carries an `upstream.legs` line renders a SECOND
+// text line under it, so the panel can show up to 24 lines for these same 12 entries -- around 18 in
+// realistic use, since not every entry has legs (e.g. an aborted or headerless one does not). The
+// count of ENTRIES this constant limits is still 12; it no longer bounds the panel's line count when
+// the flag is on. Not a reason to change the constant -- there is no evidence yet that 12 entries is
+// the wrong unit -- just a reason the "twelve short lines" framing above only holds with the flag off.
 export const NETWORK_LIMIT = 12;
 
 function emptyScanner(): ScannerDiagnostics {

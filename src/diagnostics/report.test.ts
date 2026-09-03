@@ -623,6 +623,24 @@ test('an unknown leg name is printed verbatim rather than dropped or renamed', (
   ).toEqual(['  /api/availability · 200 · 500ms · 상류 200ms', '    newleg 42']);
 });
 
+test('a leg named "toString" falls through to itself, not to Object.prototype.toString', () => {
+  // A plain-object label lookup (`LEG_LABELS[name] ?? name`) would resolve `toString` to the
+  // inherited function rather than undefined, so `??` would never fire and the panel would render
+  // the function's source text instead of the leg name. Unreachable via the real proxy today (it
+  // only emits five literal leg names), but this test pins the same "unknown name falls through to
+  // itself" promise the test above makes, against the prototype-chain case specifically.
+  expect(
+    networkReport([
+      {
+        path: '/api/availability',
+        status: 200,
+        ms: 500,
+        upstream: { totalMs: 200, legs: [{ name: 'toString', ms: 7 }] },
+      },
+    ]),
+  ).toEqual(['  /api/availability · 200 · 500ms · 상류 200ms', '    toString 7']);
+});
+
 test('a measured zero renders as 0, not as missing', () => {
   expect(
     networkReport([

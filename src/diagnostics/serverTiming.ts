@@ -9,8 +9,11 @@ export interface UpstreamLeg {
 }
 
 export interface UpstreamTiming {
-  // The server's own wall clock. NEVER a sum of `legs`: disp and stck run in parallel, so a sum
-  // exceeds the real elapsed time and would drive the panel's residual negative.
+  // The server's own wall clock. NEVER a sum of `legs`: wave 1 (search, str, auth) always fires
+  // concurrently on BOTH the direct and franchise branches (functions/api/availability.ts), so a
+  // sum of legs always exceeds the real elapsed time and would drive the panel's residual negative.
+  // (disp and stck are also parallel, but only on the direct branch -- the franchise branch awaits
+  // them sequentially, so that pair alone cannot carry the rule.)
   totalMs: number | null;
   legs: ReadonlyArray<UpstreamLeg>;
 }

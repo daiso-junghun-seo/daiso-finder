@@ -16,8 +16,9 @@ test('a header with only total yields no legs rather than a fabricated one', () 
 });
 
 test('legs without a total keep totalMs null instead of summing them', () => {
-  // Summing is forbidden: disp and stck run in Promise.all, so a sum exceeds the wall clock and
-  // drives the residual negative. See the design spec §7.
+  // Summing is forbidden: wave 1 (search, str, auth) always fires concurrently on both the direct
+  // and franchise branches, so a sum always exceeds the wall clock and drives the residual negative.
+  // (disp and stck are also parallel, but only on the direct branch.) See the design spec §7.
   expect(parseServerTiming('search;dur=88, stck;dur=310')).toEqual({
     totalMs: null,
     legs: [
@@ -119,12 +120,12 @@ test('the header probe is structural — no casts', () => {
   const withoutComments = serverTimingSource
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^[ \t]*\/\/.*$/gm, '');
-  // The `@ts-expect-error` directive is only ever valid as a full-line comment, so the
-  // comment-stripping above has already deleted any real occurrence before this assertion would
-  // even run -- checked against the RAW source instead. The two cast checks below stay against the
-  // STRIPPED text on purpose: a cast is executable code that must be checked post-strip so the word
-  // "as" appearing in prose/comments cannot false-positive. Do not merge these two checks back
-  // together.
+  // A suppression directive (`@ts-expect-error`) is a COMMENT in every form it can take --
+  // full-line, trailing after code, or inline in a block comment -- so it must be checked against
+  // the RAW source, before the comment-stripping above would delete it. The two cast checks below
+  // stay against the STRIPPED text on purpose: a cast is executable code that must be checked
+  // post-strip so the word "as" appearing in prose/comments cannot false-positive. Do not merge
+  // these two checks back together.
   expect(serverTimingSource).not.toMatch(/@ts-expect-error/);
   expect(withoutComments).not.toMatch(/as unknown as/);
   expect(withoutComments).not.toMatch(/\bas\s+\{/);

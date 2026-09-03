@@ -34,11 +34,16 @@ export const AVAILABILITY_ATTEMPTS = 3;
 // measured against real store networks, not a demonstrated capability. Hypothesis — requires field
 // validation"). A Hypothesis-labelled figure is the Bible INVITING field validation, so under CLAUDE.md §3
 // this repo may refine it on recorded evidence — no owner escalation required.
-// What blocks raising it today is EVIDENTIARY, not jurisdictional: every latency we have traverses
-// localtunnel and the proxy does not report its own upstream duration, so path latency and vendor latency
-// are not separated (and the earlier 408s were positively confirmed to be the tunnel). Raising a budget
-// from tunnel-inflated numbers is exactly the unfounded change the record exists to prevent, so the next
-// step is proxy upstream instrumentation. 1800ms is what fits under the cap meanwhile: ~1.25x the measured
+// What blocked raising it before this repo shipped upstream instrumentation was EVIDENTIARY, not
+// jurisdictional: every latency we had traversed localtunnel and the proxy did not report its own
+// upstream duration, so path latency and vendor latency were not separated (and the earlier 408s
+// were positively confirmed to be the tunnel). Raising a budget from tunnel-inflated numbers is
+// exactly the unfounded change the record exists to prevent. That instrumentation now EXISTS —
+// functions/_lib/timing.ts reports a per-leg upstream duration plus the handler's own wall clock
+// over Server-Timing, gated behind DIAG_TIMING (docs/notes/open-questions.md §B30-24) — so path
+// latency and vendor latency CAN now be separated. What remains is not more tooling but a use of
+// it: one real-device session run with DIAG_TIMING=1 to produce the clean field evidence this
+// number needs before it moves. 1800ms is what fits under the cap meanwhile: ~1.25x the measured
 // maximum, and 200ms under the runner's so an attempt timeout is what gets REPORTED rather than being
 // masked by the runner's blind abort (the observed `error · 2002ms`). Generous headroom is NOT achievable
 // under that cap — see docs/notes/open-questions.md §B30-18 ②.
