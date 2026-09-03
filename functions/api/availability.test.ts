@@ -43,6 +43,15 @@ function req(body: unknown) {
     env: ENV,
   };
 }
+function reqDiag(body: unknown) {
+  return {
+    request: new Request('http://x/api/availability', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+    env: { ...ENV, DIAG_TIMING: '1' },
+  };
+}
 
 test('direct store: fans out and returns a normalized inStock observation with no-store', async () => {
   route([
@@ -484,4 +493,77 @@ test('missing strCd or keyword → 400', async () => {
   route([]);
   expect((await onRequestPost(req({ keyword: 'x' }))).status).toBe(400);
   expect((await onRequestPost(req({ strCd: '1' }))).status).toBe(400);
+});
+
+test('a direct-store lookup reports all five legs', async () => {
+  route([['/auth/request', authOk], ['SearchGoods', searchOk([PROD])], ...locStck]);
+  const res = await onRequestPost(reqDiag({ strCd: '10803', keyword: '밀폐용기' }));
+  const timing = res.headers.get('server-timing') ?? '';
+  expect(timing).toMatch(/(^|, )total;dur=\d+/);
+  for (const leg of ['search', 'str', 'auth', 'disp', 'stck']) {
+    expect(timing).toMatch(new RegExp(`(^|, )${leg};dur=\\d+`));
+  }
+});
+
+test('noMatch does not report legs that were still in flight', async () => {
+  // The in-flight condition must be GUARANTEED, not incidental. searchGoods and fetchDirectYn have
+  // identical microtask depth (await fetch, then await res.json()) and start in the same synchronous
+  // tick, so with ordinary mocks selStr settles BEFORE the noMatch return and this test would pass
+  // or fail on scheduling rather than on the rule it claims to check. Parking selStr and auth
+  // forever makes the rule the only thing under test.
+  const never = new Promise<Response>(() => {});
+  globalThis.fetch = ((input: RequestInfo | URL) =>
+    String(input).includes('SearchGoods')
+      ? Promise.resolve(
+          new Response(JSON.stringify({ resultSet: { result: [{ resultDocuments: [] }] } }), {
+            status: 200,
+          }),
+        )
+      : never) as typeof fetch;
+  const res = await onRequestPost(reqDiag({ strCd: '10803', keyword: '없는상품' }));
+  expect(((await res.json()) as { noMatch?: boolean }).noMatch).toBe(true);
+  const timing = res.headers.get('server-timing') ?? '';
+  expect(timing).toMatch(/search;dur=\d+/);
+  expect(timing).not.toMatch(/str;dur=/);
+  expect(timing).not.toMatch(/auth;dur=/);
+});
+
+test('a franchise store with no display zone omits stck entirely', async () => {
+  // stck is never called in that branch. It must be ABSENT, not 0 -- a 0 would claim a measurement
+  // nobody made.
+  route([
+    ['/auth/request', authOk],
+    ['SearchGoods', searchOk([PROD])],
+    ['/ms/msg/selStr', () => new Response(JSON.stringify({ directYn: 'N' }), { status: 200 })],
+    ['/pdo/selIntPdStDispInfo', () => new Response(JSON.stringify({ data: [] }), { status: 200 })],
+  ]);
+  const res = await onRequestPost(reqDiag({ strCd: '10803', keyword: '밀폐용기' }));
+  const timing = res.headers.get('server-timing') ?? '';
+  expect(timing).toMatch(/disp;dur=\d+/);
+  expect(timing).not.toMatch(/stck;dur=/);
+});
+
+test('a 502 reports the legs that completed before the failure', async () => {
+  route([
+    ['/auth/request', authOk],
+    ['SearchGoods', searchOk([PROD])],
+    ['/ms/msg/selStr', () => new Response(JSON.stringify({ directYn: 'Y' }), { status: 200 })],
+    [
+      '/pdo/selIntPdStDispInfo',
+      () =>
+        new Response(JSON.stringify({ data: [{ zoneNo: '56', stairNo: '11' }] }), { status: 200 }),
+    ],
+    ['/pd/pdh/selStrPkupStck', () => new Response('nope', { status: 500 })],
+  ]);
+  const res = await onRequestPost(reqDiag({ strCd: '10803', keyword: '밀폐용기' }));
+  expect(res.status).toBe(502);
+  // The leg completed (with a non-ok response) before the throw, so it is reported. This is the case
+  // the header exists for, and losing it would blind exactly the failure worth measuring.
+  expect(res.headers.get('server-timing')).toMatch(/stck;dur=\d+/);
+});
+
+test('emits no Server-Timing without DIAG_TIMING', async () => {
+  route([['/auth/request', authOk], ['SearchGoods', searchOk([PROD])], ...locStck]);
+  const res = await onRequestPost(req({ strCd: '10803', keyword: '밀폐용기' }));
+  expect(res.headers.get('server-timing')).toBeNull();
 });

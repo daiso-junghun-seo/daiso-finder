@@ -14,6 +14,13 @@ import {
   searchGoodsUrl,
   upstreamConfig,
 } from '../_lib/daisoUpstream';
+import {
+  type DiagEnv,
+  type UpstreamTimer,
+  createUpstreamTimer,
+  diagTimingEnabled,
+  withTiming,
+} from '../_lib/timing';
 
 // Network contract with the client — mirror of src/adapters/daisomall/rawObservation.ts (keep in sync;
 // the client's parseRawObservation validator is the enforcement point).
@@ -181,10 +188,13 @@ async function fetchStock(
   };
 }
 
-export async function onRequestPost(context: {
-  request: Request;
-  env: UpstreamEnv;
-}): Promise<Response> {
+type Ctx = { request: Request; env: UpstreamEnv & DiagEnv };
+
+// The handler body is inner so the header is attached at exactly ONE place. This file branches
+// across bad-config, bad-body, missing-fields, unreachable-search, noMatch, the direct/franchise
+// split and the final catch; threading a timer argument into each return is how a path silently
+// loses its timing.
+async function handle(context: Ctx, timer: UpstreamTimer): Promise<Response> {
   let cfg: UpstreamConfig;
   try {
     cfg = upstreamConfig(context.env);
@@ -201,9 +211,11 @@ export async function onRequestPost(context: {
   if (!strCd || !keyword) return jsonResponse({ error: 'bad_request' }, 400);
 
   // Wave 1 (parallel): product identity, franchise flag, auth handshake.
-  const productP = searchGoods(cfg.wwwBase, keyword, body.pdNo);
-  const directYnP = fetchDirectYn(cfg.fapiBase, strCd);
-  const authP = requestAuth({ fapiBase: cfg.fapiBase, encKey: cfg.encKey });
+  const productP = timer.leg('search', () => searchGoods(cfg.wwwBase, keyword, body.pdNo));
+  const directYnP = timer.leg('str', () => fetchDirectYn(cfg.fapiBase, strCd));
+  const authP = timer.leg('auth', () =>
+    requestAuth({ fapiBase: cfg.fapiBase, encKey: cfg.encKey }),
+  );
   directYnP.catch(() => {}); // guard late rejections while we resolve product first
   authP.catch(() => {});
 
@@ -216,18 +228,24 @@ export async function onRequestPost(context: {
     const pdNo = body.pdNo ?? product.pdNo;
     const call = makeAuthedCall(cfg, auth);
 
+    // NOTE: makeAuthedCall retries the same call once after re-issuing the token on a 401, so the
+    // disp/stck legs fold BOTH round trips into one number. Do not read a leg as per-round-trip
+    // latency. Recorded as a limitation in the design spec §8-1; a separate marker was declined.
     let locations: { floor: string; zone: string }[];
     let stock: StockFields | null;
     if (directYn === 'Y') {
       // Direct: location ∥ stock. A fetched-stock failure throws → 502 (never a stck:null direct record).
       [locations, stock] = await Promise.all([
-        fetchLocations(cfg.fapiBase, pdNo, strCd, call),
-        fetchStock(cfg.fapiBase, pdNo, strCd, call),
+        timer.leg('disp', () => fetchLocations(cfg.fapiBase, pdNo, strCd, call)),
+        timer.leg('stck', () => fetchStock(cfg.fapiBase, pdNo, strCd, call)),
       ]);
     } else {
       // Franchise: location first; stock only if a display zone exists (SCR_MSG_0015 logic).
-      locations = await fetchLocations(cfg.fapiBase, pdNo, strCd, call);
-      stock = locations.length > 0 ? await fetchStock(cfg.fapiBase, pdNo, strCd, call) : null;
+      locations = await timer.leg('disp', () => fetchLocations(cfg.fapiBase, pdNo, strCd, call));
+      stock =
+        locations.length > 0
+          ? await timer.leg('stck', () => fetchStock(cfg.fapiBase, pdNo, strCd, call))
+          : null;
     }
 
     const observation: RawStoreObservation = {
@@ -247,4 +265,9 @@ export async function onRequestPost(context: {
   } catch {
     return badGateway();
   }
+}
+
+export async function onRequestPost(context: Ctx): Promise<Response> {
+  const timer = createUpstreamTimer(diagTimingEnabled(context.env));
+  return withTiming(await handle(context, timer), timer);
 }
