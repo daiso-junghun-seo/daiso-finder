@@ -363,6 +363,10 @@ describe('diagnostic fetch', () => {
     globalThis.fetch = (async () => new Response('{}', { status: 200 })) as typeof fetch;
     try {
       await createDiagnosticFetch(() => 0)('/api/stores', init);
+      // The length assertion proves an entry was actually published — without it, a regression that
+      // dropped the publishNetwork call entirely would leave network[0] undefined and this test green
+      // for the wrong reason (undefined?.upstream is also undefined).
+      expect(getSnapshot().network).toHaveLength(1);
       // Absent, not an empty object: the panel must be able to tell "not observed" from "observed empty".
       expect(getSnapshot().network[0]?.upstream).toBeUndefined();
     } finally {
