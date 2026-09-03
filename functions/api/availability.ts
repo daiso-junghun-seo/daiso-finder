@@ -228,9 +228,12 @@ async function handle(context: Ctx, timer: UpstreamTimer): Promise<Response> {
     const pdNo = body.pdNo ?? product.pdNo;
     const call = makeAuthedCall(cfg, auth);
 
-    // NOTE: makeAuthedCall retries the same call once after re-issuing the token on a 401, so the
-    // disp/stck legs fold BOTH round trips into one number. Do not read a leg as per-round-trip
-    // latency. Recorded as a limitation in the design spec §8-1; a separate marker was declined.
+    // NOTE: makeAuthedCall retries the same call once, after re-issuing the token, when the
+    // response is 401 or 403 — so a disp/stck leg's ms may fold one round trip or two, depending
+    // on whether a reissue was needed. A reissue already in flight (e.g. triggered by the sibling
+    // leg's 401/403 in the same Promise.all, since disp and stck share this call closure) is
+    // reused rather than requested twice. Do not read a leg as per-round-trip latency. Recorded
+    // as a limitation in the design spec §8-1; a separate marker was declined.
     let locations: { floor: string; zone: string }[];
     let stock: StockFields | null;
     if (directYn === 'Y') {
