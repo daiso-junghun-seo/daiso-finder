@@ -2,6 +2,7 @@
 // keep the mocks so `vite dev` + Vitest + the Playwright dev sweep run without a live /api server.
 import { publishNetwork } from '../diagnostics/bus';
 import { isDiagnosticsEnabled, resolveZoomOverride } from '../diagnostics/enabled';
+import { readServerTiming } from '../diagnostics/serverTiming';
 import type {
   GeolocationPort,
   ProductSearchPort,
@@ -35,7 +36,12 @@ export function createDiagnosticFetch(now: () => number = Date.now): DiagnosticF
     const started = now();
     try {
       const response = await fetch(url, init);
-      publishNetwork({ path: url, status: response.status, ms: now() - started });
+      publishNetwork({
+        path: url,
+        status: response.status,
+        ms: now() - started,
+        upstream: readServerTiming(response) ?? undefined,
+      });
       return response;
     } catch (err) {
       publishNetwork({ path: url, status: 'error', ms: now() - started });

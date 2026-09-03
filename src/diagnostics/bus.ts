@@ -3,6 +3,7 @@
 // second, drifting truth.
 import type { ScanOutcome } from '../domain/ports';
 import { isDiagnosticsEnabled } from './enabled';
+import type { UpstreamTiming } from './serverTiming';
 
 // A MediaSettingsRange as reported by track.getCapabilities() — the Image Capture spec's shape for
 // focusDistance/zoom. Each bound is independently optional per spec (a UA may report a step with no max,
@@ -152,6 +153,11 @@ export interface NetworkEntry {
   // The body of a FAILED response only, whitespace-flattened and length-capped by the publisher before it
   // ever reaches here (see ERROR_BODY_MAX_CHARS). Absent = none was read, never an empty-string stand-in.
   errorBody?: string;
+  // What the proxy reported about its OWN upstream work, when it reported anything. Absent = not
+  // observed: the flag was off, the proxy is older than this field, or the response never arrived
+  // (a cancelled duplicate carries no headers). `totalMs` is the server's wall clock and is NEVER a
+  // sum of `legs` -- see serverTiming.ts.
+  upstream?: UpstreamTiming;
 }
 
 export interface DiagnosticsSnapshot {

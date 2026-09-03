@@ -339,4 +339,34 @@ describe('diagnostic fetch', () => {
       vi.unstubAllEnvs();
     }
   });
+
+  test('createDiagnosticFetch publishes the upstream timing the response carried', async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response('{}', {
+        status: 200,
+        headers: { 'server-timing': 'total;dur=412, str;dur=61' },
+      })) as typeof fetch;
+    try {
+      await createDiagnosticFetch(() => 0)('/api/stores', init);
+      expect(getSnapshot().network[0]?.upstream).toEqual({
+        totalMs: 412,
+        legs: [{ name: 'str', ms: 61 }],
+      });
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  test('a response with no Server-Timing publishes no upstream field at all', async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () => new Response('{}', { status: 200 })) as typeof fetch;
+    try {
+      await createDiagnosticFetch(() => 0)('/api/stores', init);
+      // Absent, not an empty object: the panel must be able to tell "not observed" from "observed empty".
+      expect(getSnapshot().network[0]?.upstream).toBeUndefined();
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
 });
