@@ -30,7 +30,12 @@ export function parseServerTiming(value: string | null): UpstreamTiming | null {
     if (name === '') continue;
     const dur = params.map((p) => p.trim()).find((p) => p.startsWith(DUR_PREFIX));
     if (dur === undefined) continue;
-    const ms = Number(dur.slice(DUR_PREFIX.length));
+    const durValue = dur.slice(DUR_PREFIX.length).trim();
+    // Number('') is 0, and 0 passes Number.isFinite -- an empty or whitespace-only duration must be
+    // rejected BEFORE Number() ever runs, or it fabricates a measured zero for a duration nobody
+    // actually sent.
+    if (durValue === '') continue;
+    const ms = Number(durValue);
     // A malformed duration is DROPPED, never coerced to 0 -- a fabricated zero would read exactly
     // like an instant upstream call.
     if (!Number.isFinite(ms)) continue;
