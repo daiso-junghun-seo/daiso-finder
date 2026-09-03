@@ -24,8 +24,9 @@ interface StoreRow {
 
 type Ctx = { request: Request; env: UpstreamEnv & DiagEnv };
 
-// The handler body is inner so the header is attached at exactly ONE place. This file has six return
-// statements; threading a timer argument into each is how a path silently loses its timing.
+// The handler body is inner so the header is attached at exactly ONE place. This file has multiple
+// return statements across both search and nearby mode; threading a timer argument into each is how a
+// path silently loses its timing.
 async function handle(context: Ctx, timer: UpstreamTimer): Promise<Response> {
   let cfg: UpstreamConfig;
   try {

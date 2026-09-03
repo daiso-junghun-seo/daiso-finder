@@ -245,9 +245,7 @@ async function main() {
   console.log(
     `  serves ${SERVE_STATIC ? 'dist/ (SPA) + ' : ''}REAL functions/api/* handlers in Node.${corsNote}`,
   );
-  console.log(
-    `  upstream timing: ${process.env.DIAG_TIMING === '1' ? 'ON (Server-Timing)' : 'off'}`,
-  );
+  console.log(`  upstream timing: ${env.DIAG_TIMING === '1' ? 'ON (Server-Timing)' : 'off'}`);
   console.log(
     '  daisomall accepts Node TLS; workerd is blocked on protected endpoints (why this exists).',
   );
