@@ -28,6 +28,10 @@ test('legs without a total keep totalMs null instead of summing them', () => {
 });
 
 test('a measured zero survives', () => {
+  // A genuine dur=0 is a real measurement, not an absence -- the mirror image of the fabrication
+  // bug this file guards against. This is also what would fail if the format/finite check were
+  // ever "simplified" to a truthiness test (`if (!ms) continue;`), which drops a real zero exactly
+  // like it drops nothing at all.
   expect(parseServerTiming('total;dur=0, str;dur=0')).toEqual({
     totalMs: 0,
     legs: [{ name: 'str', ms: 0 }],
@@ -47,6 +51,27 @@ test('an empty or whitespace duration value is dropped, never fabricated as a me
   // nothing observed at all (→ null); a trailing empty leg is dropped but the total survives.
   expect(parseServerTiming('total;dur=')).toBeNull();
   expect(parseServerTiming('total;dur=412, str;dur=')).toEqual({ totalMs: 412, legs: [] });
+});
+
+test('a duration matching JavaScript numeric-literal grammar but not a plain decimal is dropped', () => {
+  // Number() accepts far more than a Server-Timing dur value ever should -- radix prefixes, signs
+  // and exponents all parse to a finite number under Number.isFinite, which is why the FORMAT is
+  // checked before Number() ever runs. Named individually so a future edit that reintroduces
+  // Number()'s permissive grammar goes red on a specific, readable case rather than a vague one.
+  expect(parseServerTiming('total;dur=0x0')).toBeNull(); // hex, even though it evaluates to 0
+  expect(parseServerTiming('total;dur=0x10')).toBeNull(); // hex, non-zero
+  expect(parseServerTiming('total;dur=0o0')).toBeNull(); // octal
+  expect(parseServerTiming('total;dur=0b0')).toBeNull(); // binary
+  expect(parseServerTiming('total;dur=+0')).toBeNull(); // explicit sign
+  expect(parseServerTiming('total;dur=-1')).toBeNull(); // negative
+  expect(parseServerTiming('total;dur=1e3')).toBeNull(); // exponent
+  expect(parseServerTiming('total;dur=Infinity')).toBeNull(); // not a decimal at all
+});
+
+test('a fractional duration is accepted -- dur is a double per spec', () => {
+  // This proxy emits integer durations today, but the parser is deliberately defensive against a
+  // spec-legal value it has never actually observed yet.
+  expect(parseServerTiming('total;dur=412.5')).toEqual({ totalMs: 412.5, legs: [] });
 });
 
 test('an absent or unparseable header is null, not an empty object', () => {

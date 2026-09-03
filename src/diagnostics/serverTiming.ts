@@ -17,6 +17,10 @@ export interface UpstreamTiming {
 
 const TOTAL_NAME = 'total';
 const DUR_PREFIX = 'dur=';
+// A Server-Timing dur value is a plain decimal, optionally with a fractional part (it is a double
+// per spec -- this proxy emits integers today, but the parser stays defensive). Deliberately NOT
+// the grammar Number() accepts: no sign, no radix prefix (0x/0o/0b), no exponent, no Infinity/NaN.
+const DUR_FORMAT = /^\d+(?:\.\d+)?$/;
 
 export function parseServerTiming(value: string | null): UpstreamTiming | null {
   if (value === null) return null;
@@ -31,13 +35,15 @@ export function parseServerTiming(value: string | null): UpstreamTiming | null {
     const dur = params.map((p) => p.trim()).find((p) => p.startsWith(DUR_PREFIX));
     if (dur === undefined) continue;
     const durValue = dur.slice(DUR_PREFIX.length).trim();
-    // Number('') is 0, and 0 passes Number.isFinite -- an empty or whitespace-only duration must be
-    // rejected BEFORE Number() ever runs, or it fabricates a measured zero for a duration nobody
-    // actually sent.
-    if (durValue === '') continue;
+    // Number() accepts far more than a Server-Timing dur value ever should: hex/octal/binary
+    // literals (0x0, 0o0, 0b0), signs (+0, -1), exponents (1e3) and 'Infinity' itself all parse to
+    // a number -- judging Number()'s RESULT is not enough (that includes the earlier '' -> 0
+    // fabrication). The FORMAT is validated before Number() ever runs, never judged after the fact.
+    if (!DUR_FORMAT.test(durValue)) continue;
     const ms = Number(durValue);
-    // A malformed duration is DROPPED, never coerced to 0 -- a fabricated zero would read exactly
-    // like an instant upstream call.
+    // Still guarded, for a pathological input the format check above cannot rule out (a digit
+    // string long enough to overflow to Infinity) -- a malformed duration is DROPPED, never
+    // coerced to 0.
     if (!Number.isFinite(ms)) continue;
     if (name === TOTAL_NAME) totalMs = ms;
     else legs.push({ name, ms });
