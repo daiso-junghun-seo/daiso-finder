@@ -1,6 +1,7 @@
 // src/adapters/daisomall/storeStockRepository.ts
 // StoreStockRepository (B6) over the internal /api/availability proxy. Validates + maps; never talks to daisomall.
 import { type NetworkOutcome, publishNetwork } from '../../diagnostics/bus';
+import { type UpstreamTiming, readServerTiming } from '../../diagnostics/serverTiming';
 import { NoCatalogMatchError } from '../../domain/errors';
 import type { StoreStockRepository } from '../../domain/ports';
 import type { AvailabilityAnswer } from '../../domain/types';
@@ -153,6 +154,7 @@ export function createDaisoStoreStockRepository(
           status: number | 'error',
           outcome: NetworkOutcome,
           errorBody?: string,
+          upstream?: UpstreamTiming,
         ): void => {
           if (published) return;
           published = true;
@@ -163,6 +165,7 @@ export function createDaisoStoreStockRepository(
             attempt: { index: index + 1, total },
             outcome,
             errorBody,
+            upstream,
           });
         };
 
@@ -173,14 +176,17 @@ export function createDaisoStoreStockRepository(
             body,
             signal: ctrl.signal,
           });
+          // Read ONCE, before either publish: both paths report the same response, and reading the
+          // header twice would be two probes of the same fact.
+          const upstream = readServerTiming(res) ?? undefined;
           if (!res.ok) {
-            publish(res.status, 'httpError', await readErrorBody(res));
+            publish(res.status, 'httpError', await readErrorBody(res), upstream);
             throw new Error(`availability ${res.status}`); // → FAILURE path
           }
           // Published here, BEFORE the body is parsed: a response arriving is the network fact, and it is
           // true regardless of what the body later turns out to contain. A mapping failure below is not a
           // transport failure and must not be re-published as one.
-          publish(res.status, 'ok');
+          publish(res.status, 'ok', undefined, upstream);
           const json = (await res.json()) as { noMatch?: boolean; data?: unknown };
           if (json?.noMatch) return { kind: 'noMatch', index };
           return {

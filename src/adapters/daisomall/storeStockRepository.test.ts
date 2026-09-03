@@ -21,6 +21,16 @@ const store = { strCd: '10803', strNm: '명동역점' };
 const ok = (body: unknown): ReturnType<FetchLike> =>
   Promise.resolve({ ok: true, status: 200, json: async () => body });
 
+// Like ok(), but with the headers a real Response carries. ok() deliberately has none, which is what
+// most doubles in this file look like — and that shape is itself covered by the third test below.
+const okTimed = (body: unknown, timing: string): ReturnType<FetchLike> =>
+  Promise.resolve({
+    ok: true,
+    status: 200,
+    headers: { get: (name: string) => (name === 'server-timing' ? timing : null) },
+    json: async () => body,
+  });
+
 beforeEach(() => {
   flag.enabled = true;
   resetDiagnostics();
@@ -674,4 +684,54 @@ test('the error body is read with no cast or suppression escape hatch', () => {
   for (const forbidden of ['as unknown as', 'as any', '@ts-expect-error', '@ts-ignore']) {
     expect(code).not.toContain(forbidden);
   }
+});
+
+// ---------------------------------------------------------------------------------------------------
+// Upstream timing (Server-Timing) — this adapter self-publishes and does not go through
+// createDiagnosticFetch, so the header has to be read here too (§B30-18).
+// ---------------------------------------------------------------------------------------------------
+
+test('an ok attempt publishes the upstream timing the proxy reported', async () => {
+  // /api/availability does NOT go through createDiagnosticFetch -- this adapter self-publishes
+  // (§B30-18) -- so the header has to be read here too, and this test is what proves it is.
+  const repo = createDaisoStoreStockRepository({
+    fetchImpl: async () =>
+      okTimed({ data: observationFixtures.inStock }, 'total;dur=1169, search;dur=88, stck;dur=310'),
+  });
+  expect(await repo.query(store, { keyword: '밀폐용기' })).toEqual(mockAnswers.inStock);
+  expect(getSnapshot().network.find((e) => e.outcome === 'ok')?.upstream).toEqual({
+    totalMs: 1169,
+    legs: [
+      { name: 'search', ms: 88 },
+      { name: 'stck', ms: 310 },
+    ],
+  });
+});
+
+test('a failed attempt publishes upstream timing too', async () => {
+  // The 502 case is the one most worth measuring; losing it here would blind exactly that.
+  const repo = createDaisoStoreStockRepository({
+    fetchImpl: async () => ({
+      ok: false,
+      status: 502,
+      headers: { get: () => 'total;dur=800, search;dur=88' },
+      json: async () => ({}),
+      text: async () => '{"error":"upstream_unavailable"}',
+    }),
+  });
+  await expect(repo.query(store, { keyword: '밀폐용기' })).rejects.toBeInstanceOf(Error);
+  expect(getSnapshot().network.find((e) => e.outcome === 'httpError')?.upstream).toEqual({
+    totalMs: 800,
+    legs: [{ name: 'search', ms: 88 }],
+  });
+});
+
+test('a double without headers publishes no upstream field', async () => {
+  // The shape most doubles in this file have. This is what proves the structural probe holds rather
+  // than throwing on the { ok, status, json } doubles FetchLike is deliberately narrowed to.
+  const repo = createDaisoStoreStockRepository({
+    fetchImpl: async () => ok({ data: observationFixtures.inStock }),
+  });
+  await repo.query(store, { keyword: '밀폐용기' });
+  expect(getSnapshot().network.find((e) => e.outcome === 'ok')?.upstream).toBeUndefined();
 });
