@@ -27,6 +27,7 @@ import fs from 'node:fs';
 //   PRE_AUTH_ENC_KEY  vendor pre-auth AES key (public constant; kept in env for rotation/hygiene)
 //   UPSTREAM_BASE     fapi.daisomall.co.kr override
 //   SEARCH_BASE       www.daisomall.co.kr override
+//   DIAG_TIMING       '1' adds Server-Timing (upstream leg durations)   default off
 // process.env always wins; .dev.vars (gitignored) is a local-only fallback so `npm run dev:live` needs no
 // exported env vars. Never logged: JWT, x-dm-uid, Authorization/Bearer, request/response bodies.
 //
@@ -66,6 +67,7 @@ function resolveUpstreamEnv() {
       process.env.PRE_AUTH_ENC_KEY || fileVars.PRE_AUTH_ENC_KEY || 'PRE_AUTH_ENC_KEY',
     UPSTREAM_BASE: process.env.UPSTREAM_BASE || fileVars.UPSTREAM_BASE || undefined,
     SEARCH_BASE: process.env.SEARCH_BASE || fileVars.SEARCH_BASE || undefined,
+    DIAG_TIMING: process.env.DIAG_TIMING || fileVars.DIAG_TIMING || undefined,
   };
 }
 
@@ -242,6 +244,9 @@ async function main() {
     : ' same-origin (no CORS headers).';
   console.log(
     `  serves ${SERVE_STATIC ? 'dist/ (SPA) + ' : ''}REAL functions/api/* handlers in Node.${corsNote}`,
+  );
+  console.log(
+    `  upstream timing: ${process.env.DIAG_TIMING === '1' ? 'ON (Server-Timing)' : 'off'}`,
   );
   console.log(
     '  daisomall accepts Node TLS; workerd is blocked on protected endpoints (why this exists).',

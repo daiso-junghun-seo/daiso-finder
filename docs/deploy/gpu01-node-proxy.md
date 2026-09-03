@@ -74,6 +74,7 @@ only** — production must set real env vars, not ship `.dev.vars`):
 | `PRE_AUTH_ENC_KEY` | recommended | hardcoded fallback `PRE_AUTH_ENC_KEY` | Public vendor constant (k-skill `daiso-product-search/SKILL.md`) — not secret, kept in env for rotation hygiene per `docs/notes/store-api-observations.md`. |
 | `UPSTREAM_BASE` | no | `https://fapi.daisomall.co.kr` | Override only if the vendor host changes. |
 | `SEARCH_BASE` | no | `https://www.daisomall.co.kr` | Override only if the vendor host changes. |
+| `DIAG_TIMING` | no | unset | Optional; `'1'` adds a `Server-Timing` response header carrying upstream leg durations. **Leave it unset in production** — it is a diagnostics aid for local device sessions, and the header would otherwise advertise which vendor endpoints the proxy calls. |
 
 None of these are session secrets — the actual sensitive material (JWT, `x-dm-uid`, Bearer) is fetched
 per-request from daisomall and **never persisted, never logged, never in `.env`** (see
@@ -89,6 +90,7 @@ PORT=8790
 PRE_AUTH_ENC_KEY=PRE_AUTH_ENC_KEY
 UPSTREAM_BASE=https://fapi.daisomall.co.kr
 SEARCH_BASE=https://www.daisomall.co.kr
+# DIAG_TIMING=1                                  # diagnostics only — leave unset in production
 ```
 
 ## 4. Build step

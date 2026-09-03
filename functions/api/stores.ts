@@ -8,6 +8,13 @@ import {
   jsonResponse,
   upstreamConfig,
 } from '../_lib/daisoUpstream';
+import {
+  type DiagEnv,
+  type UpstreamTimer,
+  createUpstreamTimer,
+  diagTimingEnabled,
+  withTiming,
+} from '../_lib/timing';
 
 interface StoreRow {
   strCd?: unknown;
@@ -15,10 +22,11 @@ interface StoreRow {
   km?: unknown;
 }
 
-export async function onRequestPost(context: {
-  request: Request;
-  env: UpstreamEnv;
-}): Promise<Response> {
+type Ctx = { request: Request; env: UpstreamEnv & DiagEnv };
+
+// The handler body is inner so the header is attached at exactly ONE place. This file has six return
+// statements; threading a timer argument into each is how a path silently loses its timing.
+async function handle(context: Ctx, timer: UpstreamTimer): Promise<Response> {
   let cfg: UpstreamConfig;
   try {
     cfg = upstreamConfig(context.env);
@@ -36,18 +44,20 @@ export async function onRequestPost(context: {
   if (query) {
     // Search mode — UNCHANGED from the existing behavior.
     try {
-      const res = await fetch(`${cfg.fapiBase}${PATHS.selStr}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          keyword: query,
-          srchYn: 'Y',
-          srchBassPkupStrYn: 'Y',
-          geolocationAgrYn: 'N',
-          currentPage: 1,
-          pageSize: 10,
+      const res = await timer.leg('str', () =>
+        fetch(`${cfg.fapiBase}${PATHS.selStr}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            keyword: query,
+            srchYn: 'Y',
+            srchBassPkupStrYn: 'Y',
+            geolocationAgrYn: 'N',
+            currentPage: 1,
+            pageSize: 10,
+          }),
         }),
-      });
+      );
       if (!res.ok) return badGateway();
       const j = (await res.json()) as { data?: StoreRow[] };
       const stores = (j?.data ?? [])
@@ -65,20 +75,22 @@ export async function onRequestPost(context: {
   if (lat === null || lng === null) return jsonResponse({ stores: [] });
 
   try {
-    const res = await fetch(`${cfg.fapiBase}${PATHS.selStr}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        keyword: '',
-        srchYn: 'N',
-        srchBassPkupStrYn: 'Y',
-        geolocationAgrYn: 'Y',
-        curLttd: lat,
-        curLitd: lng,
-        currentPage: 1,
-        pageSize: 10,
+    const res = await timer.leg('str', () =>
+      fetch(`${cfg.fapiBase}${PATHS.selStr}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          keyword: '',
+          srchYn: 'N',
+          srchBassPkupStrYn: 'Y',
+          geolocationAgrYn: 'Y',
+          curLttd: lat,
+          curLitd: lng,
+          currentPage: 1,
+          pageSize: 10,
+        }),
       }),
-    });
+    );
     if (!res.ok) return badGateway();
     const j = (await res.json()) as { data?: StoreRow[] };
     const stores = (j?.data ?? [])
@@ -93,4 +105,9 @@ export async function onRequestPost(context: {
   } catch {
     return badGateway();
   }
+}
+
+export async function onRequestPost(context: Ctx): Promise<Response> {
+  const timer = createUpstreamTimer(diagTimingEnabled(context.env));
+  return withTiming(await handle(context, timer), timer);
 }

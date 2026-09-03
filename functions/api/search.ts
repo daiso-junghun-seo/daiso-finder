@@ -10,6 +10,13 @@ import {
   searchGoodsUrl,
   upstreamConfig,
 } from '../_lib/daisoUpstream';
+import {
+  type DiagEnv,
+  type UpstreamTimer,
+  createUpstreamTimer,
+  diagTimingEnabled,
+  withTiming,
+} from '../_lib/timing';
 
 interface SearchDoc {
   pdNo?: unknown;
@@ -57,10 +64,11 @@ function foldCandidates(payload: SearchGoodsPayload): Candidate[] {
   return out;
 }
 
-export async function onRequestPost(context: {
-  request: Request;
-  env: UpstreamEnv;
-}): Promise<Response> {
+type Ctx = { request: Request; env: UpstreamEnv & DiagEnv };
+
+// The handler body is inner so the header is attached at exactly ONE place. This file has six return
+// statements; threading a timer argument into each is how a path silently loses its timing.
+async function handle(context: Ctx, timer: UpstreamTimer): Promise<Response> {
   let cfg: UpstreamConfig;
   try {
     cfg = upstreamConfig(context.env);
@@ -77,11 +85,18 @@ export async function onRequestPost(context: {
   if (!keyword) return jsonResponse({ candidates: [] });
 
   try {
-    const res = await fetch(searchGoodsUrl(cfg.wwwBase, keyword), { method: 'GET' });
+    const res = await timer.leg('search', () =>
+      fetch(searchGoodsUrl(cfg.wwwBase, keyword), { method: 'GET' }),
+    );
     if (!res.ok) return badGateway();
     const payload = (await res.json()) as SearchGoodsPayload;
     return jsonResponse({ candidates: foldCandidates(payload) });
   } catch {
     return badGateway();
   }
+}
+
+export async function onRequestPost(context: Ctx): Promise<Response> {
+  const timer = createUpstreamTimer(diagTimingEnabled(context.env));
+  return withTiming(await handle(context, timer), timer);
 }

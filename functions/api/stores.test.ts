@@ -86,3 +86,45 @@ test('nearby-mode: an upstream failure → 502 upstream_unavailable', async () =
   expect(res.status).toBe(502);
   expect(await res.json()).toEqual({ error: 'upstream_unavailable' });
 });
+
+test('search mode emits Server-Timing with the str leg when DIAG_TIMING=1', async () => {
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ data: [] }), { status: 200 })) as typeof fetch;
+  const res = await onRequestPost({
+    request: new Request('http://x/api/stores', {
+      method: 'POST',
+      body: JSON.stringify({ query: '강남' }),
+    }),
+    env: { PRE_AUTH_ENC_KEY: 'k', DIAG_TIMING: '1' },
+  });
+  expect(res.headers.get('server-timing')).toMatch(/str;dur=\d+/);
+  expect(res.headers.get('access-control-expose-headers')).toBe('server-timing');
+});
+
+test('nearby mode emits the str leg too', async () => {
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ data: [] }), { status: 200 })) as typeof fetch;
+  const res = await onRequestPost({
+    request: new Request('http://x/api/stores', {
+      method: 'POST',
+      body: JSON.stringify({ lat: 37.5, lng: 127.0 }),
+    }),
+    env: { PRE_AUTH_ENC_KEY: 'k', DIAG_TIMING: '1' },
+  });
+  expect(res.headers.get('server-timing')).toMatch(/str;dur=\d+/);
+});
+
+test('the no-coordinates early return carries total with no legs', async () => {
+  const res = await onRequestPost({
+    request: new Request('http://x/api/stores', { method: 'POST', body: JSON.stringify({}) }),
+    env: { PRE_AUTH_ENC_KEY: 'k', DIAG_TIMING: '1' },
+  });
+  expect(res.headers.get('server-timing')).toMatch(/^total;dur=\d+$/);
+});
+
+test('emits no Server-Timing without DIAG_TIMING', async () => {
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ data: [] }), { status: 200 })) as typeof fetch;
+  const res = await onRequestPost(req({ query: '강남' }));
+  expect(res.headers.get('server-timing')).toBeNull();
+});

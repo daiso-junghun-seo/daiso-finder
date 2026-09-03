@@ -229,3 +229,53 @@ test('an upstream failure → 502 upstream_unavailable', async () => {
   expect(res.status).toBe(502);
   expect(await res.json()).toEqual({ error: 'upstream_unavailable' });
 });
+
+test('emits Server-Timing with the search leg when DIAG_TIMING=1', async () => {
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ resultSet: { result: [{ resultDocuments: [] }] } }), {
+      status: 200,
+    })) as typeof fetch;
+  const res = await onRequestPost({
+    request: new Request('http://x/api/search', {
+      method: 'POST',
+      body: JSON.stringify({ keyword: '밀폐용기' }),
+    }),
+    env: { PRE_AUTH_ENC_KEY: 'k', DIAG_TIMING: '1' },
+  });
+  const timing = res.headers.get('server-timing');
+  expect(timing).toMatch(/(^|, )total;dur=\d+/);
+  expect(timing).toMatch(/(^|, )search;dur=\d+/);
+});
+
+test('emits no Server-Timing without DIAG_TIMING', async () => {
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ resultSet: { result: [{ resultDocuments: [] }] } }), {
+      status: 200,
+    })) as typeof fetch;
+  const res = await onRequestPost(req({ keyword: '밀폐용기' }));
+  expect(res.headers.get('server-timing')).toBeNull();
+});
+
+test('a 502 still reports how far it got', async () => {
+  globalThis.fetch = (async () => new Response('nope', { status: 500 })) as typeof fetch;
+  const res = await onRequestPost({
+    request: new Request('http://x/api/search', {
+      method: 'POST',
+      body: JSON.stringify({ keyword: '밀폐용기' }),
+    }),
+    env: { PRE_AUTH_ENC_KEY: 'k', DIAG_TIMING: '1' },
+  });
+  expect(res.status).toBe(502);
+  // The leg is present because it COMPLETED (with a non-ok response); this is the case the header
+  // exists for, and losing it would blind exactly the failure worth measuring.
+  expect(res.headers.get('server-timing')).toMatch(/search;dur=\d+/);
+});
+
+test('an early 400 carries total with no legs', async () => {
+  const res = await onRequestPost({
+    request: new Request('http://x/api/search', { method: 'POST', body: 'not json' }),
+    env: { PRE_AUTH_ENC_KEY: 'k', DIAG_TIMING: '1' },
+  });
+  expect(res.status).toBe(400);
+  expect(res.headers.get('server-timing')).toMatch(/^total;dur=\d+$/);
+});
