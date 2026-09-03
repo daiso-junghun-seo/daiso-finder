@@ -581,6 +581,97 @@ test("one lookup's three attempts render as three labelled, distinguishable line
   ]);
 });
 
+test('the main line carries the server wall clock and the legs go on an indented line', () => {
+  expect(
+    networkReport([
+      {
+        path: '/api/availability',
+        status: 200,
+        ms: 1169,
+        attempt: { index: 1, total: 3 },
+        outcome: 'ok',
+        upstream: {
+          totalMs: 412,
+          legs: [
+            { name: 'search', ms: 88 },
+            { name: 'str', ms: 61 },
+            { name: 'auth', ms: 96 },
+            { name: 'disp', ms: 94 },
+            { name: 'stck', ms: 310 },
+          ],
+        },
+      },
+    ]),
+  ).toEqual([
+    '  /api/availability #1/3 · 200 · 1169ms · 상류 412ms',
+    '    검색 88 · 매장 61 · 인증 96 · 진열 94 · 재고 310',
+  ]);
+});
+
+test('an unknown leg name is printed verbatim rather than dropped or renamed', () => {
+  // The panel must not silently swallow a fact the server reported just because this label map has
+  // not caught up with a new leg.
+  expect(
+    networkReport([
+      {
+        path: '/api/availability',
+        status: 200,
+        ms: 500,
+        upstream: { totalMs: 200, legs: [{ name: 'newleg', ms: 42 }] },
+      },
+    ]),
+  ).toEqual(['  /api/availability · 200 · 500ms · 상류 200ms', '    newleg 42']);
+});
+
+test('a measured zero renders as 0, not as missing', () => {
+  expect(
+    networkReport([
+      { path: '/api/stores', status: 200, ms: 5, upstream: { totalMs: 0, legs: [] } },
+    ]),
+  ).toEqual(['  /api/stores · 200 · 5ms · 상류 0ms']);
+});
+
+test('total present with no legs renders no second line', () => {
+  expect(
+    networkReport([
+      { path: '/api/search', status: 400, ms: 9, upstream: { totalMs: 3, legs: [] } },
+    ]),
+  ).toEqual(['  /api/search · 400 · 9ms · 상류 3ms']);
+});
+
+test('an entry with no upstream renders exactly as before', () => {
+  expect(
+    networkReport([
+      {
+        path: '/api/availability',
+        status: 'error',
+        ms: 1171,
+        attempt: { index: 2, total: 3 },
+        outcome: 'aborted',
+      },
+    ]),
+  ).toEqual(['  /api/availability #2/3 · 취소 · 1171ms']);
+});
+
+test('상류 comes before errorBody, never after', () => {
+  // errorBody's own rule is that it is appended LAST so a long body cannot push anything off the
+  // readable start of the line. Appending 상류 after it would break that rule.
+  expect(
+    networkReport([
+      {
+        path: '/api/availability',
+        status: 502,
+        ms: 900,
+        outcome: 'httpError',
+        errorBody: '{"error":"upstream_unavailable"}',
+        upstream: { totalMs: 700, legs: [] },
+      },
+    ]),
+  ).toEqual([
+    '  /api/availability · 502 질의 실패 · 900ms · 상류 700ms · {"error":"upstream_unavailable"}',
+  ]);
+});
+
 test('collectEnvironment reads the live globals without throwing', () => {
   const facts = collectEnvironment();
   expect(facts.buildMode).toBe('DEV'); // Vitest runs the DEV env

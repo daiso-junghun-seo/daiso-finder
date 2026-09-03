@@ -8,6 +8,7 @@ import type {
   ScannerDiagnostics,
   TrackFacts,
 } from './bus';
+import type { UpstreamLeg } from './serverTiming';
 
 export const UNREPORTED = '미보고';
 export const QUERY_FAILED = '질의 실패';
@@ -148,15 +149,36 @@ function networkStatus(entry: NetworkEntry): string {
   }
 }
 
+// Korean labels for the legs the proxy emits today (functions/api/*.ts). An unknown name falls
+// through to itself: the panel reports what the server said, and a label map that has not caught up
+// must not make a measured leg disappear.
+const LEG_LABELS: Record<string, string> = {
+  search: '검색',
+  str: '매장',
+  auth: '인증',
+  disp: '진열',
+  stck: '재고',
+};
+
+function legText(legs: ReadonlyArray<UpstreamLeg>): string {
+  return legs.map((leg) => `${LEG_LABELS[leg.name] ?? leg.name} ${leg.ms}`).join(' · ');
+}
+
 function networkLines(entries: NetworkEntry[]): string[] {
   if (entries.length === 0) return ['  (없음)'];
-  return entries.map((e) => {
+  return entries.flatMap((e) => {
     // `#2/3` groups one lookup's raced requests so three entries read as one lookup rather than three.
     const attempt = e.attempt ? ` #${e.attempt.index}/${e.attempt.total}` : '';
+    // The SERVER's wall clock, never a sum of the legs below: disp and stck run in parallel, so a sum
+    // exceeds it and would make the residual (this line's ms minus 상류) go negative. `== null` and
+    // not a truthiness check, so a measured 0 still renders.
+    const upstream = e.upstream?.totalMs == null ? '' : ` · 상류 ${e.upstream.totalMs}ms`;
     // Appended LAST, and already flattened + capped by the publisher (ERROR_BODY_MAX_CHARS), so a long
     // body cannot push the path, outcome or duration off the readable start of the line.
     const body = e.errorBody ? ` · ${e.errorBody}` : '';
-    return `  ${e.path}${attempt} · ${networkStatus(e)} · ${e.ms}ms${body}`;
+    const main = `  ${e.path}${attempt} · ${networkStatus(e)} · ${e.ms}ms${upstream}${body}`;
+    const legs = e.upstream?.legs ?? [];
+    return legs.length === 0 ? [main] : [main, `    ${legText(legs)}`];
   });
 }
 
