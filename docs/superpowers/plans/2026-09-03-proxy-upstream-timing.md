@@ -497,14 +497,20 @@ test('a direct-store lookup reports all five legs', async () => {
 });
 
 test('noMatch does not report legs that were still in flight', async () => {
-  // SearchGoods returns zero documents, so the handler answers noMatch while selStr and auth are
-  // still unresolved. Reporting them would mean either waiting (which corrupts the measurement) or
-  // inventing a number. Absent is the honest answer.
-  route([
-    ['/auth/request', authOk],
-    ['SearchGoods', searchOk([])],
-    ...locStck,
-  ]);
+  // The in-flight condition must be GUARANTEED, not incidental. searchGoods and fetchDirectYn have
+  // identical microtask depth (await fetch, then await res.json()) and start in the same synchronous
+  // tick, so with ordinary mocks selStr settles BEFORE the noMatch return and this test would pass
+  // or fail on scheduling rather than on the rule it claims to check. Parking selStr and auth
+  // forever makes the rule the only thing under test.
+  const never = new Promise<Response>(() => {});
+  globalThis.fetch = ((input: RequestInfo | URL) =>
+    String(input).includes('SearchGoods')
+      ? Promise.resolve(
+          new Response(JSON.stringify({ resultSet: { result: [{ resultDocuments: [] }] } }), {
+            status: 200,
+          }),
+        )
+      : never) as typeof fetch;
   const res = await onRequestPost(reqDiag({ strCd: '10803', keyword: '없는상품' }));
   expect(((await res.json()) as { noMatch?: boolean }).noMatch).toBe(true);
   const timing = res.headers.get('server-timing') ?? '';
