@@ -167,16 +167,21 @@ test('a malformed observation → UnmappableAnswerError (safe fallback, no fabri
 });
 
 // ---------------------------------------------------------------------------------------------------
-// The race itself (§B30-18)
+// The race itself (§B30-18, machinery kept — production ships 1, §B34)
+// ---------------------------------------------------------------------------------------------------
+// These run on explicit `attempts: 3` injection: they pin the GENERAL race machinery (first-success
+// wins, loser abort, publish partition), not the shipped count. The shipped number lives in the pin
+// test above; a re-raise needs no new machinery tests, only the constant.
 // ---------------------------------------------------------------------------------------------------
 
 test('a lookup issues AVAILABILITY_ATTEMPTS identical requests in parallel', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  // Explicit 3 (machinery's test): at the shipped 1 the "identical set" below is trivially true.
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
 
-  expect(attempts).toHaveLength(AVAILABILITY_ATTEMPTS);
+  expect(attempts).toHaveLength(3);
   // Identical: the whole point is that any one of them is an acceptable answer.
   const bodies = new Set(attempts.map((a) => a.body));
   expect(bodies.size).toBe(1);
@@ -186,15 +191,34 @@ test('a lookup issues AVAILABILITY_ATTEMPTS identical requests in parallel', asy
   await expect(pending).resolves.toEqual(mockAnswers.inStock);
 });
 
-// The owner's call, made after being told it triples this app's load on a third-party API (§B30-18).
-// Pinned so the number cannot drift silently — and it lives in ONE place so tuning it is one line.
-test('the parallel attempt count is 3 (owner decision, §B30-18)', () => {
-  expect(AVAILABILITY_ATTEMPTS).toBe(3);
+// The shipped count is 1 (2026-10-11, §B34 — the 8/8 first-wins + 10/10 single probes
+// retired the race). Pinned so the number cannot drift silently — and it lives in ONE place
+// so tuning it is one line. The race machinery below is exercised on explicit `attempts: 3`
+// injection, so a re-raise stays tested.
+test('the attempt count is 1 (evidence decision, §B34)', () => {
+  expect(AVAILABILITY_ATTEMPTS).toBe(1);
+});
+
+test('a single attempt answers directly — one request, one entry', async () => {
+  const { attempts, fetchImpl } = racingFetch();
+  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  const pending = repo.query(store, { keyword: '밀폐용기' });
+  await tick();
+
+  expect(attempts).toHaveLength(1);
+  attempts[0]?.resolve(inStockSettled());
+  await expect(pending).resolves.toEqual(mockAnswers.inStock);
+
+  const entries = getSnapshot().network;
+  expect(entries).toHaveLength(1);
+  expect(entries[0]?.attempt).toEqual({ index: 1, total: 1 });
 });
 
 test('the first SUCCESS wins; every loser is aborted and the winner is not', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  // Explicit 3: production ships 1 (§B34), and the race below is the machinery's test, not the
+  // shipped count's — the pin above owns the shipped number.
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
 
@@ -210,7 +234,7 @@ test('the first SUCCESS wins; every loser is aborted and the winner is not', asy
 // First SUCCESS, not first settle. A loser that fails must leave the race running.
 test('a losing attempt failing does not end the race — a later success still wins', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
 
@@ -224,7 +248,7 @@ test('a losing attempt failing does not end the race — a later success still w
 
 test('only when ALL attempts fail does the lookup fail (→ FAILURE path)', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
 
@@ -240,7 +264,7 @@ test('only when ALL attempts fail does the lookup fail (→ FAILURE path)', asyn
 // Empty into a spurious 질의 실패.
 test('a noMatch from ONE attempt wins the race, cancels the rest, and still yields NO_MATCH', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
   const pending = repo.query(store, { keyword: '없는상품' });
   await tick();
 
@@ -256,7 +280,7 @@ test('a noMatch from ONE attempt wins the race, cancels the rest, and still yiel
 // assertions could not tell which mechanism had fired. Only the caller can abort within one tick here.
 test('the caller aborting aborts every attempt promptly, as a cancellation not a timeout', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl, timeoutMs: 60_000 });
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3, timeoutMs: 60_000 });
   const ctrl = new AbortController();
   const pending = repo.query(store, { keyword: '밀폐용기' }, ctrl.signal);
   // Same reason as createQueryRunner's side .catch (query-cache.ts): `pending` rejects during the tick
@@ -265,7 +289,8 @@ test('the caller aborting aborts every attempt promptly, as a cancellation not a
   // assertion still sees the original rejection.
   pending.catch(() => {});
   await tick();
-  expect(attempts).toHaveLength(AVAILABILITY_ATTEMPTS);
+  // Injected 3, not the shipped 1 — this is the machinery's test (see the race header above).
+  expect(attempts).toHaveLength(3);
   for (const attempt of attempts) expect(attempt.signal?.aborted).toBe(false);
 
   ctrl.abort();
@@ -274,7 +299,7 @@ test('the caller aborting aborts every attempt promptly, as a cancellation not a
   await expect(pending).rejects.toThrow();
 
   const entries = getSnapshot().network;
-  expect(entries).toHaveLength(AVAILABILITY_ATTEMPTS);
+  expect(entries).toHaveLength(3);
   expect(entries.every((e) => e.outcome === 'aborted')).toBe(true);
   expect(entries.some((e) => e.outcome === 'timeout')).toBe(false);
 });
@@ -282,7 +307,7 @@ test('the caller aborting aborts every attempt promptly, as a cancellation not a
 // A signal that is ALREADY aborted must not produce three live requests that only get cancelled later.
 test('a caller signal aborted before the call aborts every attempt immediately', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl, timeoutMs: 60_000 });
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3, timeoutMs: 60_000 });
   const ctrl = new AbortController();
   ctrl.abort();
   await expect(repo.query(store, { keyword: '밀폐용기' }, ctrl.signal)).rejects.toThrow();
@@ -295,7 +320,7 @@ test('a caller signal aborted before the call aborts every attempt immediately',
 
 test('each attempt is published with its 1-based index and the total', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
   attempts[0]?.resolve(inStockSettled());
@@ -303,7 +328,7 @@ test('each attempt is published with its 1-based index and the total', async () 
   await tick();
 
   const entries = getSnapshot().network;
-  expect(entries).toHaveLength(AVAILABILITY_ATTEMPTS);
+  expect(entries).toHaveLength(3); // injected 3 — the shipped-1 count is pinned above
   expect(entries.map((e) => e.attempt)).toEqual(
     expect.arrayContaining([
       { index: 1, total: 3 },
@@ -345,7 +370,9 @@ test('a non-ok response is published as an httpError carrying its real status', 
 // logging exists precisely to count errors.
 test('a cancelled race loser is never published as an error', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  // Explicit 3: at the shipped 1 there is no loser, and `aborted == 0` would pass with the
+  // loser-publish deleted — the guarantee this test names would be unexercised.
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
   attempts[0]?.resolve(inStockSettled());
@@ -353,7 +380,7 @@ test('a cancelled race loser is never published as an error', async () => {
   await tick();
 
   const entries = getSnapshot().network;
-  expect(entries.filter((e) => e.outcome === 'aborted')).toHaveLength(AVAILABILITY_ATTEMPTS - 1);
+  expect(entries.filter((e) => e.outcome === 'aborted')).toHaveLength(2);
   expect(entries.filter((e) => e.outcome === 'ok')).toHaveLength(1);
   const errorKinds = entries.filter(
     (e) => e.outcome === 'httpError' || e.outcome === 'timeout' || e.outcome === 'networkError',
@@ -421,12 +448,14 @@ test('a malformed body publishes the successful transport only, never a second e
 // One entry per attempt, whatever happens after the response arrives
 // ---------------------------------------------------------------------------------------------------
 
-// The whole panel reading rests on `#i/total` being a partition: bus.ts's NETWORK_LIMIT = 12 is sized as
-// "four consecutive 3-attempt lookups", and a lookup that emitted four lines would make one `#i/3` appear
-// twice. An attempt that already reported an OBSERVED response must not go on to report a second outcome.
+// The whole panel reading rests on `#i/total` being a partition: bus.ts's NETWORK_LIMIT = 12 now holds
+// twelve single-attempt lookups (it was sized as "four consecutive 3-attempt lookups" when the race
+// shipped 3 — §B34 retired it to 1), and a lookup that emitted two lines for one attempt would make one
+// `#1/1` appear twice. An attempt that already reported an OBSERVED response must not go on to report
+// a second outcome.
 test('a loser aborted mid-body keeps its observed 200 — one entry, not a 200 plus a 취소', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
 
@@ -439,8 +468,8 @@ test('a loser aborted mid-body keeps its observed 200 — one entry, not a 200 p
   await tick();
 
   const entries = getSnapshot().network;
-  expect(entries).toHaveLength(AVAILABILITY_ATTEMPTS);
-  expect(new Set(entries.map((e) => e.attempt?.index)).size).toBe(AVAILABILITY_ATTEMPTS);
+  expect(entries).toHaveLength(3); // injected 3 — one line per attempt, no doubles
+  expect(new Set(entries.map((e) => e.attempt?.index)).size).toBe(3);
   // The surviving entry is the one that states a fact: a 200 really did arrive on all three.
   expect(entries.every((e) => e.outcome === 'ok' && e.status === 200)).toBe(true);
 });
@@ -457,7 +486,7 @@ test('a loser aborted mid-body keeps its observed 200 — one entry, not a 200 p
 // test below pins, and no measurement so far needs the distinction. See §B30-21.
 test('an attempt whose body stalls past the deadline reports no phantom 시간 초과 over its 200', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl, timeoutMs: 20 });
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3, timeoutMs: 20 });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   pending.catch(() => {}); // rejects before the assertion below attaches — see the caller-abort test
   await tick();
@@ -467,7 +496,7 @@ test('an attempt whose body stalls past the deadline reports no phantom 시간 �
   await tick();
 
   const entries = getSnapshot().network;
-  expect(entries).toHaveLength(AVAILABILITY_ATTEMPTS);
+  expect(entries).toHaveLength(3); // injected 3 — every header landed, no phantom timeout
   expect(entries.every((e) => e.outcome === 'ok' && e.status === 200)).toBe(true);
   expect(entries.some((e) => e.outcome === 'timeout')).toBe(false);
 });
@@ -482,7 +511,7 @@ test('each attempt publishes its own elapsed window — the winner its latency, 
   // real lookup produces: one winner, then two cancellations a couple of ms behind it. Distinct windows on
   // purpose: equal ones could not tell "each attempt measures itself" from "all three share one number".
   const now = scriptedClock([0, 10, 20, 1169, 1181, 1192]);
-  const repo = createDaisoStoreStockRepository({ fetchImpl, now });
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3, now });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
   attempts[0]?.resolve(inStockSettled());

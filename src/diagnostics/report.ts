@@ -177,7 +177,8 @@ function legText(legs: ReadonlyArray<UpstreamLeg>): string {
 function networkLines(entries: NetworkEntry[]): string[] {
   if (entries.length === 0) return ['  (없음)'];
   return entries.flatMap((e) => {
-    // `#2/3` groups one lookup's raced requests so three entries read as one lookup rather than three.
+    // `#1/1` labels the lookup's single attempt (the race retired to 1 in §B34; the label
+    // shape is unchanged so a re-raise needs no panel change).
     const attempt = e.attempt ? ` #${e.attempt.index}/${e.attempt.total}` : '';
     // The SERVER's wall clock, never a sum of the legs below: wave 1 (search, str, auth) always fires
     // concurrently on both the direct and franchise branches, so a sum always exceeds it and would

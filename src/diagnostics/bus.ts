@@ -120,10 +120,12 @@ export interface ScannerDiagnostics {
   outcome: ScanOutcome['kind'] | null;
 }
 
-// Which of a lookup's raced requests an entry belongs to, 1-based. Present ONLY for a request that really
-// was one of several — a single unraced request (stores/search/nearby) leaves this absent rather than
-// claiming a fabricated 1/1. The label exists because three entries per lookup are otherwise unreadable:
-// a session-accumulated list has already been misread as one lookup's requests.
+// Which of a lookup's requests an entry belongs to, 1-based. Present whenever the publisher raced
+// or counted its request — including a single unraced availability read as `{index:1,total:1}`: the
+// label is the honest count of what ran, and a future re-raise needs no panel change. (An earlier
+// version of this comment forbade a "fabricated 1/1" — that belonged to the uncounted stores/search
+// requests, which still leave this absent.) The label exists because multiple entries per lookup are
+// otherwise unreadable: a session-accumulated list has already been misread as one lookup's requests.
 export interface NetworkAttempt {
   index: number;
   total: number;
@@ -165,12 +167,12 @@ export interface DiagnosticsSnapshot {
   network: NetworkEntry[];
 }
 
-// Raised from 5: an availability lookup now races AVAILABILITY_ATTEMPTS (3) requests, so 5 held under two
-// lookups and the oldest was gone before a tester could read it. 12 = four consecutive 3-attempt lookups,
-// which is what it takes to compare one lookup against the next on a real device. It stays phone-readable:
-// twelve short lines still scroll in one flick inside the panel's 40vh textarea, and the `#i/total` label
-// keeps each lookup's group visible. Deliberately NOT imported from the adapter — diagnostics must not
-// depend on what it observes — so the two numbers are related only by this comment.
+// Raised from 5 when a lookup raced 3 requests; kept at 12 after the race retired to 1 (§B34):
+// 12 = twelve single-attempt lookups, which is what it takes to compare one lookup against the next
+// on a real device. It stays phone-readable: twelve short lines still scroll in one flick inside the
+// panel's 40vh textarea, and the `#i/total` label keeps each lookup's group visible. Deliberately NOT
+// imported from the adapter — diagnostics must not depend on what it observes — so the two numbers
+// are related only by this comment.
 // With DIAG_TIMING on (report.ts), every entry that carries an `upstream.legs` line renders a SECOND
 // text line under it, so the panel can show up to 24 lines for these same 12 entries -- around 18 in
 // realistic use, since not every entry has legs (e.g. an aborted or headerless one does not). The

@@ -78,9 +78,10 @@ test('the network log keeps only the most recent NETWORK_LIMIT entries, newest l
   expect(network[network.length - 1]?.path).toBe(`/api/${NETWORK_LIMIT + 2}`);
 });
 
-// An availability lookup races 3 requests (AVAILABILITY_ATTEMPTS), so the old limit of 5 held under two
-// lookups. The limit has to hold enough history to compare one lookup against the next on a real device.
-test('the network limit holds at least four 3-attempt lookups', () => {
+// A lookup issues one request (AVAILABILITY_ATTEMPTS = 1, §B34), so the limit of 12 holds twelve
+// lookups — enough history to compare one lookup against the next on a real device. (Sized as
+// "four 3-attempt lookups" when the race shipped 3; the count retired, the capacity did not.)
+test('the network limit holds at least twelve lookups', () => {
   expect(NETWORK_LIMIT).toBeGreaterThanOrEqual(3 * 4);
 });
 
