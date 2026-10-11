@@ -13,13 +13,24 @@ export type FetchLike = (
   init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal },
 ) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 
-// How many identical availability reads race per lookup, first SUCCESS winning. The owner chose 3 after
-// being told it triples the load this app puts on a third-party API (§B30-18). The read is contractually
-// side-effect-free (CLAUDE.md §4 — this repo never mutates stock or transactions), so duplicating it can
-// cost the vendor requests but cannot corrupt anything. Deliberately ONE constant in ONE place: the
-// per-attempt diagnostics this slice adds may well show that 2 suffices, and then this is the only line
-// that changes.
-export const AVAILABILITY_ATTEMPTS = 3;
+// How many identical availability reads race per lookup, first SUCCESS winning. Shipped as 3
+// (owner decision §B30-18), cut to 1 on measured evidence (2026-10-11, §B34): across 8+ real-device
+// lookups the FIRST attempt won every success. That run is not what per-request independence would
+// predict — read as evidence that the three attempts share one fate (same path, same tick, same
+// proxy), not as a proof; 8 samples cannot prove it. The jitter we do see (442–1445ms) lives ACROSS
+// lookups, never observably within one (losers are cancelled ~2ms behind the winner, so a within-race
+// stall has never been observable either way), and the vendor side measured tiny (upstream 44–97ms
+// across 14 queries, §B30-24/25) — no OBSERVED per-request vendor stall exists for siblings to hedge
+// against. Cost side: the race triples vendor load against an anti-abuse gate that already 403s
+// fingerprints (workerd) and once 403d a lookup outright (B-1, §B30-25). Whether bursts raise 403 risk
+// is UNMEASURED — no 1-vs-3 A/B exists — B-1 shows only that the race did not save that lookup, which
+// is all this comment claims for it. 10/10 direct single probes answered 200 in 46–282ms, far inside
+// the 1800ms deadline below.
+// The read is contractually side-effect-free (CLAUDE.md §4), so the count was always load, never
+// correctness. The race machinery stays GENERAL (deps.attempts seam + multi-attempt tests kept on
+// explicit injection): re-raising this is one line if store-network field data ever shows
+// INDEPENDENT per-request stalls. Deliberately ONE constant in ONE place, as before.
+export const AVAILABILITY_ATTEMPTS = 1;
 
 // Per-attempt deadline, so that one hung read cannot hold the race open while its siblings could still
 // win, and so that "did a network timeout occur" is answerable per request instead of arriving as one
