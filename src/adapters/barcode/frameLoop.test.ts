@@ -3,7 +3,13 @@ vi.mock('../../diagnostics/enabled', () => ({ isDiagnosticsEnabled: () => flag.e
 
 import { getSnapshot, resetDiagnostics, subscribe } from '../../diagnostics/bus';
 import type { ScanTarget } from '../../domain/ports';
-import { FRAME_LOOP_MIN_INTERVAL_MS, type FrameDecoder, runFrameLoop } from './frameLoop';
+import {
+  BRACKET_CROP_RATIO,
+  FRAME_LOOP_MIN_INTERVAL_MS,
+  type FrameDecoder,
+  bracketCropBox,
+  runFrameLoop,
+} from './frameLoop';
 
 beforeEach(() => {
   flag.enabled = true;
@@ -353,7 +359,7 @@ test('a frame with no dimensions yet is skipped without counting an attempt', as
   expect(dimensionReads).toBeGreaterThan(1);
 });
 
-test('the canvas is sized to the video and reused across attempts', async () => {
+test('the canvas is sized to the bracket crop box and reused across attempts', async () => {
   const canvas = { width: 0, height: 0 } as HTMLCanvasElement;
   let created = 0;
   let calls = 0;
@@ -364,6 +370,8 @@ test('the canvas is sized to the video and reused across attempts', async () => 
   let observedCanvas: HTMLCanvasElement | null = null;
   let observedWidth = -1;
   let observedHeight = -1;
+  let observedCrop: { sx: number; sy: number; sw: number; sh: number } | null = null;
+  const copies: Array<{ sx: number; sy: number; sw: number; sh: number }> = [];
   const decoder: FrameDecoder = {
     decodeFrame: async (c) => {
       calls += 1;
@@ -383,12 +391,45 @@ test('the canvas is sized to the video and reused across attempts', async () => 
         created += 1;
         return canvas;
       },
+      copyFrame: (_video, _canvas, crop) => {
+        copies.push({ ...crop });
+      },
     }),
   );
   // Guards against a swallowed throw hiding as `failed` with no assertion ever failing.
   expect(outcome).toEqual({ kind: 'decoded', value: '19987' });
   expect(observedCanvas).toBe(canvas);
-  expect(observedWidth).toBe(640);
-  expect(observedHeight).toBe(480);
+  // 640×480 at ratio 0.6: short side 480 → 288² at ((640−288)/2, (480−288)/2) = (176, 96).
+  // A full-frame canvas here would read 640×480 — the crop the design ships.
+  expect(observedWidth).toBe(288);
+  expect(observedHeight).toBe(288);
   expect(created).toBe(1);
+  expect(copies).toHaveLength(2);
+  for (const box of copies) {
+    expect(box).toEqual({ sx: 176, sy: 96, sw: 288, sh: 288 });
+    if (observedCrop === null) observedCrop = box;
+  }
+  expect(observedCrop).toEqual({ sx: 176, sy: 96, sw: 288, sh: 288 });
+});
+
+// The shipped crop ratio is a product decision (design §3): a silent revert to full-frame
+// reads must fail, not pass green (§B30-16 lesson — the same shape as the minIntervalMs hole).
+test('the shipped bracket crop ratio is 0.6 — the aim square the guide names', () => {
+  expect(BRACKET_CROP_RATIO).toBe(0.6);
+});
+
+test('bracketCropBox centres a short-side square: 1920×1080 is a fifth of the pixels', () => {
+  // (0.6×1080)² / (1920×1080) = 419904 / 2073600 = 20.25% — the main-thread relief budget.
+  expect(bracketCropBox(1920, 1080)).toEqual({ sx: 636, sy: 216, sw: 648, sh: 648 });
+});
+
+test('bracketCropBox mirrors on portrait video', () => {
+  expect(bracketCropBox(1080, 1920)).toEqual({ sx: 216, sy: 636, sw: 648, sh: 648 });
+});
+
+test('bracketCropBox floors odd dimensions and never emits a zeroth pixel', () => {
+  expect(bracketCropBox(641, 481)).toEqual({ sx: 176, sy: 96, sw: 288, sh: 288 });
+  expect(bracketCropBox(0, 0)).toEqual({ sx: 0, sy: 0, sw: 1, sh: 1 });
+  // Degenerate in one axis only: the valid axis still centres (sy = (100−1)/2 = 49).
+  expect(bracketCropBox(-4, 100)).toEqual({ sx: 0, sy: 49, sw: 1, sh: 1 });
 });

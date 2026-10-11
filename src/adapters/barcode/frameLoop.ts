@@ -66,8 +66,52 @@ export interface FrameLoopDeps {
   // Injectable because jsdom has no canvas: getContext() returns null and the `canvas` package is not
   // installed, so without these seams the loop could only ever be exercised on a physical device.
   nextFrame?: (cb: () => void) => void;
-  copyFrame?: (video: HTMLVideoElement, canvas: HTMLCanvasElement) => void;
+  copyFrame?: (video: HTMLVideoElement, canvas: HTMLCanvasElement, crop: CropBox) => void;
   createCanvas?: () => HTMLCanvasElement;
+}
+
+// THE BRACKET CROP (2026-10-11, design docs/superpowers/specs/2026-10-11-bracket-crop-design.md).
+// The loop copies only the central square the aim guide names (short side × 0.6) instead of the
+// whole frame. At 1920×1080 that is 648² px — 20.25% of the frame — so the two pixel-proportional
+// costs (canvas→bitmap assembly + frame copy) are expected to fall while the decoder-own cost does
+// not move (expected, not measured — the next device run measures it per design §5).
+// 1:1 scale throughout: no upscale, no downscale, so symbolSidePx stays comparable across zoom
+// levels and against pre-crop runs (same pixels, fewer of them).
+//
+// Where the visible brackets and this box coincide: only when the preview and the stream share an
+// aspect ratio (all measured devices: 16:9) — the brackets sit on the cover-fitted preview element,
+// this box on the video frame, so elsewhere it is approximately the guided region (design §1).
+//
+// A PRODUCT DECISION, not a measurement trick: codes outside the brackets stop decoding on the
+// fallback path. It stands on (a) the guide already instructing shoppers to fill the square,
+// (b) all 8 measured symbols landing at 11~16% of the bracket side, never near an edge, and
+// (c) reversibility — deleting this constant's use reverts to full-frame. Native detection
+// (Android) never passes through here and still reads the whole frame.
+export const BRACKET_CROP_RATIO = 0.6;
+
+export interface CropBox {
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+}
+
+// Pure geometry: the centred short-side square for a video frame. Floored ints (drawImage
+// source rects snap to whole pixels) and clamped to ≥1 so degenerate dims cannot zero the
+// canvas — a 0-size canvas would make every subsequent attempt throw instead of miss.
+export function bracketCropBox(
+  videoWidth: number,
+  videoHeight: number,
+  ratio: number = BRACKET_CROP_RATIO,
+): CropBox {
+  const short = Math.min(videoWidth, videoHeight);
+  const side = Math.max(1, Math.floor(short * ratio));
+  return {
+    sx: Math.max(0, Math.floor((videoWidth - side) / 2)),
+    sy: Math.max(0, Math.floor((videoHeight - side) / 2)),
+    sw: side,
+    sh: side,
+  };
 }
 
 function defaultNextFrame(cb: () => void): void {
@@ -75,8 +119,12 @@ function defaultNextFrame(cb: () => void): void {
   else setTimeout(cb, 0);
 }
 
-function defaultCopyFrame(video: HTMLVideoElement, canvas: HTMLCanvasElement): void {
-  canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+function defaultCopyFrame(video: HTMLVideoElement, canvas: HTMLCanvasElement, crop: CropBox): void {
+  // Source rect, not full frame: only the bracket square reaches the decoder. Destination is
+  // 1:1 (sw×sh → sw×sh) — scaling here would change symbolSidePx's pixel meaning.
+  canvas
+    .getContext('2d')
+    ?.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.sw, crop.sh);
 }
 
 // BOTH of the loop's waits must lose a race with the signal. Without this, a hidden or backgrounded tab —
@@ -160,12 +208,16 @@ export async function runFrameLoop(
       if (warmingUp) continue;
 
       canvas ??= createCanvas();
-      if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
-        canvas.width = videoWidth;
-        canvas.height = videoHeight;
+      // Sized to the crop box, not the video: the decoder never sees the other ~80% of the
+      // frame, which is exactly the pixel-proportional cost this stage removes. Resized with
+      // the same guard as before — setting width/height clears the bitmap, so only on change.
+      const crop = bracketCropBox(videoWidth, videoHeight);
+      if (canvas.width !== crop.sw || canvas.height !== crop.sh) {
+        canvas.width = crop.sw;
+        canvas.height = crop.sh;
       }
       const drawStart = now();
-      copyFrame(target.video, canvas);
+      copyFrame(target.video, canvas, crop);
       drawMs += now() - drawStart;
 
       const decodeStart = now();
