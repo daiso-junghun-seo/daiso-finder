@@ -155,3 +155,41 @@ test('@keyframes aim-breathe changes value at the 50% stop, not just repeats the
   assertChanges('transform');
   assertChanges('opacity');
 });
+
+// Usability floor (2026-10-11-ui-floor-pass-design.md §2–§3) — positive assertions only.
+// A prohibition-only guard passes with the declaration deleted, so each rule below pins a
+// VALUE the shopper depends on, not just the absence of something worse.
+test('.search-bar lays its input and scan button out in one flex row', () => {
+  const rule = ruleFor('.search-bar');
+  expect(rule).toMatch(/display:\s*flex/);
+  expect(ruleFor('.search-bar input')).toMatch(/flex:\s*1\s+1\s+auto/);
+});
+
+test('.recent-searches and .candidate-list drop UA bullets and keep the 8px row gap', () => {
+  for (const list of ['.recent-searches ul', '.candidate-list ul']) {
+    expect(ruleFor(list)).toMatch(/list-style:\s*none/);
+  }
+  for (const gap of ['.recent-searches li + li', '.candidate-list li + li']) {
+    expect(ruleFor(gap)).toMatch(/margin-top:\s*8px/);
+  }
+});
+
+test('.candidate-list rows are one flex line: photo, name takes the row, price hugs right', () => {
+  expect(ruleFor('.candidate-list button')).toMatch(/display:\s*flex/);
+  expect(ruleFor('.candidate-list button > span:first-of-type')).toMatch(/flex:\s*1\s+1\s+auto/);
+});
+
+test('.candidate-list photo is a fixed box that never crops the product', () => {
+  const rule = ruleFor('.candidate-list .product-photo');
+  expect(rule).toMatch(/width:\s*64px/);
+  expect(rule).toMatch(/height:\s*64px/);
+  // contain, never cover: cropping would hide shelf-matchable detail (design §2).
+  expect(rule).toMatch(/object-fit:\s*contain/);
+});
+
+test('.answer-card keeps text off the glass edge and photos inside the card', () => {
+  expect(ruleFor('.answer-card')).toMatch(/padding:\s*16px/);
+  const photo = ruleFor('.answer-card .product-photo');
+  expect(photo).toMatch(/max-width:\s*100%/);
+  expect(photo).toMatch(/object-fit:\s*contain/);
+});

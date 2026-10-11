@@ -182,6 +182,76 @@ test('the aiming square stays inside the camera preview (phone 390×844)', async
   expect(overflowPx(fieldAimBox, fieldVideoBox), fieldGeometry).toBeLessThanOrEqual(0.5);
 });
 
+// Usability floor (2026-10-11-ui-floor-pass-design.md §3) — geometry only a rendered page
+// can prove. The CSS-text guards in src/styles/layout.test.ts pin the declarations; these
+// measure what the shopper gets at phone width.
+test.describe('usability floor (phone 390×844)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'daiso.storeContext',
+        JSON.stringify({ strCd: '001', strNm: '명동역점' }),
+      );
+    });
+    await page.goto('/');
+  });
+
+  test('the search input and the 스캔 button share one row inside the viewport', async ({
+    page,
+  }) => {
+    const viewport: Box = { x: 0, y: 0, width: 390, height: 844 };
+    const input = page.getByLabel('상품 검색');
+    const scan = page.getByRole('button', { name: '바코드 스캔' });
+    await expect(input).toBeVisible();
+    await expect(scan).toBeVisible();
+    const inputBox = await boxOf(input, 'search input');
+    const scanBox = await boxOf(scan, 'scan button');
+    const geometry =
+      `input ${inputBox.width}×${inputBox.height} at y=${inputBox.y} · ` +
+      `scan ${scanBox.width}×${scanBox.height} at y=${scanBox.y}`;
+    // One row: the two boxes overlap vertically. Stacked (input above button) would read
+    // as a broken search bar at this width.
+    expect(verticalOverlapPx(inputBox, scanBox), geometry).toBeGreaterThan(0);
+    expect(overflowPx(inputBox, viewport), geometry).toBeLessThanOrEqual(0.5);
+    expect(overflowPx(scanBox, viewport), geometry).toBeLessThanOrEqual(0.5);
+  });
+
+  test('candidate photos are bounded thumbs inside their rows', async ({ page }) => {
+    const input = page.getByLabel('상품 검색');
+    await input.fill('밀폐용기');
+    await input.press('Enter');
+    const photos = page.locator('.candidate-list .product-photo');
+    await expect(photos).toHaveCount(3);
+    for (let i = 0; i < 3; i += 1) {
+      const photo = photos.nth(i);
+      const row = page.locator('.candidate-list li').nth(i);
+      const photoBox = await boxOf(photo, `candidate photo ${i}`);
+      const rowBox = await boxOf(row, `candidate row ${i}`);
+      const geometry = `photo ${photoBox.width}×${photoBox.height} · row ${rowBox.width}×${rowBox.height}`;
+      // 64px thumb + 0.5px subpixel slack. An unbounded remote image would measure in the
+      // hundreds here (its intrinsic size), blowing the row out of the viewport.
+      expect(photoBox.width, geometry).toBeLessThanOrEqual(64.5);
+      expect(photoBox.height, geometry).toBeLessThanOrEqual(64.5);
+      expect(overflowPx(photoBox, rowBox), geometry).toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  test('the answer photo stays inside the answer card', async ({ page }) => {
+    const input = page.getByLabel('상품 검색');
+    await input.fill('밀폐용기');
+    await input.press('Enter');
+    await page.getByRole('button', { name: /리빙 밀폐용기 1\.2L/ }).click();
+    await expect(page.getByText('이 매장에 있어요').first()).toBeVisible();
+    const photo = page.locator('.answer-card .product-photo');
+    await expect(photo).toBeVisible();
+    const photoBox = await boxOf(photo, 'answer photo');
+    const cardBox = await boxOf(page.locator('.answer-card'), 'answer card');
+    const geometry = `photo ${photoBox.width}×${photoBox.height} · card ${cardBox.width}×${cardBox.height}`;
+    expect(overflowPx(photoBox, cardBox), geometry).toBeLessThanOrEqual(0.5);
+  });
+});
+
 test.describe('diagnostics panel', () => {
   test('?debug=1 shows the diagnostics bar', async ({ page }) => {
     await page.goto('/?debug=1');
