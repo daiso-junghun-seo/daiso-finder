@@ -135,8 +135,6 @@ test('nothing in src imports @zxing/library except by a deep esm path', async ()
     // Test files are not shipped, and this file itself carries the barrel spellings above as data.
     if (path.includes('.test.')) continue;
     const text = (await load()) as string;
-    // Test files are not shipped, and this file itself carries the barrel spellings above as data.
-    if (path.includes('.test.')) continue;
     for (const match of String(text).matchAll(ZXING_SPECIFIER)) {
       found += 1;
       expect(`${path}: ${match[1]}`).toMatch(
