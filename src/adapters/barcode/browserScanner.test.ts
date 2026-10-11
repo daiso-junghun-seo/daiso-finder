@@ -105,12 +105,17 @@ test('only DataMatrix is scanned', () => {
 // A real segment path is now required, and every non-test source file in src is swept.
 const DEEP_ZXING_PATH = /^@zxing\/library\/esm\/(?:core|browser)\/[^']+$/;
 const ZXING_SPECIFIER = /(?:from|import)\s*\(?\s*'(@zxing\/library[^']*)'/g;
-// Vite's eager raw glob — the repo idiom for source-text guards, and typed by vite/client rather than
+// Vite's raw glob — the repo idiom for source-text guards, and typed by vite/client rather than
 // node:fs, which is not a dependency here. Relative to this file, so `../../**` is all of src.
-const sourceFiles = import.meta.glob('../../**/*.{ts,tsx}', {
+//
+// LAZY, not eager, on purpose. An eager glob evaluates every matched module during COLLECTION, and
+// on vitest 3 that breaks this file's vi.mock('../../diagnostics/enabled'): all 26 diagnostics
+// tests below then read a dead bus (decoderPath null etc.) while the outcomes stay correct —
+// verified by bisection (eager ?raw glob in, suite red; lazy, green). The loaders run inside the
+// guard test itself, long after the mock registry is in place.
+const sourceFileLoaders = import.meta.glob('../../**/*.{ts,tsx}', {
   query: '?raw',
   import: 'default',
-  eager: true,
 });
 
 // The rejection cases first, on literal strings: a guard whose regex is wrong would otherwise pass simply
@@ -124,9 +129,12 @@ test('the deep-path guard rejects the bare barrel and both esm barrel spellings'
   expect('@zxing/library/esm/browser/HTMLCanvasElementLuminanceSource').toMatch(DEEP_ZXING_PATH);
 });
 
-test('nothing in src imports @zxing/library except by a deep esm path', () => {
+test('nothing in src imports @zxing/library except by a deep esm path', async () => {
   let found = 0;
-  for (const [path, text] of Object.entries(sourceFiles)) {
+  for (const [path, load] of Object.entries(sourceFileLoaders)) {
+    // Test files are not shipped, and this file itself carries the barrel spellings above as data.
+    if (path.includes('.test.')) continue;
+    const text = (await load()) as string;
     // Test files are not shipped, and this file itself carries the barrel spellings above as data.
     if (path.includes('.test.')) continue;
     for (const match of String(text).matchAll(ZXING_SPECIFIER)) {
