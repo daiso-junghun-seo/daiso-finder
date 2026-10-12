@@ -148,8 +148,8 @@ input:focus-visible {
   min-width: 0;
 }
 
-/* Literal-result and recall lists render without UA bullets, with the same 8px row gap
-   the sheet lists use (Interface §6). */
+/* Literal-result and recall lists render without UA bullets. Candidate rows keep the
+   sheet lists' 8px+ rhythm (Interface §6 minimum); recall runs as a snap row. */
 .recent-searches ul {
   list-style: none;
   margin: 0;

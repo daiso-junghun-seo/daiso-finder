@@ -193,6 +193,7 @@ test('.answer-card keeps text off the glass edge and photos inside the card', ()
   const photo = ruleFor('.answer-card .product-photo');
   expect(photo).toMatch(/max-width:\s*100%/);
   expect(photo).toMatch(/max-height:\s*260px/);
+  expect(photo).toMatch(/border-radius:\s*var\(--radius-md\)/);
   expect(photo).toMatch(/object-fit:\s*contain/);
 });
 
@@ -265,7 +266,7 @@ test('.answer-card enters on opacity + rise only (Bible §3 150–300ms)', () =>
   expect(new Set(declared)).toEqual(new Set(['opacity', 'transform']));
 });
 
-test('recent searches render as wrap chips with the floor row-gap neutralised', () => {
+test('recent searches scroll as a snap row (stories-style, keyboard-discoverable)', () => {
   // Superseded by the snap-row test below (feed pass): kept for the pill assertion,
   // which both layouts share.
   expect(ruleFor('.recent-searches button')).toMatch(/border-radius:\s*var\(--radius-pill\)/);
