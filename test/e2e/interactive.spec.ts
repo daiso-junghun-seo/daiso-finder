@@ -28,10 +28,9 @@ test.describe('with a persisted store context', () => {
     const input = page.getByLabel('상품 검색');
     await input.fill('밀폐용기');
     await input.press('Enter');
-    // RESULTS_NOTICE renders in both the CandidateList <p> and the a11y LiveRegion — which is itself
-    // on screen here: only the scanner overlay's instance is visually hidden (D7), because one of the
-    // surface's is the sole visible source of the freshness caption in four states. Scope to the
-    // paragraph to avoid a strict-mode multiple-match.
+    // RESULTS_NOTICE renders in the CandidateList <p>; the surface LiveRegion carries the
+    // same sentence for screen readers only (visually-hidden since the 2026-10-12 polish — it
+    // duplicated the visible line before that). Scope to the paragraph regardless.
     await expect(page.locator('p', { hasText: RESULTS_NOTICE })).toBeVisible();
     const candidateRow = page.getByRole('button', { name: /리빙 밀폐용기 1\.2L/ });
     await expect(candidateRow).toBeVisible();
@@ -194,6 +193,19 @@ test.describe('usability floor (phone 390×844)', () => {
         JSON.stringify({ strCd: '001', strNm: '명동역점' }),
       );
     });
+    // The mock catalogue points at the vendor CDN, which this sandbox cannot reach — without
+    // this every photo would take the honest unmount path (ProductPhoto onError) and there
+    // would be no box to measure. A 1px PNG keeps the element mounted; the 64px thumb and
+    // card bounds under test come from CSS, not the bitmap.
+    await page.route('**/cdn.daisomall.co.kr/**', (route) =>
+      route.fulfill({
+        contentType: 'image/png',
+        body: Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+          'base64',
+        ),
+      }),
+    );
     await page.goto('/');
   });
 

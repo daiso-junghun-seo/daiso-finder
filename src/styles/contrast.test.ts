@@ -204,6 +204,13 @@ for (const { name, tokens } of THEMES) {
       worstCaseGlassRatio(tokens, '--color-error', '--surface-glass-tint-raised'),
     ).toBeGreaterThanOrEqual(THRESHOLD);
   });
+
+  // UI polish (2026-10-12): the single filled button. Opaque on opaque, so solidRatio —
+  // no worst-case composite needed. The dark theme flips the foreground (white on
+  // #ff4d5e would be ≈3.2:1); both directions are pinned, not just light.
+  test(`[${name}] --action-fg on --action-bg (primary button) holds ≥4.5:1`, () => {
+    expect(solidRatio(tokens, '--action-fg', '--action-bg')).toBeGreaterThanOrEqual(THRESHOLD);
+  });
 }
 
 test('parser found both themes (guards against silent regex drift)', () => {
@@ -215,6 +222,8 @@ test('parser found both themes (guards against silent regex drift)', () => {
     '--color-error',
     '--surface-glass-tint',
     '--surface-glass-tint-raised',
+    '--action-bg',
+    '--action-fg',
   ];
   for (const token of REQUIRED) {
     expect(lightTokens.has(token)).toBe(true);

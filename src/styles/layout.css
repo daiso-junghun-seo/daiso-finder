@@ -11,6 +11,7 @@ main {
   display: flex;
   flex-direction: column;
   flex: 1;
+  gap: var(--space-md); /* vertical beat (UI polish) */
 }
 
 /* The answer-card region grows so the bottom bar stays docked in answer states.
@@ -45,6 +46,7 @@ main {
   max-height: 85dvh;
   display: flex;
   flex-direction: column;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0; /* sheet chrome (UI polish) */
 }
 
 /* Height-constraint chain so the list overflow actually engages: every flex ancestor between the
@@ -71,11 +73,33 @@ main {
   min-height: 0;
 }
 
-/* Touch targets ≥ 44×44pt with ≥ 8px spacing between list rows (Interface §6). */
+/* Touch targets ≥ 44×44pt with ≥ 8px spacing between list rows (Interface §6).
+   Shared control paint lives here too (UI polish) — one rule for both, so the
+   first-match slicer never splits them. */
 button,
 input {
   min-height: 44px;
   min-width: 44px;
+  font: inherit;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-neutral-border);
+  background: var(--surface-solid);
+  color: var(--text-primary);
+  padding: 10px 12px;
+}
+
+/* Base controls (UI polish) — no UA grey anywhere. Shared paint lives on the
+   touch-target rule above (first-match slicer idiom — `.answer-card button + button`
+   below contains a later `button {` substring); per-control padding here.
+   DiagnosticsBar's own rules stay more specific and win where they overlap. */
+button {
+  padding: 10px 16px;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .store-selection-sheet li + li {
@@ -124,17 +148,21 @@ input {
   margin-top: 8px;
 }
 
-/* A candidate row is one flex line: fixed photo, name takes the row, price hugs right. */
+/* A candidate row is one flex line: fixed photo, name takes the row, price hugs right.
+   Rows read as cards: radius + room, name weighted, price plain (UI polish). */
 .candidate-list button {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
   text-align: left;
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
 }
 
 .candidate-list button > span:first-of-type {
   flex: 1 1 auto;
+  font-weight: 600; /* row name reads weighted (UI polish) */
 }
 
 /* Photos are bounded, never cropped: object-fit contain keeps the shelf-matchable detail
@@ -152,6 +180,98 @@ input {
   max-width: 100%;
   max-height: 240px;
   object-fit: contain;
+}
+
+/* Presentation polish (2026-10-12-ui-polish-design.md) — flat selectors (ruleFor idiom),
+   existing tokens only, no new hues. */
+
+/* Base controls: no UA grey anywhere. DiagnosticsBar's own rules stay more specific. */
+/* (Base button/input/focus rules live with the touch-target rule above — first-match
+   slicer idiom, see its comment.) */
+
+/* The single filled button in the app: the scan entry. Everything else stays outline. */
+.scan-button--primary {
+  background: var(--action-bg);
+  border-color: transparent;
+  color: var(--action-fg);
+  font-weight: 600;
+  flex: none;
+}
+
+/* Quiet change affordance — still a 44px target, never grey. */
+.store-context-line button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 10px 8px;
+}
+
+/* Surface rhythm: gutter + vertical beat. Sticky bars inherit the gutter. */
+main {
+  padding: 0 var(--space-lg);
+}
+
+.surface-content {
+  gap: var(--space-md);
+}
+
+main h1 {
+  font-size: 1.375rem;
+  margin: var(--space-md) 0;
+}
+
+.store-context-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
+}
+
+.search-bar-surface {
+  padding: var(--space-sm) var(--space-md);
+}
+
+.answer-card > div > * + * {
+  margin-top: var(--space-sm);
+}
+
+.recent-searches button {
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+/* Sheet chrome: rounded top lives on the base rule above; headed rhythm and full-width
+   row buttons below. */
+.store-selection-sheet {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.store-selection-sheet > section {
+  padding: var(--space-lg);
+  gap: var(--space-sm);
+}
+
+.store-selection-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.store-selection-sheet__results button {
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+.store-selection-sheet__nearby button {
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radius-sm);
 }
 
 /* Barcode scanner overlay — minimal layout only; presentation polish is the UI pass (HANDOFF slice 3).

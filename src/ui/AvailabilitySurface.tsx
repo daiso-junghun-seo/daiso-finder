@@ -331,7 +331,7 @@ export function AvailabilitySurface() {
           ref={scanButtonRef}
           type="button"
           aria-label={SCAN_BUTTON_LABEL}
-          className="text-label"
+          className="text-label scan-button--primary"
           onClick={openScanner}
         >
           {SCAN_BUTTON_LABEL}
@@ -417,7 +417,7 @@ export function AvailabilitySurface() {
               changeButtonRef={changeStoreRef}
             />
           </GlassSurface>
-          <LiveRegion message={RESULTS_NOTICE} />
+          <LiveRegion message={RESULTS_NOTICE} visuallyHidden />
           <CandidateList
             candidates={ui.candidates}
             onSelect={(c) => void runByPdNo(store, c, dispatch)}
@@ -448,7 +448,7 @@ export function AvailabilitySurface() {
             changeButtonRef={changeStoreRef}
           />
         </GlassSurface>
-        <LiveRegion message={announcement} />
+        <LiveRegion message={announcement} visuallyHidden />
         <AnswerCard
           ui={ui}
           policy={defaultPolicy}
