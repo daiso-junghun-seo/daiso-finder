@@ -275,6 +275,36 @@ test('success hero order is name → status → price/location → freshness →
   }
 });
 
+test('the in-stock status wears the success pill (icon + text unchanged)', () => {
+  render(
+    <AnswerCard
+      ui={{
+        state: 'success',
+        query: '밀폐용기',
+        answer: mockAnswers.inStock,
+        freshness: { class: 'live', observedAt: NOW },
+      }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+    />,
+  );
+  const status = screen.getByText(SUCCESS_IN_STOCK_STATUS);
+  expect(status).toHaveClass('status-pill', 'status-pill--success');
+});
+
+test('the empty card leads with a decorative medallion (aria-hidden chrome)', () => {
+  const { container } = render(
+    <AnswerCard
+      ui={{ state: 'empty', query: '락앤락같은통', suggestions: [] }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+    />,
+  );
+  const medal = container.querySelector('.empty-medallion');
+  expect(medal).not.toBeNull();
+  expect(medal).toHaveAttribute('aria-hidden', 'true');
+});
+
 test('success inStock with an imageUrl renders the product photo (src + alt = product name)', () => {
   render(
     <AnswerCard

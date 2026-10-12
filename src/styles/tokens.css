@@ -10,6 +10,7 @@
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
+  --radius-xl: 20px;
   --radius-pill: 999px;
 
   --space-xs: 4px;
@@ -17,6 +18,14 @@
   --space-md: 12px;
   --space-lg: 16px;
   --space-xl: 24px;
+
+  /* Refine pass: app frame ground + card elevation + status pills. Tint pairs are
+     all mechanically verified in contrast.test.ts (drop the tint, never the text). */
+  --ground: #f1f1f3;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.08);
+  --tint-success: #e8f5ec;
+  --tint-error: #fdeceb;
+  --tint-neutral: #ececef;
 
   /* Primary action: the scan entry is the single filled button in the app. White on
      #e60012 ≈ 4.8:1 — pinned in contrast.test.ts alongside the B14 rows. */
@@ -46,6 +55,11 @@
     /* Near-black on #ff4d5e ≈ 5.8:1 — white would be ≈3.2:1 and fail, so the dark
        primary flips its foreground (contrast.test.ts pins both themes). */
     --action-fg: #121212;
+    --ground: #0a0a0b;
+    --shadow-card: none;
+    --tint-success: #0f2a1a;
+    --tint-error: #331413;
+    --tint-neutral: #262628;
     --text-secondary: #c7c7c7;
     --surface-glass-tint: rgba(18, 18, 18, 0.85);
     --surface-glass-tint-raised: rgba(18, 18, 18, 0.92);
@@ -59,7 +73,7 @@
 
 body {
   margin: 0;
-  background-color: var(--color-bg);
+  background-color: var(--ground);
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: var(--font-size-body);

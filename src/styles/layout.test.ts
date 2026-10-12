@@ -189,7 +189,7 @@ test('.candidate-list photo is a fixed box that never crops the product', () => 
 });
 
 test('.answer-card keeps text off the glass edge and photos inside the card', () => {
-  expect(ruleFor('.answer-card')).toMatch(/padding:\s*16px/);
+  expect(ruleFor('.answer-card')).toMatch(/padding:\s*20px/);
   const photo = ruleFor('.answer-card .product-photo');
   expect(photo).toMatch(/max-width:\s*100%/);
   expect(photo).toMatch(/object-fit:\s*contain/);
@@ -229,7 +229,7 @@ test('.store-context-line is a spaced row with a quiet change affordance', () =>
 });
 
 test('.candidate-list rows read as cards with a weighted name', () => {
-  expect(ruleFor('.candidate-list button')).toMatch(/border-radius:\s*var\(--radius-md\)/);
+  expect(ruleFor('.candidate-list button')).toMatch(/border-radius:\s*var\(--radius-lg\)/);
   expect(ruleFor('.candidate-list button > span:first-of-type')).toMatch(/font-weight:\s*600/);
 });
 
@@ -244,12 +244,6 @@ test('.cta--primary is the full-width wired action on action tokens', () => {
   expect(rule).toMatch(/width:\s*100%/);
   expect(rule).toMatch(/background:\s*var\(--action-bg\)/);
   expect(rule).toMatch(/color:\s*var\(--action-fg\)/);
-});
-
-test('.price-line hero-emphasises the price · location (still the Heading role)', () => {
-  const rule = ruleFor('.price-line');
-  expect(rule).toMatch(/font-size:\s*1\.25rem/);
-  expect(rule).toMatch(/font-weight:\s*700/);
 });
 
 test('.skeleton-block is a decorative pulse: opacity only, aria-hidden in markup', () => {
@@ -280,4 +274,40 @@ test('.sheet-grabber is a centred affordance bar', () => {
   const rule = ruleFor('.sheet-grabber');
   expect(rule).toMatch(/width:\s*40px/);
   expect(rule).toMatch(/margin:\s*0 auto/);
+});
+
+// Refine pass 2 (2026-10-12-ui-refine-design.md §2) — positive assertions only.
+test('status pills tint without touching icon + text discipline', () => {
+  expect(ruleFor('.status-pill')).toMatch(/border-radius:\s*var\(--radius-pill\)/);
+  expect(ruleFor('.status-pill--success')).toMatch(/background:\s*var\(--tint-success\)/);
+  expect(ruleFor('.status-pill--neutral')).toMatch(/background:\s*var\(--tint-neutral\)/);
+});
+
+test('.error-banner carries its tint (icon + sentence discipline unchanged)', () => {
+  expect(ruleFor('.error-banner')).toMatch(/background:\s*var\(--tint-error\)/);
+});
+
+test('.price-line hero-emphasises within the Heading role', () => {
+  const rule = ruleFor('.price-line');
+  expect(rule).toMatch(/font-size:\s*1\.75rem/);
+  expect(rule).toMatch(/font-variant-numeric:\s*tabular-nums/);
+});
+
+test('.scan-button--primary keeps the icon aligned with its label', () => {
+  const rule = ruleFor('.scan-button--primary');
+  expect(rule).toMatch(/display:\s*inline-flex/);
+  expect(rule).toMatch(/align-items:\s*center/);
+});
+
+test('.empty-medallion is decorative chrome (aria-hidden in markup)', () => {
+  const rule = ruleFor('.empty-medallion');
+  expect(rule).toMatch(/border-radius:\s*50%/);
+  expect(rule).toMatch(/background:\s*var\(--tint-neutral\)/);
+});
+
+test('.store-selection-sheet rows carry a CSS-only chevron', () => {
+  // Second selector of the pair (the first line ends in a comma, which ruleFor cannot address).
+  const rule = ruleFor('.store-selection-sheet__nearby button::after');
+  expect(rule).toContain('border-top:');
+  expect(rule).toContain('rotate(45deg)');
 });

@@ -219,6 +219,24 @@ for (const { name, tokens } of THEMES) {
       THRESHOLD,
     );
   });
+
+  // Refine (2026-10-12-ui-refine-design.md): status pills + banner tint. Opaque pairs.
+  // A miss here drops the TINT (text stays) — recorded per pair in the design doc.
+  test(`[${name}] --color-success on --tint-success (status pill) holds ≥4.5:1`, () => {
+    expect(solidRatio(tokens, '--color-success', '--tint-success')).toBeGreaterThanOrEqual(
+      THRESHOLD,
+    );
+  });
+
+  test(`[${name}] --text-primary on --tint-neutral (neutral pill) holds ≥4.5:1`, () => {
+    expect(solidRatio(tokens, '--text-primary', '--tint-neutral')).toBeGreaterThanOrEqual(
+      THRESHOLD,
+    );
+  });
+
+  test(`[${name}] --color-error on --tint-error (error banner) holds ≥4.5:1`, () => {
+    expect(solidRatio(tokens, '--color-error', '--tint-error')).toBeGreaterThanOrEqual(THRESHOLD);
+  });
 }
 
 test('parser found both themes (guards against silent regex drift)', () => {
@@ -232,6 +250,9 @@ test('parser found both themes (guards against silent regex drift)', () => {
     '--surface-glass-tint-raised',
     '--action-bg',
     '--action-fg',
+    '--tint-success',
+    '--tint-error',
+    '--tint-neutral',
   ];
   for (const token of REQUIRED) {
     expect(lightTokens.has(token)).toBe(true);

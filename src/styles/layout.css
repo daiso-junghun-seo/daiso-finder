@@ -5,6 +5,18 @@ main {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
+  /* App frame (refine): phone-full-bleed, desktop-centred 480px column on the
+     ambient ground. Sticky bars inherit the column; the diagnostics bar is a
+     main sibling and stays full-width. */
+  max-width: 480px;
+  margin-inline: auto;
+  background-color: var(--surface-solid);
+}
+
+@media (min-width: 520px) {
+  main {
+    border-inline: 1px solid var(--color-neutral-border);
+  }
 }
 
 .surface-content {
@@ -19,9 +31,11 @@ main {
    Enter motion (redesign, Bible §3 150–300ms): opacity + rise only. */
 .answer-card {
   flex: 1;
-  padding: 16px;
+  padding: 20px;
   overflow-wrap: break-word;
   animation: card-enter 220ms ease-out;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
 }
 
 /* Bottom-docked search/scan bar (L1 in Default; the demoted class is applied by the surface).
@@ -30,7 +44,13 @@ main {
   position: sticky;
   bottom: 0;
   margin-top: auto;
-  padding-bottom: env(safe-area-inset-bottom);
+  /* Floating dock (refine): lifted bar with shadow inside the app column. The bottom
+     pad keeps the safe-area inset ADDED (shorthand after padding-bottom would reset it —
+     biome noShorthandPropertyOverrides guards this shape). */
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-sm) var(--space-md) calc(var(--space-sm) + env(safe-area-inset-bottom));
+  margin-bottom: var(--space-sm);
 }
 
 /* Store-context line anchored at the top (Interface §2: always present, always correctable). */
@@ -161,8 +181,9 @@ input:focus-visible {
   gap: 12px;
   width: 100%;
   text-align: left;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   padding: var(--space-md);
+  box-shadow: var(--shadow-card);
 }
 
 .candidate-list button > span:first-of-type {
@@ -201,6 +222,9 @@ input:focus-visible {
   color: var(--action-fg);
   font-weight: 600;
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Quiet change affordance — still a 44px target, never grey. */
@@ -233,10 +257,6 @@ main h1 {
   justify-content: space-between;
   gap: var(--space-sm);
   padding: var(--space-sm) 0;
-}
-
-.search-bar-surface {
-  padding: var(--space-sm) var(--space-md);
 }
 
 .answer-card > div > * + * {
@@ -282,10 +302,12 @@ main h1 {
   padding: 12px 16px;
 }
 
-/* Answer hero: price · location reads one notch above Heading (still the Heading role). */
+/* Answer hero: price · location reads one notch above Heading (still the Heading role).
+   Tabular numerals keep prices aligned across rows (no dependency). */
 .price-line {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: 1.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Loading skeleton (Bible Interface §3): decorative blocks, opacity pulse only.
@@ -352,6 +374,74 @@ main h1 {
   border-radius: var(--radius-pill);
   background: var(--color-neutral-border);
   margin: 0 auto var(--space-sm);
+}
+
+/* Refine pass 2 (2026-10-12-ui-refine-design.md) — status pills, banner tint, press. */
+
+/* Status pill: icon + declarative text unchanged, tinted ground beneath. Tone classes
+   pick the verified pair (contrast.test.ts); never color alone — icon + text stay. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+}
+
+.status-pill--success {
+  background: var(--tint-success);
+}
+
+.status-pill--neutral {
+  background: var(--tint-neutral);
+}
+
+/* Error banner carries its tint; the ⚠ + sentence discipline is unchanged. */
+.error-banner {
+  background: var(--tint-error);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+/* Press feedback: transform only (GPU), killed with everything else under reduce-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  button:active {
+    transform: scale(0.98);
+  }
+}
+
+/* Empty medallion: decorative chrome (aria-hidden SVG inside) — the product-photo
+   honesty rule covers product imagery, not wayfinding chrome. */
+.empty-medallion {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--tint-neutral);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-sm);
+}
+
+/* Sheet-row chevron: pure CSS (border square, rotated), never announced. */
+.store-selection-sheet__results button,
+.store-selection-sheet__nearby button {
+  position: relative;
+  padding-right: 32px;
+}
+
+.store-selection-sheet__results button::after,
+.store-selection-sheet__nearby button::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid var(--text-secondary);
+  border-right: 2px solid var(--text-secondary);
+  transform: translateY(-50%) rotate(45deg);
 }
 
 /* Barcode scanner overlay — minimal layout only; presentation polish is the UI pass (HANDOFF slice 3).
