@@ -24,6 +24,13 @@ test('every custom property glass.css references is defined in the light (:root)
   }
 });
 
+test('body sets the Korean-first system font stack (no UA serif fallback)', () => {
+  const bodyRule = css.slice(css.indexOf('body {'));
+  expect(bodyRule).toMatch(/font-family:\s*var\(--font-sans\)/);
+  expect(css).toMatch(/--font-sans:[^;]*Apple SD Gothic Neo/);
+  expect(css).toMatch(/--font-sans:[^;]*Noto Sans KR/);
+});
+
 test('dark-mode overrides redefine every theme-sensitive token', () => {
   const darkBlock = css.slice(css.indexOf(DARK_MARKER));
   for (const token of [

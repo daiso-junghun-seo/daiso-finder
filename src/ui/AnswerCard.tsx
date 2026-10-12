@@ -189,6 +189,10 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy) {
       <ProductPhoto imageUrl={answer.imageUrl} name={answer.productName} />
       <p className="text-heading">{answer.productName}</p>
       <p className="text-display">{facts.status}</p>
+      {/* Freshness is announced for every success (announcementFor) so it must also be
+          visible: without this line the surface LiveRegion was its only visual source,
+          which forbids hiding that region (LiveRegion's own rule + UI polish dedup). */}
+      <p className="text-caption">{LIVE_FRESHNESS_CAPTION}</p>
       <button type="button" className="text-label">
         {facts.cta}
       </button>

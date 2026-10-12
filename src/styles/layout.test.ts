@@ -193,3 +193,46 @@ test('.answer-card keeps text off the glass edge and photos inside the card', ()
   expect(photo).toMatch(/max-width:\s*100%/);
   expect(photo).toMatch(/object-fit:\s*contain/);
 });
+
+// UI polish (2026-10-12-ui-polish-design.md §2–§3) — positive assertions only.
+test('buttons and inputs share the flat control system (no UA grey)', () => {
+  // Shared paint lives on the `button, input` pair rule — ruleFor('input') lands there
+  // first, while a bare ruleFor('button') would land inside `.answer-card button + button`.
+  expect(ruleFor('input')).toMatch(/border-radius:\s*var\(--radius-md\)/);
+  expect(ruleFor('input')).toMatch(/border:\s*1px solid/);
+  expect(ruleFor('input')).toMatch(/font:\s*inherit/);
+  // Buttons widen the shared side padding in their own rule.
+  expect(ruleFor('button')).toMatch(/padding:\s*10px 16px/);
+});
+
+test('.scan-button--primary is the single filled button, on action tokens', () => {
+  const rule = ruleFor('.scan-button--primary');
+  expect(rule).toMatch(/background:\s*var\(--action-bg\)/);
+  expect(rule).toMatch(/color:\s*var\(--action-fg\)/);
+});
+
+test(':focus-visible carries the accent ring (keyboard shoppers)', () => {
+  const cssText = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  expect(cssText).toMatch(/button:focus-visible/);
+  expect(cssText).toContain('outline-offset: 2px');
+});
+
+test('.surface-content has a vertical beat and the headline stops shouting', () => {
+  expect(ruleFor('.surface-content')).toMatch(/gap:\s*var\(--space-md\)/);
+  expect(ruleFor('main h1')).toMatch(/font-size:\s*1\.375rem/);
+});
+
+test('.store-context-line is a spaced row with a quiet change affordance', () => {
+  expect(ruleFor('.store-context-line')).toMatch(/justify-content:\s*space-between/);
+  expect(ruleFor('.store-context-line button')).toMatch(/text-decoration:\s*underline/);
+});
+
+test('.candidate-list rows read as cards with a weighted name', () => {
+  expect(ruleFor('.candidate-list button')).toMatch(/border-radius:\s*var\(--radius-md\)/);
+  expect(ruleFor('.candidate-list button > span:first-of-type')).toMatch(/font-weight:\s*600/);
+});
+
+test('.store-selection-sheet has a rounded top and full-width row buttons', () => {
+  expect(ruleFor('.store-selection-sheet')).toMatch(/border-radius:\s*var\(--radius-lg\)/);
+  expect(ruleFor('.store-selection-sheet__results button')).toMatch(/width:\s*100%/);
+});

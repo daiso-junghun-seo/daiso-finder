@@ -1,10 +1,12 @@
 # gpu01 Node proxy — deploy runbook (Option C)
 
 > **STATUS: PREP ONLY — NOT DEPLOYED.** Public egress to daisomall from any host (this proxy on gpu01, or
-> the earlier CF Workers probe in the runtime-resolution doc) is gated on the **owner's ToS/robots
-> review**, which has not happened yet. Nothing in this document has been run against gpu01. This runbook
-> exists so deployment is a paperwork-free `git pull` + `systemctl restart` once that review clears — it
-> is not itself authorization to deploy.
+> the earlier CF Workers probe in the runtime-resolution doc) was gated on the **owner's ToS/robots
+> review**. **✅ CLEARED 2026-10-12 (owner verdict: 열린 URL 이용이라 이슈 없음)** — robots.txt는 크롤러
+> 규율이고 이 앱은 사용자 조회당 API 1회의 읽기 전용 호출(우회·대량수집 없음)이므로. Nothing in this
+> document has been run against gpu01 (no gpu01 access from the clearing session's box). This runbook
+> exists so deployment is a paperwork-free `git pull` + `systemctl restart` once port/hostname are
+> chosen — it is not itself authorization to deploy.
 
 Design source: [`docs/superpowers/specs/2026-07-23-runtime-resolution.md`](../superpowers/specs/2026-07-23-runtime-resolution.md)
 (Option C). Server implementation: [`scripts/dev-proxy.mjs`](../../scripts/dev-proxy.mjs) — the same file

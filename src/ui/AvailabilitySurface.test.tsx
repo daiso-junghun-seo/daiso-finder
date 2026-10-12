@@ -142,8 +142,8 @@ describe('live search', () => {
     const input = screen.getByLabelText('상품 검색');
     await userEvent.type(input, '밀폐용기{Enter}');
     expect(input).toHaveValue('밀폐용기');
-    // RESULTS_NOTICE appears twice — the visible CandidateList <p> and the a11y LiveRegion — so scope to
-    // the paragraph (same disambiguation the empty-state test uses for its LiveRegion echo).
+    // RESULTS_NOTICE renders in the visible CandidateList <p>; the a11y LiveRegion carries
+    // the same sentence for screen readers only (visually-hidden since the 2026-10-12 polish).
     expect(await screen.findByText(RESULTS_NOTICE, { selector: 'p' })).toBeInTheDocument();
     const candidateButton = await screen.findByRole('button', { name: /리빙 밀폐용기 1\.2L/ });
     // Candidate rows never show availability — identity only (photo/name/price), stock checked on tap.
@@ -155,10 +155,23 @@ describe('live search', () => {
   test('submitting an unknown keyword ends in Empty with the Bible body', async () => {
     render(<AvailabilitySurface />);
     await userEvent.type(screen.getByLabelText('상품 검색'), '락앤락같은통{Enter}');
-    // The a11y LiveRegion announces the same sentence; target the answer-card paragraph.
+    // The a11y LiveRegion announces the same sentence from behind visually-hidden paint.
     expect(
       await screen.findByText(emptyBody('락앤락같은통'), { selector: 'p' }),
     ).toBeInTheDocument();
+  });
+
+  // UI polish dedup (2026-10-12): the surface LiveRegion must never paint a second copy of
+  // what the card/list already shows — announcements stay audible via role=status either way.
+  test('the surface live regions announce without painting a duplicate line', async () => {
+    render(<AvailabilitySurface />);
+    await userEvent.type(screen.getByLabelText('상품 검색'), '밀폐용기{Enter}');
+    expect(await screen.findByText(RESULTS_NOTICE, { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveClass('visually-hidden');
+    // …and onward into an answer: the card carries every announced sentence visibly.
+    await userEvent.click(await screen.findByRole('button', { name: /리빙 밀폐용기 1\.2L/ }));
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveClass('visually-hidden');
   });
 
   test('submitting a blank query does nothing', async () => {
