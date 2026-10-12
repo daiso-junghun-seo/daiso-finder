@@ -211,6 +211,14 @@ for (const { name, tokens } of THEMES) {
   test(`[${name}] --action-fg on --action-bg (primary button) holds ≥4.5:1`, () => {
     expect(solidRatio(tokens, '--action-fg', '--action-bg')).toBeGreaterThanOrEqual(THRESHOLD);
   });
+
+  // The keyboard ring paints on the app's own surfaces (opaque, per-theme) — not over
+  // arbitrary imagery like glass tints, so the per-theme solid pair is the honest check.
+  test(`[${name}] --color-accent focus ring on --surface-solid holds ≥4.5:1`, () => {
+    expect(solidRatio(tokens, '--color-accent', '--surface-solid')).toBeGreaterThanOrEqual(
+      THRESHOLD,
+    );
+  });
 }
 
 test('parser found both themes (guards against silent regex drift)', () => {

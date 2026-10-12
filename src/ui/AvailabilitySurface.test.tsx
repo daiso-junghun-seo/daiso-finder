@@ -168,6 +168,10 @@ describe('live search', () => {
     await userEvent.type(screen.getByLabelText('상품 검색'), '밀폐용기{Enter}');
     expect(await screen.findByText(RESULTS_NOTICE, { selector: 'p' })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveClass('visually-hidden');
+    // …and onward into an answer: the card carries every announced sentence visibly.
+    await userEvent.click(await screen.findByRole('button', { name: /리빙 밀폐용기 1\.2L/ }));
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveClass('visually-hidden');
   });
 
   test('submitting a blank query does nothing', async () => {

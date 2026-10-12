@@ -20,9 +20,10 @@ success/sheet/empty`)
 1. No font stack — UA serif fallback. System sans stack is the largest single win.
 2. Announcement duplication — surface `<LiveRegion>` renders visibly next to the
    card/list carrying the same sentences (verified field-by-field against
-   `announcementFor` in copy.ts: loading/empty/candidates/error/success/partial
-   all duplicate). Fix: `visuallyHidden` at the two surface call sites
-   (candidates + answer branches). SR announcements preserved; E2E `.first()`
+   `announcementFor` in copy.ts: every state duplicates EXCEPT success/non-inStock,
+   whose freshness line the card lacked — the review caught it, so that branch now
+   renders the caption visibly too). Fix: `visuallyHidden` at the two surface call
+   sites (candidates + answer branches). SR announcements preserved; E2E `.first()`
    locators keep passing with a single match. The stale "sole visible source"
    comment in interactive.spec.ts is corrected, not deleted.
 3. Raw UA controls — grey bevel buttons, square inputs. Flat button system +
@@ -78,11 +79,14 @@ success/sheet/empty`)
 ## 4. Tests
 
 - contrast.test.ts: primary pairs (light + dark) + focus-ring pair, same
-  worst-case-composite method as B14 rows.
-- layout.test.ts: positive assertions for font stack, button radius/border,
-  primary fill tokens, rhythm rules (flat selectors only).
-- AvailabilitySurface.test.tsx / LiveRegion.test.tsx: add single-match +
-  hidden-class assertions for the two deduped regions (announcements still fire).
+  worst-case-composite method as B14 rows (ring: opaque on own surfaces, so the
+  per-theme solid pair is the honest check — recorded in the test).
+- layout.test.ts: positive assertions for button system, rhythm rules, sheet chrome
+  (flat selectors only). Font stack asserted in tokens.test.ts (it lives there).
+- AvailabilitySurface.test.tsx: dedup assertions for BOTH live regions (candidates +
+  answer branches — announcements still fire).
+- ProductPhoto onError unmount + 3 unit tests; E2E CDN stub (1px PNG) so geometry
+  tests measure the CSS box, not the sandbox's unreachable CDN (disclosed in situ).
 - E2E: no locator changes (`.first()` survives); stale comment corrected.
 - Verification: re-shoot 01–05 at 390×844 and eyeball before/after.
 
