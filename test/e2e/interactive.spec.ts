@@ -38,6 +38,16 @@ test.describe('with a persisted store context', () => {
     await expect(page.getByText('이 매장에 있어요').first()).toBeVisible();
   });
 
+  // i18n floor (2026-10-12): ?lang=en renders English guidance end to end while match
+  // tokens (store name here) stay Korean (D069). The ko-KR project locale keeps every
+  // other test on the default language without URL churn.
+  test('?lang=en renders English guidance with Korean match tokens intact', async ({ page }) => {
+    await page.goto('/?lang=en');
+    await expect(page.getByRole('button', { name: 'Scan' })).toBeVisible();
+    await expect(page.getByText('Check if this store has it')).toBeVisible();
+    await expect(page.getByText('DAISO 명동역점')).toBeVisible();
+  });
+
   test('typing an unknown keyword ends in Empty with the Bible sentence', async ({ page }) => {
     await page.goto('/');
     const input = page.getByLabel('상품 검색');

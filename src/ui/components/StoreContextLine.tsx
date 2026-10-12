@@ -2,25 +2,44 @@
 // Store-context display (Interface §2 IA: "always present and always correctable").
 // 매장 변경 opens the D082 store-selection sheet via the injected handler; the surface may pass a
 // ref to the button so the modal sheet can restore focus to its opener on close (Interface §6).
+// The locale toggle beside it shows the TARGET language (one 44px control — a KO|EN pair has no
+// room on 390px). It only switches guidance language; match tokens never translate (D069).
 import type { Ref } from 'react';
 import type { StoreContext } from '../../domain/types';
-import { STORE_CHANGE_BUTTON, storeLine } from '../copy';
+import type { Locale } from '../../i18n/locale';
+import { strings } from '../../i18n/strings';
 
 export function StoreContextLine({
   store,
+  locale,
+  onToggleLocale,
   onChangeStore,
   changeButtonRef,
 }: {
   store: StoreContext;
+  locale: Locale;
+  onToggleLocale: () => void;
   onChangeStore?: () => void;
   changeButtonRef?: Ref<HTMLButtonElement>;
 }) {
+  const S = strings(locale);
+  const toEnglish = locale === 'ko';
   return (
     <div className="store-context-line text-caption" id="store-line">
-      <span>{storeLine(store.strNm)}</span>
-      <button ref={changeButtonRef} type="button" className="text-label" onClick={onChangeStore}>
-        {STORE_CHANGE_BUTTON}
-      </button>
+      <span>{S.storeLine(store.strNm)}</span>
+      <span className="store-context-actions">
+        <button
+          type="button"
+          className="text-label locale-toggle"
+          aria-label={toEnglish ? S.LOCALE_TOGGLE_TO_EN : S.LOCALE_TOGGLE_TO_KO}
+          onClick={onToggleLocale}
+        >
+          {toEnglish ? 'EN' : 'KO'}
+        </button>
+        <button ref={changeButtonRef} type="button" className="text-label" onClick={onChangeStore}>
+          {S.STORE_CHANGE_BUTTON}
+        </button>
+      </span>
     </div>
   );
 }

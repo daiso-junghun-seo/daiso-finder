@@ -74,12 +74,26 @@ beforeEach(() => {
     store: { strCd: '001', strNm: '명동역점' },
     sheetOpen: false,
     scannerOpen: false,
+    locale: 'ko',
   });
 });
 
 test('default surface shows the purpose headline', () => {
   render(<AvailabilitySurface />);
   expect(screen.getByText('이 매장에 있는지 바로 확인해 보세요')).toBeInTheDocument();
+});
+
+test('the locale toggle switches guidance to English and persists the choice', async () => {
+  const user = userEvent.setup();
+  render(<AvailabilitySurface />);
+  await user.click(screen.getByRole('button', { name: '영어로 보기' }));
+  expect(screen.getByRole('button', { name: 'Scan' })).toBeInTheDocument();
+  expect(screen.getByText('Check if this store has it')).toBeInTheDocument();
+  // Match tokens stay Korean (D069) while guidance translates.
+  expect(screen.getByText('DAISO 명동역점')).toBeInTheDocument();
+  expect(localStorage.getItem('daiso.locale')).toBe('en');
+  await user.click(screen.getByRole('button', { name: 'Switch to Korean' }));
+  expect(screen.getByRole('button', { name: '바코드 스캔' })).toBeInTheDocument();
 });
 
 test('a RESULT event renders the real Bible copy for the in-stock answer, not a raw state name', () => {

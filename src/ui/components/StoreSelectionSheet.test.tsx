@@ -19,6 +19,7 @@ test('renders as a labelled modal dialog with the nearby list when GPS recommend
   render(
     <StoreSelectionSheet
       current={{ strCd: '001', strNm: '명동역점' }}
+      locale="ko"
       directory={directory}
       geolocation={geoWithStores}
       onSelect={() => {}}
@@ -36,6 +37,7 @@ test('marks the current store row with aria-current', async () => {
   render(
     <StoreSelectionSheet
       current={{ strCd: '001', strNm: '명동역점' }}
+      locale="ko"
       directory={directory}
       geolocation={geoWithStores}
       onSelect={() => {}}
@@ -51,6 +53,7 @@ test('tapping a nearby row selects that store', async () => {
   render(
     <StoreSelectionSheet
       current={{ strCd: '001', strNm: '명동역점' }}
+      locale="ko"
       directory={directory}
       geolocation={geoWithStores}
       onSelect={onSelect}
@@ -65,6 +68,7 @@ test('no location → shows the note and focuses the search field (Interface §4
   render(
     <StoreSelectionSheet
       current={{ strCd: '001', strNm: '명동역점' }}
+      locale="ko"
       directory={directory}
       geolocation={geoEmpty}
       onSelect={() => {}}
@@ -81,6 +85,7 @@ test('typing searches the directory and tapping a result selects it', async () =
   render(
     <StoreSelectionSheet
       current={null}
+      locale="ko"
       directory={directory}
       geolocation={geoEmpty}
       onSelect={onSelect}
@@ -96,6 +101,7 @@ test('focus lands in the dialog when the nearby list renders (F4 modal behavior)
   render(
     <StoreSelectionSheet
       current={{ strCd: '001', strNm: '명동역점' }}
+      locale="ko"
       directory={directory}
       geolocation={geoWithStores}
       onSelect={() => {}}
@@ -112,6 +118,7 @@ test('Escape dismisses the dialog via onClose (F4)', async () => {
   render(
     <StoreSelectionSheet
       current={{ strCd: '001', strNm: '명동역점' }}
+      locale="ko"
       directory={directory}
       geolocation={geoWithStores}
       onSelect={() => {}}
@@ -127,6 +134,7 @@ test('Escape closes the sheet even when focus is outside the dialog (document-le
   render(
     <StoreSelectionSheet
       current={{ strCd: '001', strNm: '명동역점' }}
+      locale="ko"
       directory={directory}
       geolocation={geoWithStores}
       onSelect={() => {}}
@@ -144,6 +152,7 @@ test('Escape outside the dialog still does nothing on first run (onClose undefin
   render(
     <StoreSelectionSheet
       current={null}
+      locale="ko"
       directory={directory}
       geolocation={geoEmpty}
       onSelect={() => {}}
@@ -160,6 +169,7 @@ test('Escape does nothing when onClose is not provided (first run)', async () =>
   render(
     <StoreSelectionSheet
       current={null}
+      locale="ko"
       directory={directory}
       geolocation={geoEmpty}
       onSelect={() => {}}
@@ -175,6 +185,7 @@ test('Escape during IME composition does not close the sheet (F8)', async () => 
   render(
     <StoreSelectionSheet
       current={{ strCd: '001', strNm: '명동역점' }}
+      locale="ko"
       directory={directory}
       geolocation={geoWithStores}
       onSelect={() => {}}
@@ -191,6 +202,22 @@ test('Escape during IME composition does not close the sheet (F8)', async () => 
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
+test('locale="en" renders English chrome with Korean store names intact (D069)', async () => {
+  render(
+    <StoreSelectionSheet
+      current={{ strCd: '001', strNm: '명동역점' }}
+      locale="en"
+      directory={directory}
+      geolocation={geoWithStores}
+      onSelect={() => {}}
+      onClose={() => {}}
+    />,
+  );
+  expect(await screen.findByRole('dialog', { name: 'Select store' })).toBeInTheDocument();
+  expect(await screen.findByText('Nearby stores')).toBeInTheDocument();
+  expect(await screen.findByRole('button', { name: '명동역점 · 120m' })).toBeInTheDocument();
+});
+
 test('a store-search failure clears results instead of crashing (F5)', async () => {
   const flaky: StoreDirectoryPort = {
     searchStores: async (q) => {
@@ -201,6 +228,7 @@ test('a store-search failure clears results instead of crashing (F5)', async () 
   render(
     <StoreSelectionSheet
       current={null}
+      locale="ko"
       directory={flaky}
       geolocation={geoEmpty}
       onSelect={() => {}}
@@ -221,6 +249,7 @@ test('닫기 shows only when onClose is provided (first run hides it)', async ()
   const { rerender } = render(
     <StoreSelectionSheet
       current={{ strCd: '001', strNm: '명동역점' }}
+      locale="ko"
       directory={directory}
       geolocation={geoEmpty}
       onSelect={() => {}}
@@ -232,6 +261,7 @@ test('닫기 shows only when onClose is provided (first run hides it)', async ()
   rerender(
     <StoreSelectionSheet
       current={null}
+      locale="ko"
       directory={directory}
       geolocation={geoEmpty}
       onSelect={() => {}}

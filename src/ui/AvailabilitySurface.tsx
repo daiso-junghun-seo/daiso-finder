@@ -11,6 +11,7 @@ import { type Scenario, mockAnswers } from '../adapters/mock/fixtures';
 import { createMockRepository } from '../adapters/mock/mockRepository';
 import { defaultPolicy } from '../domain/policy';
 import type { ProductCandidate, StoreContext, StoreEvent, UiState } from '../domain/types';
+import { strings } from '../i18n/strings';
 import { createIndexedDbCache } from '../infra/cache-storage';
 import { createQueryRunner } from '../infra/query-cache';
 import { loadStoreContext } from '../infra/store-context';
@@ -21,14 +22,7 @@ import { GlassSurface } from './components/GlassSurface';
 import { ScannerOverlay } from './components/ScannerOverlay';
 import { StoreContextLine } from './components/StoreContextLine';
 import { StoreSelectionSheet } from './components/StoreSelectionSheet';
-import {
-  DEFAULT_HEADLINE,
-  RECENT_SEARCHES_LABEL,
-  RESULTS_NOTICE,
-  SCAN_BUTTON_LABEL,
-  SEARCH_PLACEHOLDER,
-  announcementFor,
-} from './copy';
+import { announcementFor } from './copy';
 import { useAvailabilityStore } from './store';
 
 // Placeholder store for the Inc-0 sweep only — the sheet exists (D082); this is now only the E2E
@@ -249,6 +243,10 @@ export function AvailabilitySurface() {
   const scannerOpen = useAvailabilityStore((s) => s.scannerOpen);
   const openScanner = useAvailabilityStore((s) => s.openScanner);
   const closeScanner = useAvailabilityStore((s) => s.closeScanner);
+  const locale = useAvailabilityStore((s) => s.locale);
+  const setLocale = useAvailabilityStore((s) => s.setLocale);
+  const S = strings(locale);
+  const toggleLocale = () => setLocale(locale === 'ko' ? 'en' : 'ko');
   const [input, setInput] = useState('');
   const changeStoreRef = useRef<HTMLButtonElement>(null);
   const answerCardRef = useRef<HTMLDivElement>(null);
@@ -294,6 +292,7 @@ export function AvailabilitySurface() {
   const sheet = (
     <StoreSelectionSheet
       current={store}
+      locale={locale}
       directory={storeDirectory}
       geolocation={browserGeolocation}
       onSelect={selectStore}
@@ -322,15 +321,15 @@ export function AvailabilitySurface() {
         }}
       >
         <input
-          aria-label="상품 검색"
-          placeholder={SEARCH_PLACEHOLDER}
+          aria-label={S.SEARCH_INPUT_LABEL}
+          placeholder={S.SEARCH_PLACEHOLDER}
           value={input}
           onChange={(e) => setInput(e.target.value)}
         />
         <button
           ref={scanButtonRef}
           type="button"
-          aria-label={SCAN_BUTTON_LABEL}
+          aria-label={S.SCAN_BUTTON_LABEL}
           className="text-label scan-button--primary"
           onClick={openScanner}
         >
@@ -347,7 +346,7 @@ export function AvailabilitySurface() {
           >
             <path d="M1 6V1h5M12 1h5v5M17 12v5h-5M6 17H1v-5" />
           </svg>
-          {SCAN_BUTTON_LABEL}
+          {S.SCAN_BUTTON_LABEL}
         </button>
       </form>
     </GlassSurface>
@@ -361,7 +360,12 @@ export function AvailabilitySurface() {
   const scannerModal = scannerOpen && (
     <>
       <div className="sheet-scrim" aria-hidden="true" />
-      <ScannerOverlay scanner={scanner} onDecoded={handleDecoded} onClose={closeScanner} />
+      <ScannerOverlay
+        scanner={scanner}
+        locale={locale}
+        onDecoded={handleDecoded}
+        onClose={closeScanner}
+      />
     </>
   );
 
@@ -376,14 +380,16 @@ export function AvailabilitySurface() {
           <GlassSurface className="store-context-surface">
             <StoreContextLine
               store={store}
+              locale={locale}
+              onToggleLocale={toggleLocale}
               onChangeStore={openSheet}
               changeButtonRef={changeStoreRef}
             />
           </GlassSurface>
-          <h1>{DEFAULT_HEADLINE}</h1>
+          <h1>{S.DEFAULT_HEADLINE}</h1>
           {recentSearches.length > 0 && (
             <div className="recent-searches">
-              <p className="text-caption">{RECENT_SEARCHES_LABEL}</p>
+              <p className="text-caption">{S.RECENT_SEARCHES_LABEL}</p>
               <ul>
                 {recentSearches.map((keyword) => (
                   <li key={keyword}>
@@ -426,13 +432,16 @@ export function AvailabilitySurface() {
           <GlassSurface className="store-context-surface">
             <StoreContextLine
               store={store}
+              locale={locale}
+              onToggleLocale={toggleLocale}
               onChangeStore={openSheet}
               changeButtonRef={changeStoreRef}
             />
           </GlassSurface>
-          <LiveRegion message={RESULTS_NOTICE} visuallyHidden />
+          <LiveRegion message={S.RESULTS_NOTICE} visuallyHidden />
           <CandidateList
             candidates={ui.candidates}
+            locale={locale}
             onSelect={(c) => void runByPdNo(store, c, dispatch)}
           />
           {searchBar}
@@ -449,7 +458,7 @@ export function AvailabilitySurface() {
   }
 
   const nowMs = Date.now();
-  const announcement = announcementFor(ui, defaultPolicy, nowMs).join('. ');
+  const announcement = announcementFor(ui, defaultPolicy, nowMs, locale).join('. ');
 
   return (
     <main>
@@ -457,6 +466,8 @@ export function AvailabilitySurface() {
         <GlassSurface className="store-context-surface">
           <StoreContextLine
             store={store}
+            locale={locale}
+            onToggleLocale={toggleLocale}
             onChangeStore={openSheet}
             changeButtonRef={changeStoreRef}
           />
@@ -466,6 +477,7 @@ export function AvailabilitySurface() {
           ui={ui}
           policy={defaultPolicy}
           nowMs={nowMs}
+          locale={locale}
           cardRef={answerCardRef}
           onScan={openScanner}
           onRetry={() => {

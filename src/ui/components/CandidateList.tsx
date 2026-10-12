@@ -3,20 +3,24 @@
 // identity-only — photo/name/price — never availability: stock is checked only after a tap (search-first
 // flow, no AI confidence model — see RESULTS_NOTICE in ../copy.ts).
 import type { ProductCandidate } from '../../domain/types';
-import { RESULTS_NOTICE } from '../copy';
+import type { Locale } from '../../i18n/locale';
+import { strings } from '../../i18n/strings';
 import { formatPrice } from '../format';
 import { ProductPhoto } from './ProductPhoto';
 
 export function CandidateList({
   candidates,
+  locale,
   onSelect,
 }: {
   candidates: ProductCandidate[];
+  locale: Locale;
   onSelect: (c: ProductCandidate) => void;
 }) {
+  const S = strings(locale);
   return (
     <div className="candidate-list">
-      <p className="text-caption">{RESULTS_NOTICE}</p>
+      <p className="text-caption">{S.RESULTS_NOTICE}</p>
       <ul>
         {candidates.map((c) => (
           <li key={c.pdNo}>

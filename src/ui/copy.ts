@@ -1,12 +1,18 @@
 // src/ui/copy.ts — Bible-verbatim copy (Interface/availability-check.md §4). Transcribe exactly; do not paraphrase.
 import type { DataOwnerPolicy } from '../domain/policy';
 import type { AvailabilityAnswer, UiState } from '../domain/types';
+import { announcementForEn, factsFor as factsForEn } from '../i18n/en';
+import type { Locale } from '../i18n/locale';
 import { formatLocation, formatPrice, formatRelativeTimeKo } from './format';
 
 export const DEFAULT_HEADLINE = '이 매장에 있는지 바로 확인해 보세요';
 export const SEARCH_PLACEHOLDER = '상품명 또는 바코드 스캔';
 export const SCAN_BUTTON_LABEL = '바코드 스캔';
 export const STORE_CHANGE_BUTTON = '매장 변경';
+export const SEARCH_INPUT_LABEL = '상품 검색';
+// App-owned (not Bible): the locale toggle shows the TARGET language. Mirrored in i18n/en.ts.
+export const LOCALE_TOGGLE_TO_EN = '영어로 보기';
+export const LOCALE_TOGGLE_TO_KO = '한국어로 보기';
 
 export const LOADING_CARD_COPY = '이 매장 재고를 확인하고 있어요…';
 export const LOADING_DELAY_LINE = '연결이 느려서 확인이 조금 걸리고 있어요.';
@@ -103,7 +109,10 @@ export interface AnswerFacts {
 
 // Shared between Success and Error(cached): both show the same declarative facts about the answer,
 // differing only in the surrounding frame (celebratory vs "here is what we still know").
-export function factsFor(answer: AvailabilityAnswer): AnswerFacts {
+// locale defaults to ko so every existing caller keeps the verbatim path; 'en' delegates to
+// the English twin (same structure, translated pieces — i18n/en.ts).
+export function factsFor(answer: AvailabilityAnswer, locale: Locale = 'ko'): AnswerFacts {
+  if (locale === 'en') return factsForEn(answer);
   switch (answer.kind) {
     case 'inStock':
       return { status: SUCCESS_IN_STOCK_STATUS, cta: SUCCESS_IN_STOCK_CTA };
@@ -135,11 +144,14 @@ export function priceLocationLine(answer: AvailabilityAnswer): string | undefine
 type NonDefaultUiState = Exclude<UiState, { state: 'default' }>;
 
 // Ordered per Interface §6: status line first, then price·location, then the freshness stamp, then the CTA.
+// locale defaults to ko (verbatim path untouched); 'en' delegates to the twin.
 export function announcementFor(
   ui: NonDefaultUiState,
   policy: DataOwnerPolicy,
   nowMs: number,
+  locale: Locale = 'ko',
 ): string[] {
+  if (locale === 'en') return announcementForEn(ui, policy, nowMs);
   switch (ui.state) {
     case 'loading':
       return ui.slow ? [LOADING_CARD_COPY, LOADING_DELAY_LINE] : [LOADING_CARD_COPY];
@@ -164,7 +176,11 @@ export function announcementFor(
         answer.kind === 'inStock' && answer.qtyUpperBound <= policy.lowQtyCutoff
           ? lowQtyCaption(answer.qtyUpperBound)
           : LIVE_FRESHNESS_CAPTION;
-      return [facts.status, ...(line ? [line] : []), freshnessCap, facts.cta];
+      // No CTA announced for inStock success: its button (위치 보기) was removed as a dead
+      // stub 2026-10-12 (owner, §B40) — announcing an action with no control would strand
+      // screen-reader shoppers. facts.cta still exists for Flow 2's restoration.
+      const cta = answer.kind === 'inStock' ? [] : [facts.cta];
+      return [facts.status, ...(line ? [line] : []), freshnessCap, ...cta];
     }
     case 'partial': {
       if (ui.trigger === 'franchise') return [PARTIAL_FRANCHISE_BODY, PARTIAL_FRANCHISE_CTA];

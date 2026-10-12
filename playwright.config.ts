@@ -15,12 +15,12 @@ export default defineConfig({
     {
       name: 'dev',
       testMatch: /(states|interactive)\.spec\.ts$/,
-      use: { baseURL: 'http://localhost:5173' },
+      use: { baseURL: 'http://localhost:5173', locale: 'ko-KR' },
     },
     {
       name: 'preview',
       testMatch: /live-pipeline\.spec\.ts$/,
-      use: { baseURL: 'http://localhost:4173', serviceWorkers: 'block' },
+      use: { baseURL: 'http://localhost:4173', serviceWorkers: 'block', locale: 'ko-KR' },
     },
   ],
 });

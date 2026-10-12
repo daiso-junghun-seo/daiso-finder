@@ -239,10 +239,12 @@ test('success inStock (ample qty) shows live freshness, price/location, and the 
   expect(screen.getByText(SUCCESS_IN_STOCK_STATUS)).toBeInTheDocument();
   expect(screen.getByText('2,000원 · 11층 56번')).toBeInTheDocument();
   expect(screen.getByText(LIVE_FRESHNESS_CAPTION)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: SUCCESS_IN_STOCK_CTA })).toBeInTheDocument();
+  // 위치 보기 removed 2026-10-12 (owner: dead stub — §B40). Its string still lives in
+  // factsFor for Flow 2's restoration, but no control may promise it meanwhile.
+  expect(screen.queryByRole('button', { name: SUCCESS_IN_STOCK_CTA })).not.toBeInTheDocument();
 });
 
-test('success hero order is name → status → price/location → freshness → CTA (peak glance)', () => {
+test('success hero order is name → status → price/location → freshness (peak glance)', () => {
   render(
     <AnswerCard
       ui={{
@@ -260,10 +262,9 @@ test('success hero order is name → status → price/location → freshness →
     screen.getByText(SUCCESS_IN_STOCK_STATUS),
     screen.getByText('2,000원 · 11층 56번'),
     screen.getByText(LIVE_FRESHNESS_CAPTION),
-    screen.getByRole('button', { name: SUCCESS_IN_STOCK_CTA }),
   ];
   // Each node must follow the previous in document order — a restyle that reorders the
-  // glance (price above status, CTA above price) breaks the Bible peak moment silently.
+  // glance (price above status) breaks the Bible peak moment silently.
   for (let i = 1; i < nodes.length; i += 1) {
     const prev = nodes[i - 1];
     const curr = nodes[i];

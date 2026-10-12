@@ -15,13 +15,21 @@ const noImage: ProductCandidate = { pdNo: '19988', name: '리빙 밀폐용기 2.
 const candidates: ProductCandidate[] = [withImage, noImage];
 
 test('renders the Bible-verbatim results notice, not the AI-suggestion tier copy', () => {
-  render(<CandidateList candidates={candidates} onSelect={() => {}} />);
+  render(<CandidateList candidates={candidates} locale="ko" onSelect={() => {}} />);
   expect(screen.getByText(RESULTS_NOTICE)).toBeInTheDocument();
   expect(screen.queryByText('이걸 찾으시나요?')).not.toBeInTheDocument();
 });
 
+test('locale="en" renders the English notice with Korean product names intact (D069)', () => {
+  render(<CandidateList candidates={candidates} locale="en" onSelect={() => {}} />);
+  expect(
+    screen.getByText('These are search results. Scanning is more accurate.'),
+  ).toBeInTheDocument();
+  expect(screen.getByText('리빙 밀폐용기 1.2L')).toBeInTheDocument();
+});
+
 test('renders each candidate name and price, and a photo (alt = name) when supplied', () => {
-  render(<CandidateList candidates={candidates} onSelect={() => {}} />);
+  render(<CandidateList candidates={candidates} locale="ko" onSelect={() => {}} />);
   expect(screen.getByText('리빙 밀폐용기 1.2L')).toBeInTheDocument();
   expect(screen.getByText(formatPrice(2000))).toBeInTheDocument();
   const img = screen.getByRole('img', { name: '리빙 밀폐용기 1.2L' });
@@ -32,19 +40,19 @@ test('renders each candidate name and price, and a photo (alt = name) when suppl
 });
 
 test('never shows availability on a candidate row (identity only — stock checked on tap)', () => {
-  render(<CandidateList candidates={candidates} onSelect={() => {}} />);
+  render(<CandidateList candidates={candidates} locale="ko" onSelect={() => {}} />);
   expect(screen.queryByText(/이 매장에 있어요/)).not.toBeInTheDocument();
   expect(screen.queryByText(/품절/)).not.toBeInTheDocument();
 });
 
 test('a candidate without an imageUrl renders no photo (no fabricated placeholder)', () => {
-  render(<CandidateList candidates={[noImage]} onSelect={() => {}} />);
+  render(<CandidateList candidates={[noImage]} locale="ko" onSelect={() => {}} />);
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
 });
 
 test('clicking a candidate row calls onSelect with that candidate', async () => {
   const onSelect = vi.fn();
-  render(<CandidateList candidates={candidates} onSelect={onSelect} />);
+  render(<CandidateList candidates={candidates} locale="ko" onSelect={onSelect} />);
   await userEvent.click(screen.getByRole('button', { name: /리빙 밀폐용기 1\.2L/ }));
   expect(onSelect).toHaveBeenCalledTimes(1);
   expect(onSelect).toHaveBeenCalledWith(withImage);

@@ -50,6 +50,42 @@ export function formatRelativeTimeKo(observedAtMs: number, nowMs: number): strin
   return `${dayLabel} ${period} ${hour12}시`;
 }
 
+// English relative-time, mirroring formatRelativeTimeKo's rules: same calendar day ->
+// "Today", previous -> "Yesterday", older -> absolute "Mon D"; hours as h AM/PM with
+// minutes truncated (same truncation the ko rule documents).
+const EN_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+export function formatRelativeTimeEn(observedAtMs: number, nowMs: number): string {
+  const observed = new Date(observedAtMs);
+  const now = new Date(nowMs);
+  const dayDiff = Math.floor(
+    (startOfDay(now).getTime() - startOfDay(observed).getTime()) / 86_400_000,
+  );
+  const dayLabel =
+    dayDiff === 0
+      ? 'Today'
+      : dayDiff === 1
+        ? 'Yesterday'
+        : `${EN_MONTHS[observed.getMonth()]} ${observed.getDate()}`;
+  const hour = observed.getHours();
+  const period = hour < 12 ? 'AM' : 'PM';
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${dayLabel}, ${hour12} ${period}`;
+}
+
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }

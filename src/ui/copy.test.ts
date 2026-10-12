@@ -163,7 +163,7 @@ test('priceLocationLine renders only for inStock answers that carry a location',
   expect(priceLocationLine(mockAnswers.temporarilyOut)).toBeUndefined();
 });
 
-test('announcementFor orders a success announcement as status -> price/location -> freshness -> CTA (Interface §6)', () => {
+test('announcementFor orders a success announcement as status -> price/location -> freshness (no CTA: 위치 보기 removed as a dead stub, §B40)', () => {
   const ui = {
     state: 'success' as const,
     query: '밀폐용기',
@@ -174,7 +174,6 @@ test('announcementFor orders a success announcement as status -> price/location 
     SUCCESS_IN_STOCK_STATUS,
     '2,000원 · 11층 56번',
     LIVE_FRESHNESS_CAPTION,
-    SUCCESS_IN_STOCK_CTA,
   ]);
 });
 

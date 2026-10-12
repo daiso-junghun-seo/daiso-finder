@@ -2,6 +2,7 @@ import {
   formatLchDay,
   formatLocation,
   formatPrice,
+  formatRelativeTimeEn,
   formatRelativeTimeKo,
   kmToMeters,
 } from './format';
@@ -67,4 +68,14 @@ test('kmToMeters rounds kilometers to whole meters', () => {
   expect(kmToMeters(9.9)).toBe(9900);
   expect(kmToMeters(0.12)).toBe(120);
   expect(kmToMeters(0.1204)).toBe(120);
+});
+
+test('formatRelativeTimeEn mirrors the ko rules in English (day bands + truncated hours)', () => {
+  const day = (y: number, m: number, d: number, h: number) => new Date(y, m, d, h, 30).getTime();
+  // Same day AM/PM, midnight, noon — same edges the ko tests pin.
+  expect(formatRelativeTimeEn(day(2026, 6, 15, 7), day(2026, 6, 15, 9))).toBe('Today, 7 AM');
+  expect(formatRelativeTimeEn(day(2026, 6, 15, 18), day(2026, 6, 16, 9))).toBe('Yesterday, 6 PM');
+  expect(formatRelativeTimeEn(day(2026, 5, 12, 10), day(2026, 6, 15, 9))).toBe('Jun 12, 10 AM');
+  expect(formatRelativeTimeEn(day(2026, 6, 15, 0), day(2026, 6, 15, 9))).toBe('Today, 12 AM');
+  expect(formatRelativeTimeEn(day(2026, 6, 15, 12), day(2026, 6, 15, 13))).toBe('Today, 12 PM');
 });
