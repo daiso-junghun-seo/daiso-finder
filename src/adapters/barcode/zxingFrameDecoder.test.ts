@@ -41,13 +41,16 @@ test('all three retryable zxing exception kinds are translated', () => {
 // hand back a retail EAN as if it were a pdNo. And the await itself fails if a package upgrade moves any
 // of the four deep paths — which loadZxingFrameDecoder's catch would otherwise turn into a silent
 // `unsupported` on every iOS device, with no error anywhere.
+// Four lazy-chunk imports: under full-suite parallel load the honest load outruns the
+// 5s default (observed timeouts when the box also serves dev/proxy/tunnels). What this
+// pins is constructibility, not load speed.
 test('the zxing parts load and are constructible', async () => {
   const parts = await importZxingFrameParts();
   expect(typeof parts.BinaryBitmap).toBe('function');
   expect(typeof parts.HybridBinarizer).toBe('function');
   expect(typeof parts.HTMLCanvasElementLuminanceSource).toBe('function');
   expect(parts.reader.constructor.name).toBe('DataMatrixReader');
-});
+}, 20_000);
 
 // THE END-TO-END ONE, and the only test here that runs the REAL assembly and the REAL reader. Every
 // other test in this file injects the parts, so all of them would keep passing with an `assemble` that

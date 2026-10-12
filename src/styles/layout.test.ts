@@ -165,13 +165,14 @@ test('.search-bar lays its input and scan button out in one flex row', () => {
   expect(ruleFor('.search-bar input')).toMatch(/flex:\s*1\s+1\s+auto/);
 });
 
-test('.recent-searches and .candidate-list drop UA bullets and keep the 8px row gap', () => {
+test('.recent-searches and .candidate-list drop UA bullets; rows keep the 8px gap', () => {
   for (const list of ['.recent-searches ul', '.candidate-list ul']) {
     expect(ruleFor(list)).toMatch(/list-style:\s*none/);
   }
-  for (const gap of ['.recent-searches li + li', '.candidate-list li + li']) {
-    expect(ruleFor(gap)).toMatch(/margin-top:\s*8px/);
-  }
+  // Candidate rows stack vertically (8px); recent searches wrap as chips whose gap owns
+  // both axes (redesign) — its li+li margin is neutralised, not 8px.
+  expect(ruleFor('.candidate-list li + li')).toMatch(/margin-top:\s*8px/);
+  expect(ruleFor('.recent-searches li + li')).toMatch(/margin-top:\s*0/);
 });
 
 test('.candidate-list rows are one flex line: photo, name takes the row, price hugs right', () => {
@@ -235,4 +236,48 @@ test('.candidate-list rows read as cards with a weighted name', () => {
 test('.store-selection-sheet has a rounded top and full-width row buttons', () => {
   expect(ruleFor('.store-selection-sheet')).toMatch(/border-radius:\s*var\(--radius-lg\)/);
   expect(ruleFor('.store-selection-sheet__results button')).toMatch(/width:\s*100%/);
+});
+
+// Redesign (2026-10-12-ui-redesign-design.md §2–§3) — positive assertions only.
+test('.cta--primary is the full-width wired action on action tokens', () => {
+  const rule = ruleFor('.cta--primary');
+  expect(rule).toMatch(/width:\s*100%/);
+  expect(rule).toMatch(/background:\s*var\(--action-bg\)/);
+  expect(rule).toMatch(/color:\s*var\(--action-fg\)/);
+});
+
+test('.price-line hero-emphasises the price · location (still the Heading role)', () => {
+  const rule = ruleFor('.price-line');
+  expect(rule).toMatch(/font-size:\s*1\.25rem/);
+  expect(rule).toMatch(/font-weight:\s*700/);
+});
+
+test('.skeleton-block is a decorative pulse: opacity only, aria-hidden in markup', () => {
+  const rule = ruleFor('.skeleton-block');
+  expect(rule).toMatch(/animation:\s*skeleton-pulse/);
+  expect(blockFor('@keyframes skeleton-pulse')).toMatch(/opacity/);
+  const declared = [...blockFor('@keyframes skeleton-pulse').matchAll(/^\s*([a-z-]+):/gm)].map(
+    (m) => m[1],
+  );
+  expect(new Set(declared)).toEqual(new Set(['opacity']));
+});
+
+test('.answer-card enters on opacity + rise only (Bible §3 150–300ms)', () => {
+  expect(ruleFor('.answer-card')).toMatch(/animation:\s*card-enter 220ms ease-out/);
+  const declared = [...blockFor('@keyframes card-enter').matchAll(/^\s*([a-z-]+):/gm)].map(
+    (m) => m[1],
+  );
+  expect(new Set(declared)).toEqual(new Set(['opacity', 'transform']));
+});
+
+test('recent searches render as wrap chips with the floor row-gap neutralised', () => {
+  expect(ruleFor('.recent-searches ul')).toMatch(/flex-wrap:\s*wrap/);
+  expect(ruleFor('.recent-searches li + li')).toMatch(/margin-top:\s*0/);
+  expect(ruleFor('.recent-searches button')).toMatch(/border-radius:\s*var\(--radius-pill\)/);
+});
+
+test('.sheet-grabber is a centred affordance bar', () => {
+  const rule = ruleFor('.sheet-grabber');
+  expect(rule).toMatch(/width:\s*40px/);
+  expect(rule).toMatch(/margin:\s*0 auto/);
 });

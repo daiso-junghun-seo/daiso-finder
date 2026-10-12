@@ -18,6 +18,7 @@ import {
   PARTIAL_NO_LOCATION_NOTE,
   PARTIAL_STALE_CACHE_CTA,
   RETRY_BUTTON,
+  SCAN_BUTTON_LABEL,
   cachedFreshnessCaption,
   emptyBody,
   extraPositionsLabel,
@@ -37,6 +38,7 @@ export function AnswerCard({
   policy,
   nowMs,
   onRetry,
+  onScan,
   cardRef,
 }: {
   ui: NonDefaultUiState;
@@ -45,13 +47,16 @@ export function AnswerCard({
   // Wired ONLY to the four 다시 확인 renders (error/cached, error/noCache, partial/locationMissing,
   // partial/staleCache): re-runs the retained query (B15). All other CTAs stay inert stubs.
   onRetry?: () => void;
+  // Wired ONLY to the Empty render (Bible Interface §4: the Empty card carries its own scan CTA).
+  // Scan-origin empties reuse it as the scan retry.
+  onScan?: () => void;
   // Retry-focus target (decision 6): the surface root is focusable (tabIndex -1) so focus never falls
   // to <body> when the retry button unmounts on the Loading swap.
   cardRef?: Ref<HTMLDivElement>;
 }) {
   return (
     <GlassSurface className="answer-card" tabIndex={-1} surfaceRef={cardRef}>
-      {renderBody(ui, policy, nowMs, onRetry)}
+      {renderBody(ui, policy, nowMs, onRetry, onScan)}
     </GlassSurface>
   );
 }
@@ -61,20 +66,31 @@ function renderBody(
   policy: DataOwnerPolicy,
   nowMs: number,
   onRetry?: () => void,
+  onScan?: () => void,
 ) {
   switch (ui.state) {
     case 'loading':
       return (
         <div>
+          {/* Skeleton shell (Bible Interface §3: skeleton <100ms, no blank screen). Decorative
+              blocks only — aria-hidden, opacity pulse, killed by the global reduce-motion cut. */}
+          <div className="skeleton-block skeleton-photo" aria-hidden="true" />
+          <div className="skeleton-block skeleton-line" aria-hidden="true" />
+          <div className="skeleton-block skeleton-line skeleton-line--short" aria-hidden="true" />
           <p className="text-body">{LOADING_CARD_COPY}</p>
           {ui.slow && <p className="text-caption">{LOADING_DELAY_LINE}</p>}
         </div>
       );
     case 'empty':
       return (
-        <p className="text-body">
-          {ui.origin === 'scan' ? scanEmptyBody(ui.query) : emptyBody(ui.query)}
-        </p>
+        <div>
+          <p className="text-body">
+            {ui.origin === 'scan' ? scanEmptyBody(ui.query) : emptyBody(ui.query)}
+          </p>
+          <button type="button" className="text-label cta--primary" onClick={onScan}>
+            {SCAN_BUTTON_LABEL}
+          </button>
+        </div>
       );
     case 'candidates':
       // Unreachable: candidates is a pre-answer state that AvailabilitySurface renders separately
@@ -131,7 +147,7 @@ function renderErrorCached(
           {facts.cta}
         </button>
       )}
-      <button type="button" className="text-label" onClick={onRetry}>
+      <button type="button" className="text-label cta--primary" onClick={onRetry}>
         {RETRY_BUTTON}
       </button>
     </div>
@@ -145,7 +161,7 @@ function renderErrorNoCache(onRetry?: () => void) {
         <span aria-hidden="true">⚠ </span>
         {ERROR_NO_CACHE_BODY}
       </p>
-      <button type="button" className="text-label" onClick={onRetry}>
+      <button type="button" className="text-label cta--primary" onClick={onRetry}>
         {RETRY_BUTTON}
       </button>
     </div>
@@ -166,7 +182,7 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy) {
           {facts.status}
         </p>
         {primary && (
-          <p className="text-heading">
+          <p className="text-heading price-line">
             {formatPrice(answer.price)} · {formatLocation(primary)}
           </p>
         )}
@@ -234,7 +250,7 @@ function renderPartial(
         <p className="text-heading">{answer.productName}</p>
         <p className="text-body">{partialLocationMissingConfirmed(answer.price)}</p>
         <p className="text-caption">{PARTIAL_NO_LOCATION_NOTE}</p>
-        <button type="button" className="text-label" onClick={onRetry}>
+        <button type="button" className="text-label cta--primary" onClick={onRetry}>
           {PARTIAL_NO_LOCATION_CTA}
         </button>
       </div>
@@ -246,7 +262,7 @@ function renderPartial(
       <ProductPhoto imageUrl={answer.imageUrl} name={answer.productName} />
       <p className="text-heading">{answer.productName}</p>
       <p className="text-body">{partialStaleCacheBody(relativeTime)}</p>
-      <button type="button" className="text-label" onClick={onRetry}>
+      <button type="button" className="text-label cta--primary" onClick={onRetry}>
         {PARTIAL_STALE_CACHE_CTA}
       </button>
     </div>

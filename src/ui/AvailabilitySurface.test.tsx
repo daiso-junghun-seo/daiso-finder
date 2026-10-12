@@ -179,6 +179,22 @@ describe('live search', () => {
     await userEvent.type(screen.getByLabelText('상품 검색'), '   {Enter}');
     expect(useAvailabilityStore.getState().ui).toEqual({ state: 'default' });
   });
+
+  // Redesign (Bible Empty L2): the card's own scan button re-opens the scanner.
+  test('the empty card scan button re-opens the scanner', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<AvailabilitySurface />);
+    await user.type(screen.getByLabelText('상품 검색'), '락앤락같은통{Enter}');
+    expect(
+      await screen.findByText(emptyBody('락앤락같은통'), { selector: 'p' }),
+    ).toBeInTheDocument();
+    // Two scan buttons now: the bottom bar's and the card's — the card's is the one
+    // under test (the bar's opener is covered by the scanner entry tests).
+    const cardScan = container.querySelector('.answer-card button');
+    expect(cardScan).not.toBeNull();
+    await user.click(cardScan as HTMLElement);
+    expect(useAvailabilityStore.getState().scannerOpen).toBe(true);
+  });
 });
 
 describe('modal behavior (F4)', () => {

@@ -454,6 +454,7 @@ export function AvailabilitySurface() {
           policy={defaultPolicy}
           nowMs={nowMs}
           cardRef={answerCardRef}
+          onScan={openScanner}
           onRetry={() => {
             void runQuery(store, ui.query, dispatch);
             // The retry button unmounts on the Loading swap — move focus to the persistent card
