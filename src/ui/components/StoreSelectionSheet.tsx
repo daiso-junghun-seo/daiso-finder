@@ -6,29 +6,26 @@
 import { useEffect, useRef, useState } from 'react';
 import type { GeolocationPort, StoreDirectoryPort } from '../../domain/ports';
 import type { StoreContext } from '../../domain/types';
-import {
-  STORE_SELECT_CLOSE,
-  STORE_SELECT_NEARBY_HEADER,
-  STORE_SELECT_NO_LOCATION_NOTE,
-  STORE_SELECT_SEARCH_PLACEHOLDER,
-  STORE_SELECT_TITLE,
-  nearbyStoreRowLabel,
-} from '../copy';
+import type { Locale } from '../../i18n/locale';
+import { strings } from '../../i18n/strings';
 import { GlassSurface } from './GlassSurface';
 
 export function StoreSelectionSheet({
   current,
+  locale,
   directory,
   geolocation,
   onSelect,
   onClose,
 }: {
   current: StoreContext | null;
+  locale: Locale;
   directory: StoreDirectoryPort;
   geolocation: GeolocationPort;
   onSelect: (store: StoreContext) => void;
   onClose?: () => void;
 }) {
+  const S = strings(locale);
   const [nearby, setNearby] = useState<Array<StoreContext & { distanceM: number }> | null>(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<StoreContext[]>([]);
@@ -100,18 +97,18 @@ export function StoreSelectionSheet({
         <div className="sheet-grabber" aria-hidden="true" />
         <div className="store-selection-sheet__header">
           <h2 id="store-select-title" className="text-heading">
-            {STORE_SELECT_TITLE}
+            {S.STORE_SELECT_TITLE}
           </h2>
           {onClose && (
             <button type="button" className="text-label" onClick={onClose}>
-              {STORE_SELECT_CLOSE}
+              {S.STORE_SELECT_CLOSE}
             </button>
           )}
         </div>
         <input
           ref={searchRef}
-          aria-label={STORE_SELECT_SEARCH_PLACEHOLDER}
-          placeholder={STORE_SELECT_SEARCH_PLACEHOLDER}
+          aria-label={S.STORE_SELECT_SEARCH_PLACEHOLDER}
+          placeholder={S.STORE_SELECT_SEARCH_PLACEHOLDER}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -127,7 +124,7 @@ export function StoreSelectionSheet({
           </ul>
         ) : nearby === null ? null : nearby.length > 0 ? (
           <div className="store-selection-sheet__nearby-group">
-            <p className="text-caption">{STORE_SELECT_NEARBY_HEADER}</p>
+            <p className="text-caption">{S.STORE_SELECT_NEARBY_HEADER}</p>
             <ul className="store-selection-sheet__nearby">
               {nearby.map((store) => (
                 <li key={store.strCd}>
@@ -137,7 +134,7 @@ export function StoreSelectionSheet({
                     aria-current={current?.strCd === store.strCd ? 'true' : undefined}
                     onClick={() => onSelect({ strCd: store.strCd, strNm: store.strNm })}
                   >
-                    {nearbyStoreRowLabel(store.strNm, store.distanceM)}
+                    {S.nearbyStoreRowLabel(store.strNm, store.distanceM)}
                     {current?.strCd === store.strCd && <span aria-hidden="true"> ✓</span>}
                   </button>
                 </li>
@@ -145,7 +142,7 @@ export function StoreSelectionSheet({
             </ul>
           </div>
         ) : (
-          <p className="text-body">{STORE_SELECT_NO_LOCATION_NOTE}</p>
+          <p className="text-body">{S.STORE_SELECT_NO_LOCATION_NOTE}</p>
         )}
       </section>
     </GlassSurface>

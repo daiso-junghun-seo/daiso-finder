@@ -4,32 +4,12 @@
 import type { Ref } from 'react';
 import type { DataOwnerPolicy } from '../domain/policy';
 import type { AvailabilityAnswer, UiState } from '../domain/types';
+import type { Locale } from '../i18n/locale';
+import { strings } from '../i18n/strings';
 import { GlassSurface } from './components/GlassSurface';
 import { ProductPhoto } from './components/ProductPhoto';
-import {
-  ERROR_CACHED_BANNER,
-  ERROR_NO_CACHE_BODY,
-  LIVE_FRESHNESS_CAPTION,
-  LOADING_CARD_COPY,
-  LOADING_DELAY_LINE,
-  PARTIAL_FRANCHISE_BODY,
-  PARTIAL_FRANCHISE_CTA,
-  PARTIAL_NO_LOCATION_CTA,
-  PARTIAL_NO_LOCATION_NOTE,
-  PARTIAL_STALE_CACHE_CTA,
-  RETRY_BUTTON,
-  SCAN_BUTTON_LABEL,
-  cachedFreshnessCaption,
-  emptyBody,
-  extraPositionsLabel,
-  factsFor,
-  lowQtyCaption,
-  partialLocationMissingConfirmed,
-  partialStaleCacheBody,
-  priceLocationLine,
-  scanEmptyBody,
-} from './copy';
-import { formatLocation, formatPrice, formatRelativeTimeKo } from './format';
+import { priceLocationLine } from './copy';
+import { formatLocation, formatPrice, formatRelativeTimeEn, formatRelativeTimeKo } from './format';
 
 type NonDefaultUiState = Exclude<UiState, { state: 'default' }>;
 
@@ -37,6 +17,7 @@ export function AnswerCard({
   ui,
   policy,
   nowMs,
+  locale,
   onRetry,
   onScan,
   cardRef,
@@ -44,6 +25,11 @@ export function AnswerCard({
   ui: NonDefaultUiState;
   policy: DataOwnerPolicy;
   nowMs: number;
+  // Guidance language for every line in this card (D069 — match tokens stay Korean
+  // regardless). Optional with a ko default (same defaulting as ScannerOverlay) so tests
+  // and future callers that forget it degrade to the default language, never to nothing —
+  // production always passes the store locale explicitly.
+  locale?: Locale;
   // Wired ONLY to the four 다시 확인 renders (error/cached, error/noCache, partial/locationMissing,
   // partial/staleCache): re-runs the retained query (B15). All other CTAs stay inert stubs.
   onRetry?: () => void;
@@ -56,7 +42,7 @@ export function AnswerCard({
 }) {
   return (
     <GlassSurface className="answer-card" tabIndex={-1} surfaceRef={cardRef}>
-      {renderBody(ui, policy, nowMs, onRetry, onScan)}
+      {renderBody(ui, policy, nowMs, locale, onRetry, onScan)}
     </GlassSurface>
   );
 }
@@ -65,9 +51,15 @@ function renderBody(
   ui: NonDefaultUiState,
   policy: DataOwnerPolicy,
   nowMs: number,
+  locale: Locale = 'ko',
   onRetry?: () => void,
   onScan?: () => void,
 ) {
+  // One destructure instead of 20 imports: every bare copy name below resolves through the
+  // active locale table, so no call site changes when a string gains a language. Sub-renders
+  // take the locale and destructure only what they use (each stays self-contained).
+  const { LOADING_CARD_COPY, LOADING_DELAY_LINE, SCAN_BUTTON_LABEL, emptyBody, scanEmptyBody } =
+    strings(locale);
   switch (ui.state) {
     case 'loading':
       return (
@@ -114,12 +106,12 @@ function renderBody(
       return null;
     case 'error':
       return ui.variant === 'cached'
-        ? renderErrorCached(ui.answer, ui.freshness.observedAt, nowMs, onRetry)
-        : renderErrorNoCache(onRetry);
+        ? renderErrorCached(ui.answer, ui.freshness.observedAt, nowMs, locale, onRetry)
+        : renderErrorNoCache(locale, onRetry);
     case 'success':
-      return renderSuccess(ui.answer, policy);
+      return renderSuccess(ui.answer, policy, locale);
     case 'partial':
-      return renderPartial(ui, nowMs, onRetry);
+      return renderPartial(ui, nowMs, locale, onRetry);
   }
 }
 
@@ -127,9 +119,19 @@ function renderErrorCached(
   answer: AvailabilityAnswer,
   observedAt: number,
   nowMs: number,
+  locale: Locale,
   onRetry?: () => void,
 ) {
-  const facts = factsFor(answer);
+  const {
+    ERROR_CACHED_BANNER,
+    RETRY_BUTTON,
+    cachedFreshnessCaption,
+    extraPositionsLabel,
+    factsFor,
+  } = strings(locale);
+  const relTime = (at: number) =>
+    locale === 'en' ? formatRelativeTimeEn(at, nowMs) : formatRelativeTimeKo(at, nowMs);
+  const facts = factsFor(answer, locale);
   const line = priceLocationLine(answer);
   // priceLocationLine requires both price and location together; an inStock answer can be cached with a
   // known price but no location (state-machine.ts only gates Success/Partial on hasLocation, not the
@@ -153,9 +155,7 @@ function renderErrorCached(
           {extraPositionsLabel(rest.length)}
         </button>
       )}
-      <p className="text-caption">
-        {cachedFreshnessCaption(formatRelativeTimeKo(observedAt, nowMs))}
-      </p>
+      <p className="text-caption">{cachedFreshnessCaption(relTime(observedAt))}</p>
       {answer.kind === 'franchiseUndeterminable' && (
         // Decision 5: a cached franchise answer keeps its own CTA (inert stub) — the outage frame
         // alone would strand the shopper with a retry that cannot ever determine franchise stock.
@@ -170,7 +170,8 @@ function renderErrorCached(
   );
 }
 
-function renderErrorNoCache(onRetry?: () => void) {
+function renderErrorNoCache(locale: Locale, onRetry?: () => void) {
+  const { ERROR_NO_CACHE_BODY, RETRY_BUTTON } = strings(locale);
   return (
     <div>
       <p className="text-body error-banner">
@@ -184,8 +185,9 @@ function renderErrorNoCache(onRetry?: () => void) {
   );
 }
 
-function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy) {
-  const facts = factsFor(answer);
+function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy, locale: Locale) {
+  const { LIVE_FRESHNESS_CAPTION, extraPositionsLabel, factsFor, lowQtyCaption } = strings(locale);
+  const facts = factsFor(answer, locale);
   if (answer.kind === 'inStock') {
     const [primary, ...rest] = answer.locations;
     const isLowQty = answer.qtyUpperBound <= policy.lowQtyCutoff;
@@ -210,9 +212,10 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy) {
             {extraPositionsLabel(rest.length)}
           </button>
         )}
-        <button type="button" className="text-label">
-          {facts.cta}
-        </button>
+        {/* No CTA: 위치 보기 was removed 2026-10-12 (owner: dead stub promising an
+            unwired flow — a prominent dead button violates I4 feedback worse than its
+            absence. facts.cta still carries the string for Flow 2, which restores this
+            button wired. Siblings (대안 보기 etc.) stay until their flows land — §B40. */}
       </div>
     );
   }
@@ -240,8 +243,20 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy) {
 function renderPartial(
   ui: Extract<NonDefaultUiState, { state: 'partial' }>,
   nowMs: number,
+  locale: Locale,
   onRetry?: () => void,
 ) {
+  const {
+    PARTIAL_FRANCHISE_BODY,
+    PARTIAL_FRANCHISE_CTA,
+    PARTIAL_NO_LOCATION_CTA,
+    PARTIAL_NO_LOCATION_NOTE,
+    PARTIAL_STALE_CACHE_CTA,
+    partialLocationMissingConfirmed,
+    partialStaleCacheBody,
+  } = strings(locale);
+  const relTime = (at: number) =>
+    locale === 'en' ? formatRelativeTimeEn(at, nowMs) : formatRelativeTimeKo(at, nowMs);
   const { answer, freshness, trigger } = ui;
   if (trigger === 'franchise') {
     return (
@@ -272,7 +287,7 @@ function renderPartial(
       </div>
     );
   }
-  const relativeTime = freshness ? formatRelativeTimeKo(freshness.observedAt, nowMs) : '';
+  const relativeTime = freshness ? relTime(freshness.observedAt) : '';
   return (
     <div>
       <ProductPhoto imageUrl={answer.imageUrl} name={answer.productName} />

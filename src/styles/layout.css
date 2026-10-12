@@ -275,8 +275,35 @@ main h1 {
   padding: var(--space-sm) 0;
 }
 
+/* Utility cluster: locale toggle + store change share the right end. */
+.store-context-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: none;
+}
+
+.locale-toggle {
+  min-width: 44px;
+  padding: 10px 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
 .answer-card > div > * + * {
   margin-top: var(--space-sm);
+}
+
+/* The grown card's content centres in its void (user-centered layout): the peak answer
+   sits at the visual centre instead of stranding whitespace below the CTA. Above-fold
+   rule unaffected — nothing scrolls that did not before. */
+.answer-card > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
 }
 
 /* Recent chips restyle below (redesign): full-width rows become wrap pills. */

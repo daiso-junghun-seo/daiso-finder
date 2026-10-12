@@ -6,33 +6,24 @@
 // only adds a hint (Bible Engineering §5).
 import { useEffect, useRef, useState } from 'react';
 import type { ScanOutcome, ScannerPort } from '../../domain/ports';
+import type { Locale } from '../../i18n/locale';
+import { strings } from '../../i18n/strings';
 import { LiveRegion } from '../a11y/LiveRegion';
-import {
-  SCAN_AIM_GUIDE,
-  SCAN_AIM_GUIDE_TOKEN,
-  SCAN_BUTTON_LABEL,
-  SCAN_FAILED,
-  SCAN_HINT,
-  SCAN_PERMISSION_DENIED,
-  SCAN_UNSUPPORTED,
-  STORE_SELECT_CLOSE,
-  splitAimGuide,
-} from '../copy';
+import { splitAimGuide } from '../copy';
 import { GlassSurface } from './GlassSurface';
 
 const DEFAULT_HINT_DELAY_MS = 10_000;
 const AIM_GUIDE_ID = 'scanner-aim-guide';
-const AIM_GUIDE_PARTS = splitAimGuide(SCAN_AIM_GUIDE, SCAN_AIM_GUIDE_TOKEN);
 
-function noticeFor(outcome: ScanOutcome | null): string | null {
+function noticeFor(outcome: ScanOutcome | null, S: ReturnType<typeof strings>): string | null {
   if (!outcome) return null;
   switch (outcome.kind) {
     case 'permissionDenied':
-      return SCAN_PERMISSION_DENIED;
+      return S.SCAN_PERMISSION_DENIED;
     case 'unsupported':
-      return SCAN_UNSUPPORTED;
+      return S.SCAN_UNSUPPORTED;
     case 'failed':
-      return SCAN_FAILED;
+      return S.SCAN_FAILED;
     default:
       return null; // decoded/cancelled leave no notice behind
   }
@@ -40,15 +31,21 @@ function noticeFor(outcome: ScanOutcome | null): string | null {
 
 export function ScannerOverlay({
   scanner,
+  locale,
   onDecoded,
   onClose,
   hintDelayMs = DEFAULT_HINT_DELAY_MS,
 }: {
   scanner: ScannerPort;
+  // Guidance language for every line on this surface (D069 — match tokens stay Korean
+  // regardless). Defaults to ko so existing callers/tests are unaffected.
+  locale?: Locale;
   onDecoded: (value: string) => void;
   onClose: () => void;
   hintDelayMs?: number;
 }) {
+  const S = strings(locale ?? 'ko');
+  const aimGuideParts = splitAimGuide(S.SCAN_AIM_GUIDE, S.SCAN_AIM_GUIDE_TOKEN);
   const videoRef = useRef<HTMLVideoElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [outcome, setOutcome] = useState<ScanOutcome | null>(null);
@@ -104,7 +101,7 @@ export function ScannerOverlay({
     };
   }, [scanner, onDecoded]);
 
-  const notice = noticeFor(outcome);
+  const notice = noticeFor(outcome, S);
 
   return (
     <GlassSurface className="scanner-overlay">
@@ -116,10 +113,10 @@ export function ScannerOverlay({
       >
         <div className="scanner-overlay__header">
           <h2 id="scanner-title" className="text-heading">
-            {SCAN_BUTTON_LABEL}
+            {S.SCAN_BUTTON_LABEL}
           </h2>
           <button ref={closeRef} type="button" className="text-label" onClick={onClose}>
-            {STORE_SELECT_CLOSE}
+            {S.STORE_SELECT_CLOSE}
           </button>
         </div>
         <div className="scanner-overlay__viewport">
@@ -168,27 +165,27 @@ export function ScannerOverlay({
                 Wired as the dialog's accessible description (aria-describedby above) because focus
                 stays on 닫기 for the whole overlay — a bare paragraph would never be announced. */}
             <p id={AIM_GUIDE_ID} className="text-body">
-              {AIM_GUIDE_PARTS ? (
+              {aimGuideParts ? (
                 <>
-                  {AIM_GUIDE_PARTS[0]}
-                  <strong>{AIM_GUIDE_PARTS[1]}</strong>
-                  {AIM_GUIDE_PARTS[2]}
+                  {aimGuideParts[0]}
+                  <strong>{aimGuideParts[1]}</strong>
+                  {aimGuideParts[2]}
                 </>
               ) : (
                 /* A token that cannot be found must never cost the shopper the instruction. */
-                SCAN_AIM_GUIDE
+                S.SCAN_AIM_GUIDE
               )}
             </p>
-            {hinting && <p className="text-caption">{SCAN_HINT}</p>}
+            {hinting && <p className="text-caption">{S.SCAN_HINT}</p>}
           </>
         )}
         {/* Focus stays on 닫기 for the whole overlay, so an outcome notice that is only rendered is
             never spoken. The surface's idiom applies here too: visible copy plus a live region that
             echoes it. THIS instance is the only one that hides the echo (D7): the notice is already on
             screen one line above, so leaving it visible would print the same sentence twice. The two
-            AvailabilitySurface instances must stay VISIBLE — in four states one of them is the sole
-            on-screen source of LIVE_FRESHNESS_CAPTION, and freshness framing is Bible D061, not ours to
-            drop. Mounted with the dialog and left in place (message '') so that when an outcome lands
+            AvailabilitySurface instances echo visibly-hidden for the same reason since the 2026-10-12
+            polish dedup (their cards carry every announced sentence — verified per state). Mounted with
+            the dialog and left in place (message '') so that when an outcome lands
             only the TEXT changes — a live region inserted together with its content is announced
             unreliably. */}
         <LiveRegion message={notice ?? ''} visuallyHidden />
