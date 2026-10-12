@@ -97,6 +97,7 @@ export function StoreSelectionSheet({
   return (
     <GlassSurface className="store-selection-sheet">
       <section role="dialog" aria-modal="true" aria-labelledby="store-select-title">
+        <div className="sheet-grabber" aria-hidden="true" />
         <div className="store-selection-sheet__header">
           <h2 id="store-select-title" className="text-heading">
             {STORE_SELECT_TITLE}

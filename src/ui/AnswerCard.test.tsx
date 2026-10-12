@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { mockAnswers } from '../adapters/mock/fixtures';
 import { defaultPolicy } from '../domain/policy';
 import { AnswerCard } from './AnswerCard';
@@ -60,6 +61,20 @@ test('loading (slow) adds the delay line', () => {
   expect(screen.getByText(LOADING_DELAY_LINE)).toBeInTheDocument();
 });
 
+test('loading renders an aria-hidden skeleton shell (Bible §3, no blank screen)', () => {
+  const { container } = render(
+    <AnswerCard
+      ui={{ state: 'loading', query: '밀폐용기', slow: false }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+    />,
+  );
+  const blocks = container.querySelectorAll('.skeleton-block');
+  // Photo slot + two text bars: fewer would read as decoration, not a card taking shape.
+  expect(blocks).toHaveLength(3);
+  for (const block of blocks) expect(block).toHaveAttribute('aria-hidden', 'true');
+});
+
 test('empty renders the Bible body with the query quoted', () => {
   render(
     <AnswerCard
@@ -81,6 +96,33 @@ test('a scan-origin empty card tells the shopper to search by name instead of sc
   );
   expect(screen.getByText(scanEmptyBody('19987'))).toBeInTheDocument();
   expect(screen.queryByText(emptyBody('19987'))).not.toBeInTheDocument();
+});
+
+test('empty carries its own scan CTA (Bible L2) — wired in both origins', async () => {
+  const user = userEvent.setup();
+  const empties: Array<
+    | { state: 'empty'; query: string; suggestions: string[] }
+    | { state: 'empty'; query: string; suggestions: string[]; origin: 'scan' }
+  > = [
+    { state: 'empty', query: '락앤락같은통', suggestions: [] },
+    { state: 'empty', query: '19987', suggestions: [], origin: 'scan' },
+  ];
+  for (const ui of empties) {
+    let scanned = 0;
+    const { unmount } = render(
+      <AnswerCard
+        ui={ui}
+        policy={defaultPolicy}
+        nowMs={NOW}
+        onScan={() => {
+          scanned += 1;
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '바코드 스캔' }));
+    expect(scanned).toBe(1);
+    unmount();
+  }
 });
 
 test('error/noCache renders the no-cache body and the retry button', () => {
@@ -198,6 +240,39 @@ test('success inStock (ample qty) shows live freshness, price/location, and the 
   expect(screen.getByText('2,000원 · 11층 56번')).toBeInTheDocument();
   expect(screen.getByText(LIVE_FRESHNESS_CAPTION)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: SUCCESS_IN_STOCK_CTA })).toBeInTheDocument();
+});
+
+test('success hero order is name → status → price/location → freshness → CTA (peak glance)', () => {
+  render(
+    <AnswerCard
+      ui={{
+        state: 'success',
+        query: '밀폐용기',
+        answer: mockAnswers.inStock,
+        freshness: { class: 'live', observedAt: NOW },
+      }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+    />,
+  );
+  const nodes = [
+    screen.getByText(mockAnswers.inStock.productName),
+    screen.getByText(SUCCESS_IN_STOCK_STATUS),
+    screen.getByText('2,000원 · 11층 56번'),
+    screen.getByText(LIVE_FRESHNESS_CAPTION),
+    screen.getByRole('button', { name: SUCCESS_IN_STOCK_CTA }),
+  ];
+  // Each node must follow the previous in document order — a restyle that reorders the
+  // glance (price above status, CTA above price) breaks the Bible peak moment silently.
+  for (let i = 1; i < nodes.length; i += 1) {
+    const prev = nodes[i - 1];
+    const curr = nodes[i];
+    expect(prev).toBeDefined();
+    expect(curr).toBeDefined();
+    expect(prev?.compareDocumentPosition(curr ?? document.body)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  }
 });
 
 test('success inStock with an imageUrl renders the product photo (src + alt = product name)', () => {

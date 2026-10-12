@@ -15,11 +15,13 @@ main {
 }
 
 /* The answer-card region grows so the bottom bar stays docked in answer states.
-   Padding keeps text off the glass edge; long product names wrap inside it (floor). */
+   Padding keeps text off the glass edge; long product names wrap inside it (floor).
+   Enter motion (redesign, Bible §3 150–300ms): opacity + rise only. */
 .answer-card {
   flex: 1;
   padding: 16px;
   overflow-wrap: break-word;
+  animation: card-enter 220ms ease-out;
 }
 
 /* Bottom-docked search/scan bar (L1 in Default; the demoted class is applied by the surface).
@@ -132,10 +134,13 @@ input:focus-visible {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm); /* redesign: chips own both axes; the li+li margin below is neutralised */
 }
 
 .recent-searches li + li {
-  margin-top: 8px;
+  margin-top: 0; /* redesign: the wrap-chip gap owns both axes, not row margins */
 }
 
 .candidate-list ul {
@@ -238,18 +243,10 @@ main h1 {
   margin-top: var(--space-sm);
 }
 
-.recent-searches button {
-  width: 100%;
-  text-align: left;
-  border-radius: var(--radius-sm);
-}
+/* Recent chips restyle below (redesign): full-width rows become wrap pills. */
 
 /* Sheet chrome: rounded top lives on the base rule above; headed rhythm and full-width
    row buttons below. */
-.store-selection-sheet {
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-}
-
 .store-selection-sheet > section {
   padding: var(--space-lg);
   gap: var(--space-sm);
@@ -272,6 +269,89 @@ main h1 {
   width: 100%;
   text-align: left;
   border-radius: var(--radius-sm);
+}
+
+/* Redesign (2026-10-12-ui-redesign-design.md) — same contract, redistributed weight. */
+
+/* Full-width wired CTA: the single L2 action per state. Inert stubs stay outline. */
+.cta--primary {
+  width: 100%;
+  background: var(--action-bg);
+  border-color: transparent;
+  color: var(--action-fg);
+  padding: 12px 16px;
+}
+
+/* Answer hero: price · location reads one notch above Heading (still the Heading role). */
+.price-line {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+/* Loading skeleton (Bible Interface §3): decorative blocks, opacity pulse only.
+   The global reduce-motion cut stops the pulse; the copy beneath never moves. */
+.skeleton-block {
+  border-radius: var(--radius-sm);
+  background: var(--color-neutral-border);
+  opacity: 0.45;
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.skeleton-photo {
+  width: 120px;
+  height: 120px;
+}
+
+.skeleton-line {
+  height: 16px;
+  margin-top: var(--space-sm);
+}
+
+.skeleton-line--short {
+  width: 55%;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Answer enter motion (Bible §3: 150–300ms): opacity + rise only, same GPU discipline
+   as aim-breathe. The decode loop is stopped before any answer renders, so nothing
+   contends with it; the global reduce-motion cut replaces it with an immediate cut.
+   (The animation itself lives on the base .answer-card rule above — first-match idiom.) */
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Recent searches as wrap chips: same data, tap = resubmit. List layout merged into
+   the floor rule above (first-match idiom). */
+.recent-searches button {
+  width: auto;
+  border-radius: var(--radius-pill);
+  padding: 8px 14px;
+  min-height: 44px;
+}
+
+/* Sheet grabber: visual affordance only, no gesture change. */
+.sheet-grabber {
+  width: 40px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-neutral-border);
+  margin: 0 auto var(--space-sm);
 }
 
 /* Barcode scanner overlay — minimal layout only; presentation polish is the UI pass (HANDOFF slice 3).

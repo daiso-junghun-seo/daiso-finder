@@ -113,7 +113,9 @@ const ZXING_SPECIFIER = /(?:from|import)\s*\(?\s*'(@zxing\/library[^']*)'/g;
 // tests below then read a dead bus (decoderPath null etc.) while the outcomes stay correct —
 // verified by bisection (eager ?raw glob in, suite red; lazy, green). The loaders run inside the
 // guard test itself, long after the mock registry is in place.
-const sourceFileLoaders = import.meta.glob('../../**/*.{ts,tsx}', {
+// Test files carry the barrel spellings above as data, so they are excluded from the
+// sweep itself; the `.test.` skip inside the loop stays as belt-and-braces.
+const sourceFileLoaders = import.meta.glob(['../../**/*.{ts,tsx}', '!../../**/*.test.{ts,tsx}'], {
   query: '?raw',
   import: 'default',
 });
@@ -129,6 +131,8 @@ test('the deep-path guard rejects the bare barrel and both esm barrel spellings'
   expect('@zxing/library/esm/browser/HTMLCanvasElementLuminanceSource').toMatch(DEEP_ZXING_PATH);
 });
 
+// Loads every non-test source file as text: under full-suite parallel load that honest
+// work outruns the 5s default (observed timeouts when the box also serves dev/proxy/tunnels).
 test('nothing in src imports @zxing/library except by a deep esm path', async () => {
   let found = 0;
   for (const [path, load] of Object.entries(sourceFileLoaders)) {
@@ -145,7 +149,7 @@ test('nothing in src imports @zxing/library except by a deep esm path', async ()
   // The four in zxingFrameDecoder.ts and nowhere else. An exact count, so neither a vacuous sweep (glob
   // returning nothing) nor a fifth import slipping in unreviewed can pass.
   expect(found).toBe(4);
-});
+}, 20_000);
 
 // The old test here — `importBundledDatamatrixReader` hands back BrowserDatamatrixCodeReader, whose
 // `.reader` is a DataMatrixReader and not a MultiFormatReader that would decode 1D again — went with
