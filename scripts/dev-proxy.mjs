@@ -119,8 +119,16 @@ function serveStatic(url, res) {
       res.end('not found');
       return;
     }
+    // Entry HTML and the service worker must never sit in browser cache: both are
+    // unhashed filenames pointing at hashed chunks, so a cached copy pins the whole
+    // app to the previous deploy (observed 2026-10-12 — phone showed the pre-polish
+    // UI after a refresh). Hashed assets below carry their own long cache instead.
+    const noStore = filePath.endsWith('.html') || filePath.endsWith('sw.js');
     res.writeHead(200, {
       'content-type': MIME[path.extname(filePath)] ?? 'application/octet-stream',
+      ...(noStore
+        ? { 'cache-control': 'no-store' }
+        : { 'cache-control': 'public, max-age=31536000, immutable' }),
     });
     res.end(data);
   });
