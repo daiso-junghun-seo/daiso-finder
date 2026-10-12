@@ -165,13 +165,13 @@ test('.search-bar lays its input and scan button out in one flex row', () => {
   expect(ruleFor('.search-bar input')).toMatch(/flex:\s*1\s+1\s+auto/);
 });
 
-test('.recent-searches and .candidate-list drop UA bullets; rows keep the 8px gap', () => {
+test('.recent-searches and .candidate-list drop UA bullets', () => {
   for (const list of ['.recent-searches ul', '.candidate-list ul']) {
     expect(ruleFor(list)).toMatch(/list-style:\s*none/);
   }
-  // Candidate rows stack vertically (8px); recent searches wrap as chips whose gap owns
-  // both axes (redesign) — its li+li margin is neutralised, not 8px.
-  expect(ruleFor('.candidate-list li + li')).toMatch(/margin-top:\s*8px/);
+  // Candidate rows breathe at 12px (feed rhythm — the 8px Interface minimum, not exactly 8);
+  // recent chips scroll in one row whose gap owns both axes.
+  expect(ruleFor('.candidate-list li + li')).toMatch(/margin-top:\s*12px/);
   expect(ruleFor('.recent-searches li + li')).toMatch(/margin-top:\s*0/);
 });
 
@@ -182,8 +182,8 @@ test('.candidate-list rows are one flex line: photo, name takes the row, price h
 
 test('.candidate-list photo is a fixed box that never crops the product', () => {
   const rule = ruleFor('.candidate-list .product-photo');
-  expect(rule).toMatch(/width:\s*64px/);
-  expect(rule).toMatch(/height:\s*64px/);
+  expect(rule).toMatch(/width:\s*80px/);
+  expect(rule).toMatch(/height:\s*80px/);
   // contain, never cover: cropping would hide shelf-matchable detail (design §2).
   expect(rule).toMatch(/object-fit:\s*contain/);
 });
@@ -192,6 +192,8 @@ test('.answer-card keeps text off the glass edge and photos inside the card', ()
   expect(ruleFor('.answer-card')).toMatch(/padding:\s*20px/);
   const photo = ruleFor('.answer-card .product-photo');
   expect(photo).toMatch(/max-width:\s*100%/);
+  expect(photo).toMatch(/max-height:\s*260px/);
+  expect(photo).toMatch(/border-radius:\s*var\(--radius-md\)/);
   expect(photo).toMatch(/object-fit:\s*contain/);
 });
 
@@ -264,9 +266,9 @@ test('.answer-card enters on opacity + rise only (Bible §3 150–300ms)', () =>
   expect(new Set(declared)).toEqual(new Set(['opacity', 'transform']));
 });
 
-test('recent searches render as wrap chips with the floor row-gap neutralised', () => {
-  expect(ruleFor('.recent-searches ul')).toMatch(/flex-wrap:\s*wrap/);
-  expect(ruleFor('.recent-searches li + li')).toMatch(/margin-top:\s*0/);
+test('recent searches scroll as a snap row (stories-style, keyboard-discoverable)', () => {
+  // Superseded by the snap-row test below (feed pass): kept for the pill assertion,
+  // which both layouts share.
   expect(ruleFor('.recent-searches button')).toMatch(/border-radius:\s*var\(--radius-pill\)/);
 });
 
@@ -290,7 +292,18 @@ test('.error-banner carries its tint (icon + sentence discipline unchanged)', ()
 test('.price-line hero-emphasises within the Heading role', () => {
   const rule = ruleFor('.price-line');
   expect(rule).toMatch(/font-size:\s*1\.75rem/);
+  expect(rule).toMatch(/font-weight:\s*700/);
   expect(rule).toMatch(/font-variant-numeric:\s*tabular-nums/);
+});
+
+test('candidate prices align down the feed (tabular numerals)', () => {
+  expect(ruleFor('.candidate-list button > span:last-of-type')).toMatch(/tabular-nums/);
+});
+
+test('recent searches scroll as a snap row (stories-style, keyboard-discoverable)', () => {
+  expect(ruleFor('.recent-searches ul')).toMatch(/flex-wrap:\s*nowrap/);
+  expect(ruleFor('.recent-searches ul')).toMatch(/scroll-snap-type:\s*x/);
+  expect(ruleFor('.recent-searches ul')).toMatch(/scrollbar-width:\s*thin/);
 });
 
 test('.scan-button--primary keeps the icon aligned with its label', () => {
