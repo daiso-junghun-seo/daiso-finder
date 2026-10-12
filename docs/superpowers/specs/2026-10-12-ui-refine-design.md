@@ -46,8 +46,10 @@ single thumb CTA) on DAISO red — not a new language, the contract fully dresse
 
 ## 3. Tests
 
-- contrast.test.ts: every NEW tint pair light+dark (success/error/neutral pills,
-  error banner if tinted, chip ground?). Fail = drop tint, keep text.
+- contrast.test.ts: every NEW text-bearing tint pair light+dark (success/error/neutral pills,
+  error banner if tinted, chip ground?). Decorative-only color (medallion icon on tint,
+  bare ground gutter — never behind text) is exempt by construction, not by oversight.
+  Fail = drop tint, keep text.
 - layout.test.ts: positive assertions per new rule; keyframes untouched (no new
   motion except :active press — no test needed beyond presence? assert the
   transform-only declaration textually).
