@@ -84,6 +84,22 @@ function renderBody(
     case 'empty':
       return (
         <div>
+          <div className="empty-medallion" aria-hidden="true">
+            <svg
+              width="26"
+              height="26"
+              viewBox="0 0 26 26"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="M16.5 16.5 23 23" />
+            </svg>
+          </div>
           <p className="text-body">
             {ui.origin === 'scan' ? scanEmptyBody(ui.query) : emptyBody(ui.query)}
           </p>
@@ -129,7 +145,7 @@ function renderErrorCached(
       </p>
       <ProductPhoto imageUrl={answer.imageUrl} name={answer.productName} />
       <p className="text-heading">{answer.productName}</p>
-      <p className="text-display">{facts.status}</p>
+      <p className="text-display status-pill status-pill--neutral">{facts.status}</p>
       {line && <p className="text-heading">{line}</p>}
       {priceOnly && <p className="text-heading">{priceOnly}</p>}
       {rest.length > 0 && (
@@ -177,7 +193,7 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy) {
       <div>
         <ProductPhoto imageUrl={answer.imageUrl} name={answer.productName} />
         <p className="text-heading">{answer.productName}</p>
-        <p className="text-display success-status">
+        <p className="text-display success-status status-pill status-pill--success">
           <span aria-hidden="true">✓ </span>
           {facts.status}
         </p>
@@ -204,7 +220,7 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy) {
     <div>
       <ProductPhoto imageUrl={answer.imageUrl} name={answer.productName} />
       <p className="text-heading">{answer.productName}</p>
-      <p className="text-display">{facts.status}</p>
+      <p className="text-display status-pill status-pill--neutral">{facts.status}</p>
       {/* Freshness is announced for every success (announcementFor) so it must also be
           visible: without this line the surface LiveRegion was its only visual source,
           which forbids hiding that region (LiveRegion's own rule + UI polish dedup). */}

@@ -334,6 +334,19 @@ export function AvailabilitySurface() {
           className="text-label scan-button--primary"
           onClick={openScanner}
         >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 18 18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M1 6V1h5M12 1h5v5M17 12v5h-5M6 17H1v-5" />
+          </svg>
           {SCAN_BUTTON_LABEL}
         </button>
       </form>
