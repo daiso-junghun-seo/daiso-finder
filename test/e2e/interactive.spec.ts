@@ -195,7 +195,7 @@ test.describe('usability floor (phone 390×844)', () => {
     });
     // The mock catalogue points at the vendor CDN, which this sandbox cannot reach — without
     // this every photo would take the honest unmount path (ProductPhoto onError) and there
-    // would be no box to measure. A 1px PNG keeps the element mounted; the 64px thumb and
+    // would be no box to measure. A 1px PNG keeps the element mounted; the 80px thumb and
     // card bounds under test come from CSS, not the bitmap.
     await page.route('**/cdn.daisomall.co.kr/**', (route) =>
       route.fulfill({
@@ -241,10 +241,10 @@ test.describe('usability floor (phone 390×844)', () => {
       const photoBox = await boxOf(photo, `candidate photo ${i}`);
       const rowBox = await boxOf(row, `candidate row ${i}`);
       const geometry = `photo ${photoBox.width}×${photoBox.height} · row ${rowBox.width}×${rowBox.height}`;
-      // 64px thumb + 0.5px subpixel slack. An unbounded remote image would measure in the
+      // 80px thumb + 0.5px subpixel slack. An unbounded remote image would measure in the
       // hundreds here (its intrinsic size), blowing the row out of the viewport.
-      expect(photoBox.width, geometry).toBeLessThanOrEqual(64.5);
-      expect(photoBox.height, geometry).toBeLessThanOrEqual(64.5);
+      expect(photoBox.width, geometry).toBeLessThanOrEqual(80.5);
+      expect(photoBox.height, geometry).toBeLessThanOrEqual(80.5);
       expect(overflowPx(photoBox, rowBox), geometry).toBeLessThanOrEqual(0.5);
     }
   });

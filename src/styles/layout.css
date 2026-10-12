@@ -154,9 +154,20 @@ input:focus-visible {
   list-style: none;
   margin: 0;
   padding: 0;
+  /* Stories-style row (refine-3): horizontal snap scroll, one axis. Thin scrollbar
+     keeps keyboard discoverability (hidden would not). Chips keep pill + 44px. */
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm); /* redesign: chips own both axes; the li+li margin below is neutralised */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-xs);
+}
+
+.recent-searches li {
+  scroll-snap-align: start;
+  flex: none;
 }
 
 .recent-searches li + li {
@@ -170,7 +181,7 @@ input:focus-visible {
 }
 
 .candidate-list li + li {
-  margin-top: 8px;
+  margin-top: 12px; /* feed rhythm (refine-3): the 8px Interface minimum, breathed out */
 }
 
 /* A candidate row is one flex line: fixed photo, name takes the row, price hugs right.
@@ -191,12 +202,16 @@ input:focus-visible {
   font-weight: 600; /* row name reads weighted (UI polish) */
 }
 
+.candidate-list button > span:last-of-type {
+  font-variant-numeric: tabular-nums; /* prices align down the feed (no dependency) */
+}
+
 /* Photos are bounded, never cropped: object-fit contain keeps the shelf-matchable detail
    whole (honesty over neatness). The row thumb is a fixed box so rows stay uniform even
    before the remote image arrives; the answer photo scales down into the card. */
 .candidate-list .product-photo {
-  width: 64px;
-  height: 64px;
+  width: 80px;
+  height: 80px;
   object-fit: contain;
   flex: none;
 }
@@ -204,7 +219,8 @@ input:focus-visible {
 .answer-card .product-photo {
   display: block;
   max-width: 100%;
-  max-height: 240px;
+  max-height: 260px;
+  border-radius: var(--radius-md);
   object-fit: contain;
 }
 
@@ -303,10 +319,11 @@ main h1 {
 }
 
 /* Answer hero: price · location reads one notch above Heading (still the Heading role).
-   Tabular numerals keep prices aligned across rows (no dependency). */
+   Tabular numerals keep prices aligned across rows (no dependency). Weight stays 700 —
+   size carries the hero, not a fourth typeface weight (03 Should Not). */
 .price-line {
   font-size: 1.75rem;
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
