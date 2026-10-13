@@ -243,6 +243,15 @@ test('.candidate-list rows read as cards with a weighted name', () => {
   expect(ruleFor('.candidate-list button > span:first-of-type')).toMatch(/font-weight:\s*600/);
 });
 
+// UI_Improvement_Plan P1 (fewer borders): shadow carries elevation on cards + rows.
+test('the answer card drops the glass border (doubled class beats import order)', () => {
+  expect(ruleFor('.glass-surface.answer-card')).toMatch(/border-width:\s*0/);
+});
+
+test('candidate rows drop their border (shadow carries elevation)', () => {
+  expect(ruleFor('.candidate-list button')).toMatch(/border-width:\s*0/);
+});
+
 test('.store-selection-sheet has a rounded top and full-width row buttons', () => {
   expect(ruleFor('.store-selection-sheet')).toMatch(/border-radius:\s*var\(--radius-lg\)/);
   expect(ruleFor('.store-selection-sheet__results button')).toMatch(/width:\s*100%/);

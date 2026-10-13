@@ -40,6 +40,13 @@ main {
   box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
+/* Fewer borders (Refactoring UI P1): the shadow carries elevation, so the glass border
+   goes on the answer card — one surface, one depth cue. Doubled class for specificity:
+   glass.css loads after layout.css, so a plain .answer-card rule would lose. */
+.glass-surface.answer-card {
+  border-width: 0;
+}
+
 /* Bottom-docked search/scan bar (L1 in Default; the demoted class is applied by the surface).
    margin-top: auto docks it in Default, where no growing answer-card region exists yet. */
 .search-bar-surface {
@@ -219,6 +226,7 @@ input:focus-visible {
   width: 100%;
   text-align: left;
   border-radius: var(--radius-lg);
+  border-width: 0;
   padding: var(--space-md);
   box-shadow: var(--shadow-card);
 }
