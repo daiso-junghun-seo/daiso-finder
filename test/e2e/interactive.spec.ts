@@ -48,6 +48,21 @@ test.describe('with a persisted store context', () => {
     await expect(page.getByText('DAISO 명동역점')).toBeVisible();
   });
 
+  // Keep-product-on-switch (2026-10-13): the retained query re-runs under the new
+  // store instead of resetting to Default (the mock search answers alike for any store).
+  test('switching stores keeps the candidate list under the new store', async ({ page }) => {
+    await page.goto('/');
+    const input = page.getByLabel('상품 검색');
+    await input.fill('밀폐용기');
+    await input.press('Enter');
+    await expect(page.locator('p', { hasText: RESULTS_NOTICE })).toBeVisible();
+    await page.getByRole('button', { name: '매장 변경' }).click();
+    await page.getByPlaceholder('매장명 또는 지역명으로 검색').fill('을지로');
+    await page.getByRole('button', { name: '을지로점' }).click();
+    await expect(page.getByText('다이소 을지로점')).toBeVisible();
+    await expect(page.locator('p', { hasText: RESULTS_NOTICE })).toBeVisible();
+  });
+
   test('typing an unknown keyword ends in Empty with the Bible sentence', async ({ page }) => {
     await page.goto('/');
     const input = page.getByLabel('상품 검색');

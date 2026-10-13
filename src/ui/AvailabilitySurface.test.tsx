@@ -8,6 +8,7 @@ import {
   AvailabilitySurface,
   type QueryOutcomeRunner,
   isCurrentRun,
+  planStoreSwitch,
   runByPdNo,
   runByScan,
   runQuery,
@@ -145,6 +146,45 @@ describe('store change (D082)', () => {
     await userEvent.click(screen.getByRole('button', { name: '닫기' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByText('다이소 명동역점')).toBeInTheDocument();
+  });
+});
+
+describe('keep product on store switch (2026-10-13)', () => {
+  test('planStoreSwitch stays on Default and on blank lookups, keeps the rest', () => {
+    const loading = { state: 'loading', query: '밀폐용기', slow: false } as const;
+    expect(planStoreSwitch({ state: 'default' }, { keyword: '밀폐용기', scan: false })).toBeNull();
+    expect(planStoreSwitch({ state: 'default' }, null)).toBeNull();
+    expect(planStoreSwitch(loading, { keyword: '   ', scan: false })).toBeNull();
+    const typed = { keyword: '밀폐용기', scan: false };
+    expect(planStoreSwitch(loading, typed)).toBe(typed);
+    const scanned = { keyword: '19987', scan: true };
+    expect(
+      planStoreSwitch(
+        {
+          state: 'success',
+          query: '19987',
+          answer: mockAnswers.inStock,
+          freshness: { class: 'live' as const, observedAt: 0 },
+        },
+        scanned,
+      ),
+    ).toBe(scanned);
+  });
+
+  // Mock adapters: 밀폐용기 re-searches to the 3-candidate list under ANY store, so the
+  // switch lands back on candidates instead of resetting to Default — with the new store
+  // on the store line and no extra recent-search bump.
+  test('switching stores re-runs the retained query under the new store', async () => {
+    const user = userEvent.setup();
+    render(<AvailabilitySurface />);
+    await user.type(screen.getByLabelText('상품 검색'), '밀폐용기{Enter}');
+    expect(await screen.findByText(RESULTS_NOTICE, { selector: 'p' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '매장 변경' }));
+    await user.type(screen.getByPlaceholderText('매장명 또는 지역명으로 검색'), '을지로');
+    await user.click(await screen.findByRole('button', { name: '을지로점' }));
+    expect(await screen.findByText('다이소 을지로점')).toBeInTheDocument();
+    expect(await screen.findByText(RESULTS_NOTICE, { selector: 'p' })).toBeInTheDocument();
+    expect(useAvailabilityStore.getState().recentSearches).toEqual(['밀폐용기']);
   });
 });
 
