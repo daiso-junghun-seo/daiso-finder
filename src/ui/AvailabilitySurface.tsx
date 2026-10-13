@@ -129,6 +129,29 @@ let latestRunToken = 0;
 // ProductSearchPort; tests inject a controllable search to exercise the candidate-count branches below.
 export type CandidateSearch = (keyword: string) => Promise<ProductCandidate[]>;
 
+// What the surface retains across a store switch so the product survives it. Typed
+// submits keep the keyword (re-searched); candidate taps keep the whole candidate
+// (exact pdNo identity via runByPdNo, no re-search); scans keep the decoded value
+// (verbatim pdNo via runByScan — B29). A blank keyword retains nothing.
+export type SubmittedQuery =
+  | { kind: 'typed'; keyword: string }
+  | { kind: 'candidate'; candidate: ProductCandidate }
+  | { kind: 'scan'; value: string };
+
+// Pure plan for a store switch: null = stay on Default (no lookup to keep), otherwise the
+// lookup to re-run under the new store. The run itself goes through runQuery/runByPdNo/runByScan,
+// so tokens, guards and the retained-query semantics all behave exactly like a fresh submit.
+export function planStoreSwitch(
+  current: UiState,
+  last: SubmittedQuery | null,
+): SubmittedQuery | null {
+  if (current.state === 'default') return null;
+  if (!last) return null;
+  if (last.kind === 'typed' && !last.keyword.trim()) return null;
+  if (last.kind === 'scan' && !last.value.trim()) return null;
+  return last;
+}
+
 // Live typed-search pipeline (search-first, Interface §copy-table AI-low): every submitted keyword is
 // searched for literal candidates FIRST. ≥2 → show the candidate list (a pre-answer state; picking one
 // re-queries via runByPdNo). 0 or 1 → fall straight through to the availability pipeline — 1 candidate
@@ -249,8 +272,12 @@ export function AvailabilitySurface() {
   const [input, setInput] = useState('');
   const changeStoreRef = useRef<HTMLButtonElement>(null);
   const answerCardRef = useRef<HTMLDivElement>(null);
-  const wasSheetOpen = useRef(sheetOpen);
   const scanButtonRef = useRef<HTMLButtonElement>(null);
+  // Last submitted lookup (UI-shell memory, not domain): kept across store switches so the
+  // product survives them. Overwritten by every new submit/tap/decode; never cleared (a switch
+  // with no prior lookup simply finds nothing to keep — see planStoreSwitch).
+  const lastSubmit = useRef<SubmittedQuery | null>(null);
+  const wasSheetOpen = useRef(sheetOpen);
   const wasScannerOpen = useRef(scannerOpen);
 
   useEffect(() => {
@@ -283,10 +310,26 @@ export function AvailabilitySurface() {
     (value: string) => {
       closeScanner(); // the camera stops on unmount; the answer takes the surface from here
       if (!store) return; // unreachable: the scan button only exists once a store is chosen (D082)
+      lastSubmit.current = { kind: 'scan', value };
       void runByScan(store, value, dispatch);
     },
     [store, dispatch, closeScanner],
   );
+
+  // Store switch that keeps the product: the reducer still lands Default (D082 context swap),
+  // then the retained lookup re-runs under the new store — scans and candidate taps keep exact
+  // pdNo identity (runByScan/runByPdNo), typed keywords go search-first. No recent-search bump
+  // (not a new submit).
+  // The plan reads the PRE-switch ui: selectStore resets to Default first, so planning after
+  // it would always find nothing to keep.
+  const handleSelectStore = (next: StoreContext) => {
+    const keep = planStoreSwitch(ui, lastSubmit.current);
+    selectStore(next);
+    if (!keep) return;
+    if (keep.kind === 'scan') void runByScan(next, keep.value, dispatch);
+    else if (keep.kind === 'candidate') void runByPdNo(next, keep.candidate, dispatch);
+    else void runQuery(next, keep.keyword, dispatch);
+  };
 
   const sheet = (
     <StoreSelectionSheet
@@ -294,7 +337,7 @@ export function AvailabilitySurface() {
       locale={locale}
       directory={storeDirectory}
       geolocation={browserGeolocation}
-      onSelect={selectStore}
+      onSelect={handleSelectStore}
       onClose={store ? closeSheet : undefined}
     />
   );
@@ -316,6 +359,7 @@ export function AvailabilitySurface() {
           const keyword = input.trim();
           if (!keyword) return;
           recordSearch(keyword);
+          lastSubmit.current = { kind: 'typed', keyword };
           void runQuery(store, keyword, dispatch);
         }}
       >
@@ -415,6 +459,7 @@ export function AvailabilitySurface() {
                       onClick={() => {
                         setInput(keyword);
                         recordSearch(keyword); // re-bump to front — keeps recency order consistent on re-tap
+                        lastSubmit.current = { kind: 'typed', keyword };
                         void runQuery(store, keyword, dispatch);
                       }}
                     >
@@ -458,7 +503,10 @@ export function AvailabilitySurface() {
           <CandidateList
             candidates={ui.candidates}
             locale={locale}
-            onSelect={(c) => void runByPdNo(store, c, dispatch)}
+            onSelect={(c) => {
+              lastSubmit.current = { kind: 'candidate', candidate: c };
+              void runByPdNo(store, c, dispatch);
+            }}
           />
           {searchBar}
         </div>
