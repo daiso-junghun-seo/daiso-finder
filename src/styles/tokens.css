@@ -22,6 +22,7 @@
   --space-md: 12px;
   --space-lg: 16px;
   --space-xl: 24px;
+  --space-2xl: 32px; /* hero top air + empty-state breathing (UI_Improvement_Plan §2.1) */
 
   /* Taste pass: warm paper ground. Red is rationed to the scan primary + focus ring —
      secondary actions go neutral (red everywhere reads cheap). Every text-bearing

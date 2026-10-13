@@ -132,11 +132,12 @@ function renderErrorCached(
   const relTime = (at: number) =>
     locale === 'en' ? formatRelativeTimeEn(at, nowMs) : formatRelativeTimeKo(at, nowMs);
   const facts = factsFor(answer, locale);
-  const line = priceLocationLine(answer);
+  const line = priceLocationLine(answer, locale);
   // priceLocationLine requires both price and location together; an inStock answer can be cached with a
   // known price but no location (state-machine.ts only gates Success/Partial on hasLocation, not the
   // FAILURE/cache path), so fall back to price-only rather than silently dropping it.
-  const priceOnly = !line && answer.kind === 'inStock' ? formatPrice(answer.price) : undefined;
+  const priceOnly =
+    !line && answer.kind === 'inStock' ? formatPrice(answer.price, locale) : undefined;
   // Cached facts keep Success's collapsed disclosure for extra positions (P6-4): same markup shape.
   const rest = answer.kind === 'inStock' ? answer.locations.slice(1) : [];
   return (
@@ -201,7 +202,7 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy, loca
         </p>
         {primary && (
           <p className="text-heading price-line">
-            {formatPrice(answer.price)} · {formatLocation(primary)}
+            {formatPrice(answer.price, locale)} · {formatLocation(primary)}
           </p>
         )}
         <p className="text-caption">

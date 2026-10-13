@@ -301,7 +301,9 @@ main {
 main h1 {
   font-size: 1.75rem;
   font-weight: 700;
-  margin: var(--space-xl) 0 var(--space-md);
+  /* Tight headline (Refactoring UI — capped at -0.02em so Hangul jamo never clump). */
+  letter-spacing: -0.02em;
+  margin: var(--space-2xl) 0 var(--space-md);
 }
 
 .store-context-line {

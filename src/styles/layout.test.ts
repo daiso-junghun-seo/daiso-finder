@@ -313,6 +313,8 @@ test('the entry headline reads large-title (weight count unchanged)', () => {
   const rule = ruleFor('main h1');
   expect(rule).toMatch(/font-size:\s*1\.75rem/);
   expect(rule).toMatch(/font-weight:\s*700/);
+  expect(rule).toMatch(/letter-spacing:\s*-0\.02em/);
+  expect(rule).toMatch(/margin:\s*var\(--space-2xl\) 0 var\(--space-md\)/);
 });
 
 // Refine pass 2 (2026-10-12-ui-refine-design.md §2) — positive assertions only.

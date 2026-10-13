@@ -85,7 +85,7 @@ export function restockBody(lchDay: string): string {
 }
 
 export function partialLocationMissingConfirmed(price: number): string {
-  return `In stock here · ${formatPrice(price)}`;
+  return `In stock here · ${formatPrice(price, 'en')}`;
 }
 export const PARTIAL_NO_LOCATION_NOTE = 'No location info. Please ask staff where it is.';
 
@@ -194,5 +194,5 @@ function priceLocationLine(answer: AvailabilityAnswer): string | undefined {
   if (answer.kind !== 'inStock') return undefined;
   const primary = answer.locations[0];
   if (!primary) return undefined;
-  return `${formatPrice(answer.price)} · ${formatLocation(primary)}`;
+  return `${formatPrice(answer.price, 'en')} · ${formatLocation(primary)}`;
 }

@@ -27,7 +27,7 @@ export function CandidateList({
             <button type="button" className="text-body" onClick={() => onSelect(c)}>
               <ProductPhoto imageUrl={c.imageUrl} name={c.name} />
               <span>{c.name}</span>
-              <span>{formatPrice(c.price)}</span>
+              <span>{formatPrice(c.price, locale)}</span>
             </button>
           </li>
         ))}
