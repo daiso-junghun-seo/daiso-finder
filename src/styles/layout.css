@@ -44,11 +44,12 @@ main {
   position: sticky;
   bottom: 0;
   margin-top: auto;
-  /* Floating dock (refine): lifted bar with shadow inside the app column. The bottom
+  /* Floating dock (refine): lifted bar with shadow inside the app column. Specular top
+     edge (iOS pass — D083's own Liquid Glass permission). The bottom
      pad keeps the safe-area inset ADDED (shorthand after padding-bottom would reset it —
      biome noShorthandPropertyOverrides guards this shape). */
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.25);
   padding: var(--space-sm) var(--space-md) calc(var(--space-sm) + env(safe-area-inset-bottom));
   margin-bottom: var(--space-sm);
 }
@@ -146,6 +147,29 @@ input:focus-visible {
 .search-bar input {
   flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
+}
+
+/* iOS search field (iOS pass): magnifier lives inside the input, label/placeholder
+   unchanged (Bible). Icon is aria-hidden chrome; the programmatic label still names it. */
+.search-field {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+}
+
+.search-field svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.search-field input {
+  padding-left: 36px;
 }
 
 /* Literal-result and recall lists render without UA bullets. Candidate rows keep the
@@ -264,8 +288,9 @@ main {
 }
 
 main h1 {
-  font-size: 1.375rem;
-  margin: var(--space-md) 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: var(--space-xl) 0 var(--space-md);
 }
 
 .store-context-line {
@@ -350,6 +375,7 @@ main h1 {
    Tabular numerals keep prices aligned across rows (no dependency). Weight stays 700 —
    size carries the hero, not a fourth typeface weight (03 Should Not). */
 .price-line {
+  font-family: var(--font-display);
   font-size: 1.75rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;

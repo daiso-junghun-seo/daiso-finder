@@ -220,9 +220,9 @@ test(':focus-visible carries the accent ring (keyboard shoppers)', () => {
   expect(cssText).toContain('outline-offset: 2px');
 });
 
-test('.surface-content has a vertical beat and the headline stops shouting', () => {
+test('.surface-content has a vertical beat and a large-title entry', () => {
   expect(ruleFor('.surface-content')).toMatch(/gap:\s*var\(--space-md\)/);
-  expect(ruleFor('main h1')).toMatch(/font-size:\s*1\.375rem/);
+  expect(ruleFor('main h1')).toMatch(/font-size:\s*1\.75rem/);
 });
 
 test('.store-context-line is a spaced row with a quiet change affordance', () => {
@@ -276,6 +276,26 @@ test('.sheet-grabber is a centred affordance bar', () => {
   const rule = ruleFor('.sheet-grabber');
   expect(rule).toMatch(/width:\s*40px/);
   expect(rule).toMatch(/margin:\s*0 auto/);
+});
+
+// iOS pass (2026-10-13-ui-ios-design.md §1) — positive assertions only.
+test('hero type rides the rounded display stack (graceful elsewhere)', () => {
+  expect(ruleFor('.price-line')).toMatch(/font-family:\s*var\(--font-display\)/);
+});
+
+test('the search field carries its magnifier inside the input (label unchanged)', () => {
+  expect(ruleFor('.search-field')).toMatch(/display:\s*flex/);
+  expect(ruleFor('.search-field input')).toMatch(/padding-left:\s*36px/);
+});
+
+test('the dock carries a specular top edge (D083 permission, decorative)', () => {
+  expect(ruleFor('.search-bar-surface')).toMatch(/inset 0 1px 0/);
+});
+
+test('the entry headline reads large-title (weight count unchanged)', () => {
+  const rule = ruleFor('main h1');
+  expect(rule).toMatch(/font-size:\s*1\.75rem/);
+  expect(rule).toMatch(/font-weight:\s*700/);
 });
 
 // Refine pass 2 (2026-10-12-ui-refine-design.md §2) — positive assertions only.
