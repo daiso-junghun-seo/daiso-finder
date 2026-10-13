@@ -13,7 +13,7 @@ export const SEARCH_PLACEHOLDER = '상품명 또는 바코드 스캔';
 export const SCAN_BUTTON_LABEL = '바코드 스캔';
 export const STORE_CHANGE_BUTTON = '매장 변경';
 export const SEARCH_INPUT_LABEL = '상품 검색';
-// App-owned (not Bible): the locale toggle shows the TARGET language. Mirrored in i18n/en.ts.
+// App-owned (not Bible): label for the segmented locale control. Mirrored in i18n/en.ts.
 export const LOCALE_GROUP_LABEL = '표시 언어';
 
 export const LOADING_CARD_COPY = '이 매장 재고를 확인하고 있어요…';
