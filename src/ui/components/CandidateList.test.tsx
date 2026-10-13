@@ -26,6 +26,8 @@ test('locale="en" renders the English notice with Korean product names intact (D
     screen.getByText('These are search results. Scanning is more accurate.'),
   ).toBeInTheDocument();
   expect(screen.getByText('리빙 밀폐용기 1.2L')).toBeInTheDocument();
+  // Prices translate units (₩) with identical digits.
+  expect(screen.getByText('₩2,000')).toBeInTheDocument();
 });
 
 test('renders each candidate name and price, and a photo (alt = name) when supplied', () => {

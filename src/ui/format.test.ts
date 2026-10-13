@@ -12,6 +12,12 @@ test('formatPrice adds the Korean won suffix with thousands separators', () => {
   expect(formatPrice(1234567)).toBe('1,234,567원');
 });
 
+test('formatPrice in English uses the ₩ prefix with identical digits (matchable)', () => {
+  expect(formatPrice(2000, 'en')).toBe('₩2,000');
+  expect(formatPrice(1234567, 'en')).toBe('₩1,234,567');
+  expect(formatPrice(2000, 'ko')).toBe(formatPrice(2000));
+});
+
 test('formatLocation renders floor and zone as "N층 M번"', () => {
   expect(formatLocation({ floor: '11', zone: '56' })).toBe('11층 56번');
 });

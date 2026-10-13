@@ -136,11 +136,14 @@ export function factsFor(answer: AvailabilityAnswer, locale: Locale = 'ko'): Ans
   }
 }
 
-export function priceLocationLine(answer: AvailabilityAnswer): string | undefined {
+export function priceLocationLine(
+  answer: AvailabilityAnswer,
+  locale: Locale = 'ko',
+): string | undefined {
   if (answer.kind !== 'inStock') return undefined;
   const primary = answer.locations[0];
   if (!primary) return undefined;
-  return `${formatPrice(answer.price)} · ${formatLocation(primary)}`;
+  return `${formatPrice(answer.price, locale)} · ${formatLocation(primary)}`;
 }
 
 type NonDefaultUiState = Exclude<UiState, { state: 'default' }>;

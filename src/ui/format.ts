@@ -1,8 +1,13 @@
 // src/ui/format.ts — presentation-only formatting. Domain never formats; UI never fabricates values.
 import type { StoreLocation } from '../domain/types';
+import type { Locale } from '../i18n/locale';
 
-export function formatPrice(price: number): string {
-  return `${price.toLocaleString('ko-KR')}원`;
+// Prices render per locale, digits identical (comma-grouped both sides) so the number stays
+// matchable against the shelf tag in either language: ko `2,000원`, en `₩2,000`.
+export function formatPrice(price: number, locale: Locale = 'ko'): string {
+  return locale === 'en'
+    ? `₩${price.toLocaleString('en-US')}`
+    : `${price.toLocaleString('ko-KR')}원`;
 }
 
 export function formatLocation(location: StoreLocation): string {
