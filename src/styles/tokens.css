@@ -4,6 +4,10 @@
   --color-accent: #e60012;
   --font-sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI",
     Roboto, sans-serif;
+  /* Rounded display for hero numerals/status (iOS pass): Apple renders SF Rounded,
+     everyone else falls through to --font-sans with an identical metrics family. */
+  --font-display: ui-rounded, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Noto Sans KR", "Segoe UI", Roboto, sans-serif;
   --font-size-body: 16px;
   --line-height-body: 1.5;
 
@@ -58,7 +62,7 @@
     --action-fg: #121212;
     --ground: #000000;
     --surface-solid: #1c1c1e;
-    --shadow-card: none;
+    --shadow-card: 0 0 0 transparent;
     --tint-success: #0f2a1a;
     --tint-error: #331413;
     --tint-neutral: #262628;
@@ -89,8 +93,9 @@ body {
   } /* immediate cuts (Interface §3) */
 }
 
-/* Typography mapping (Interface §5). */
+/* Typography mapping (Interface §5). Display + price hero ride the rounded stack. */
 .text-display {
+  font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 700;
 }

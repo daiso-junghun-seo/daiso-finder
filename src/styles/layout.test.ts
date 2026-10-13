@@ -190,6 +190,7 @@ test('.candidate-list photo is a fixed box that never crops the product', () => 
 
 test('.answer-card keeps text off the glass edge and photos inside the card', () => {
   expect(ruleFor('.answer-card')).toMatch(/padding:\s*20px/);
+  expect(ruleFor('.answer-card')).toMatch(/inset 0 1px 0/);
   const photo = ruleFor('.answer-card .product-photo');
   expect(photo).toMatch(/max-width:\s*100%/);
   expect(photo).toMatch(/max-height:\s*260px/);
@@ -220,9 +221,9 @@ test(':focus-visible carries the accent ring (keyboard shoppers)', () => {
   expect(cssText).toContain('outline-offset: 2px');
 });
 
-test('.surface-content has a vertical beat and the headline stops shouting', () => {
+test('.surface-content has a vertical beat and a large-title entry', () => {
   expect(ruleFor('.surface-content')).toMatch(/gap:\s*var\(--space-md\)/);
-  expect(ruleFor('main h1')).toMatch(/font-size:\s*1\.375rem/);
+  expect(ruleFor('main h1')).toMatch(/font-size:\s*1\.75rem/);
 });
 
 test('.store-context-line is a spaced row with a quiet change affordance', () => {
@@ -278,6 +279,26 @@ test('.sheet-grabber is a centred affordance bar', () => {
   expect(rule).toMatch(/margin:\s*0 auto/);
 });
 
+// iOS pass (2026-10-13-ui-ios-design.md §1) — positive assertions only.
+test('hero type rides the rounded display stack (graceful elsewhere)', () => {
+  expect(ruleFor('.price-line')).toMatch(/font-family:\s*var\(--font-display\)/);
+});
+
+test('the search field carries its magnifier inside the input (label unchanged)', () => {
+  expect(ruleFor('.search-field')).toMatch(/display:\s*flex/);
+  expect(ruleFor('.search-field input')).toMatch(/padding-left:\s*36px/);
+});
+
+test('the dock carries a specular top edge (D083 permission, decorative)', () => {
+  expect(ruleFor('.search-bar-surface')).toMatch(/inset 0 1px 0/);
+});
+
+test('the entry headline reads large-title (weight count unchanged)', () => {
+  const rule = ruleFor('main h1');
+  expect(rule).toMatch(/font-size:\s*1\.75rem/);
+  expect(rule).toMatch(/font-weight:\s*700/);
+});
+
 // Refine pass 2 (2026-10-12-ui-refine-design.md §2) — positive assertions only.
 test('status pills tint without touching icon + text discipline', () => {
   expect(ruleFor('.status-pill')).toMatch(/border-radius:\s*var\(--radius-pill\)/);
@@ -310,6 +331,7 @@ test('.scan-button--primary keeps the icon aligned with its label', () => {
   const rule = ruleFor('.scan-button--primary');
   expect(rule).toMatch(/display:\s*inline-flex/);
   expect(rule).toMatch(/align-items:\s*center/);
+  expect(rule).toMatch(/font-family:\s*var\(--font-display\)/);
 });
 
 test('.empty-medallion is decorative chrome (aria-hidden in markup)', () => {

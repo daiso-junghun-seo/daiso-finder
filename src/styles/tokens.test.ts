@@ -31,6 +31,12 @@ test('body sets the Korean-first system font stack (no UA serif fallback)', () =
   expect(css).toMatch(/--font-sans:[^;]*Noto Sans KR/);
 });
 
+test('display type rides the rounded stack (SF Rounded where available)', () => {
+  const displayRule = css.slice(css.indexOf('.text-display {'));
+  expect(displayRule).toMatch(/font-family:\s*var\(--font-display\)/);
+  expect(css).toMatch(/--font-display:[^;]*ui-rounded/);
+});
+
 test('dark-mode overrides redefine every theme-sensitive token', () => {
   const darkBlock = css.slice(css.indexOf(DARK_MARKER));
   for (const token of [
