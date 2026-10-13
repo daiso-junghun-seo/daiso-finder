@@ -6,6 +6,9 @@ import type { Locale } from '../i18n/locale';
 import { formatLocation, formatPrice, formatRelativeTimeKo } from './format';
 
 export const DEFAULT_HEADLINE = '이 매장에 있는지 바로 확인해 보세요';
+// App-owned helper (not a Bible table line — draft pending ratification like the scan
+// drafts): one orienting sentence under the headline. Mirrored in i18n/en.ts.
+export const DEFAULT_SUBHEAD = '바코드를 스캔하거나 상품명을 입력해 보세요';
 export const SEARCH_PLACEHOLDER = '상품명 또는 바코드 스캔';
 export const SCAN_BUTTON_LABEL = '바코드 스캔';
 export const STORE_CHANGE_BUTTON = '매장 변경';

@@ -243,11 +243,12 @@ input:focus-visible {
   gap: 8px;
 }
 
-/* Quiet change affordance — still a 44px target, never grey. */
+/* Quiet change affordance — still a 44px target, never grey. Neutral, not accent:
+   red is rationed to the scan primary + focus ring (taste pass). */
 .store-context-line button {
   border-color: transparent;
   background: transparent;
-  color: var(--color-accent);
+  color: var(--text-secondary);
   text-decoration: underline;
   text-underline-offset: 3px;
   padding: 10px 8px;
@@ -455,13 +456,14 @@ main h1 {
 }
 
 /* Empty medallion: decorative chrome (aria-hidden SVG inside) — the product-photo
-   honesty rule covers product imagery, not wayfinding chrome. */
+   honesty rule covers product imagery, not wayfinding chrome. Neutral icon:
+   accent is rationed (taste pass). */
 .empty-medallion {
   width: 56px;
   height: 56px;
   border-radius: 50%;
   background: var(--tint-neutral);
-  color: var(--color-accent);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;

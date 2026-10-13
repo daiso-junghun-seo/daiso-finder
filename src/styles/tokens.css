@@ -19,13 +19,14 @@
   --space-lg: 16px;
   --space-xl: 24px;
 
-  /* Refine pass: app frame ground + card elevation + status pills. Tint pairs are
-     all mechanically verified in contrast.test.ts (drop the tint, never the text). */
-  --ground: #f1f1f3;
+  /* Taste pass: warm paper ground. Red is rationed to the scan primary + focus ring —
+     secondary actions go neutral (red everywhere reads cheap). Every text-bearing
+     pair re-verified mechanically in contrast.test.ts. */
+  --ground: #f2f1ee;
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.08);
   --tint-success: #e8f5ec;
   --tint-error: #fdeceb;
-  --tint-neutral: #ececef;
+  --tint-neutral: #ececea;
 
   /* Primary action: the scan entry is the single filled button in the app. White on
      #e60012 ≈ 4.8:1 — pinned in contrast.test.ts alongside the B14 rows. */
@@ -55,7 +56,8 @@
     /* Near-black on #ff4d5e ≈ 5.8:1 — white would be ≈3.2:1 and fail, so the dark
        primary flips its foreground (contrast.test.ts pins both themes). */
     --action-fg: #121212;
-    --ground: #0a0a0b;
+    --ground: #000000;
+    --surface-solid: #1c1c1e;
     --shadow-card: none;
     --tint-success: #0f2a1a;
     --tint-error: #331413;

@@ -387,6 +387,7 @@ export function AvailabilitySurface() {
             />
           </GlassSurface>
           <h1>{S.DEFAULT_HEADLINE}</h1>
+          <p className="text-caption">{S.DEFAULT_SUBHEAD}</p>
           {recentSearches.length > 0 && (
             <div className="recent-searches">
               <p className="text-caption">{S.RECENT_SEARCHES_LABEL}</p>

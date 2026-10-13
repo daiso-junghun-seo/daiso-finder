@@ -9,6 +9,7 @@ import type { Locale } from './locale';
 
 export interface CopyTable {
   readonly DEFAULT_HEADLINE: string;
+  readonly DEFAULT_SUBHEAD: string;
   readonly SEARCH_PLACEHOLDER: string;
   readonly SCAN_BUTTON_LABEL: string;
   readonly STORE_CHANGE_BUTTON: string;
