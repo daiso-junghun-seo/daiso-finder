@@ -81,6 +81,7 @@ beforeEach(() => {
 test('default surface shows the purpose headline', () => {
   render(<AvailabilitySurface />);
   expect(screen.getByText('이 매장에 있는지 바로 확인해 보세요')).toBeInTheDocument();
+  expect(screen.getByText('바코드를 스캔하거나 상품명을 입력해 보세요')).toBeInTheDocument();
 });
 
 test('the locale toggle switches guidance to English and persists the choice', async () => {

@@ -8,6 +8,7 @@ import type { AvailabilityAnswer, UiState } from '../domain/types';
 import { formatLocation, formatPrice, formatRelativeTimeEn } from '../ui/format';
 
 export const DEFAULT_HEADLINE = 'Check if this store has it';
+export const DEFAULT_SUBHEAD = 'Scan a barcode or type a product name.';
 export const SEARCH_PLACEHOLDER = 'Product name or scan barcode';
 export const SCAN_BUTTON_LABEL = 'Scan';
 export const STORE_CHANGE_BUTTON = 'Change store';
