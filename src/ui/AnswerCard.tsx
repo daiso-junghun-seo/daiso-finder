@@ -202,7 +202,7 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy, loca
         </p>
         {primary && (
           <p className="text-heading price-line">
-            {formatPrice(answer.price, locale)} · {formatLocation(primary)}
+            {formatPrice(answer.price, locale)} · {formatLocation(primary, locale)}
           </p>
         )}
         <p className="text-caption">

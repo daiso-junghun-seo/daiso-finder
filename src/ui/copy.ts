@@ -143,7 +143,7 @@ export function priceLocationLine(
   if (answer.kind !== 'inStock') return undefined;
   const primary = answer.locations[0];
   if (!primary) return undefined;
-  return `${formatPrice(answer.price, locale)} · ${formatLocation(primary)}`;
+  return `${formatPrice(answer.price, locale)} · ${formatLocation(primary, locale)}`;
 }
 
 type NonDefaultUiState = Exclude<UiState, { state: 'default' }>;

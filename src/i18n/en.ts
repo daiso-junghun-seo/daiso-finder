@@ -194,5 +194,5 @@ function priceLocationLine(answer: AvailabilityAnswer): string | undefined {
   if (answer.kind !== 'inStock') return undefined;
   const primary = answer.locations[0];
   if (!primary) return undefined;
-  return `${formatPrice(answer.price, 'en')} · ${formatLocation(primary)}`;
+  return `${formatPrice(answer.price, 'en')} · ${formatLocation(primary, 'en')}`;
 }
