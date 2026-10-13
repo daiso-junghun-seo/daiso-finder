@@ -1,7 +1,8 @@
 // src/i18n/en.ts — English guidance strings. Korean product/store names, prices,
-// floors/zones and image alts NEVER translate (D069 match tokens) — only the
-// surrounding guidance does. First-draft app copy; Bible ratification may reword
-// through the same verbatim-replace path as the ko drafts. Completeness against
+// and image alts NEVER translate (D069 match tokens) — only the surrounding guidance
+// does. Floors/zones translate GRAMMAR only (11F · No. 56, digits identical) per owner
+// order §B46 — signage risk recorded there, not hidden here. First-draft app copy;
+// Bible ratification may reword through the same verbatim-replace path as the ko drafts. Completeness against
 // copy.ts is compiler-checked (CopyTable in ./strings) plus a runtime key test.
 import type { DataOwnerPolicy } from '../domain/policy';
 import type { AvailabilityAnswer, UiState } from '../domain/types';
