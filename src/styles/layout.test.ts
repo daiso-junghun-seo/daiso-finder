@@ -190,6 +190,7 @@ test('.candidate-list photo is a fixed box that never crops the product', () => 
 
 test('.answer-card keeps text off the glass edge and photos inside the card', () => {
   expect(ruleFor('.answer-card')).toMatch(/padding:\s*20px/);
+  expect(ruleFor('.answer-card')).toMatch(/inset 0 1px 0/);
   const photo = ruleFor('.answer-card .product-photo');
   expect(photo).toMatch(/max-width:\s*100%/);
   expect(photo).toMatch(/max-height:\s*260px/);
@@ -330,6 +331,7 @@ test('.scan-button--primary keeps the icon aligned with its label', () => {
   const rule = ruleFor('.scan-button--primary');
   expect(rule).toMatch(/display:\s*inline-flex/);
   expect(rule).toMatch(/align-items:\s*center/);
+  expect(rule).toMatch(/font-family:\s*var\(--font-display\)/);
 });
 
 test('.empty-medallion is decorative chrome (aria-hidden in markup)', () => {

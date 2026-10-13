@@ -62,7 +62,7 @@
     --action-fg: #121212;
     --ground: #000000;
     --surface-solid: #1c1c1e;
-    --shadow-card: none;
+    --shadow-card: 0 0 0 transparent;
     --tint-success: #0f2a1a;
     --tint-error: #331413;
     --tint-neutral: #262628;

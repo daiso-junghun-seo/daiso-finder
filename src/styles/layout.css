@@ -35,7 +35,9 @@ main {
   overflow-wrap: break-word;
   animation: card-enter 220ms ease-out;
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-card);
+  /* Drop shadow + specular top edge (the token is a transparent no-op in dark mode so
+     the layered declaration stays valid in both themes — `none` would void the inset). */
+  box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 /* Bottom-docked search/scan bar (L1 in Default; the demoted class is applied by the surface).
@@ -260,6 +262,7 @@ input:focus-visible {
   background: var(--action-bg);
   border-color: transparent;
   color: var(--action-fg);
+  font-family: var(--font-display);
   font-weight: 600;
   flex: none;
   display: inline-flex;
