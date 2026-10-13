@@ -231,6 +231,13 @@ test('.store-context-line is a spaced row with a quiet change affordance', () =>
   expect(ruleFor('.store-context-line button')).toMatch(/text-decoration:\s*underline/);
 });
 
+test('the locale segmented control presses the current language (44px segments)', () => {
+  expect(ruleFor('.locale-segmented')).toMatch(/border-radius:\s*var\(--radius-pill\)/);
+  expect(ruleFor('.locale-segmented button[aria-pressed="true"]')).toMatch(
+    /background:\s*var\(--surface-solid\)/,
+  );
+});
+
 test('.candidate-list rows read as cards with a weighted name', () => {
   expect(ruleFor('.candidate-list button')).toMatch(/border-radius:\s*var\(--radius-lg\)/);
   expect(ruleFor('.candidate-list button > span:first-of-type')).toMatch(/font-weight:\s*600/);

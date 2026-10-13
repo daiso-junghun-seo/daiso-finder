@@ -312,13 +312,32 @@ main h1 {
   flex: none;
 }
 
-.locale-toggle {
-  min-width: 44px;
-  padding: 10px 8px;
+/* Segmented language control (iOS idiom at 44px — the 32pt idiom would break the
+   Interface §6 target rule, so segments stay full height). The pressed segment shows
+   the CURRENT language: the single-toggle it replaces showed only the target, which
+   read as the current state. */
+.locale-segmented {
+  display: inline-flex;
+  background: var(--tint-neutral);
+  border: 0;
+  margin: 0;
+  padding: 2px;
+  border-radius: var(--radius-pill);
+}
+
+.locale-segmented button {
   border-color: transparent;
   background: transparent;
   color: var(--text-secondary);
-  font-weight: 700;
+  min-width: 44px;
+  padding: 6px 12px;
+}
+
+.locale-segmented button[aria-pressed="true"] {
+  background: var(--surface-solid);
+  color: var(--text-primary);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 
 .answer-card > div > * + * {

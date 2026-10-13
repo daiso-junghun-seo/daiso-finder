@@ -1,14 +1,14 @@
 """Generate DAISO Finder PWA icons (deterministic, dependency: Pillow only).
 
 Abstract mark only — no trademarked logo redraw: a white magnifier over shelf
-lines on the app's accent red (see src/styles/tokens.css --color-accent).
-The maskable variant keeps the mark inside the center safe zone with full-bleed red.
+lines on ink (matches --action-bg; taste-2 retired the red).
+The maskable variant keeps the mark inside the center safe zone with full-bleed ink.
 Run:  python3 scripts/make-icons.py   (writes public/icons/*.png)
 """
 from PIL import Image, ImageDraw
 
-ACCENT = (230, 0, 18, 255)      # --color-accent (light theme)
-WHITE = (255, 255, 255, 255)
+ACCENT = (27, 27, 29, 255)        # ink primary (taste-2) — matches --action-bg
+ICON_FG = (255, 255, 255, 255)    # white mark on ink
 SHELF = (255, 255, 255, 255)
 OUT = "public/icons"
 
@@ -30,12 +30,12 @@ def draw_mark(draw: ImageDraw.ImageDraw, box: tuple) -> None:
     cx, cy = x0 + w * 0.44, y0 + w * 0.42
     lw = max(2, int(w * 0.075))           # stroke width
     # lens ring
-    draw.ellipse([cx - ring, cy - ring, cx + ring, cy + ring], outline=WHITE, width=lw)
+    draw.ellipse([cx - ring, cy - ring, cx + ring, cy + ring], outline=ICON_FG, width=lw)
     # handle (45 deg down-right)
     import math
     dx = dy = ring * math.cos(math.pi / 4)
     draw.line([cx + dx * 0.82, cy + dy * 0.82, cx + dx * 1.75, cy + dy * 1.75],
-              fill=WHITE, width=lw)
+              fill=ICON_FG, width=lw)
     # two shelf lines under the lens
     for i, yy in enumerate((y0 + w * 0.74, y0 + w * 0.86)):
         inset = w * (0.16 + 0.06 * i)

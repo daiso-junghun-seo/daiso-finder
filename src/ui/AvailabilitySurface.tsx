@@ -246,7 +246,6 @@ export function AvailabilitySurface() {
   const locale = useAvailabilityStore((s) => s.locale);
   const setLocale = useAvailabilityStore((s) => s.setLocale);
   const S = strings(locale);
-  const toggleLocale = () => setLocale(locale === 'ko' ? 'en' : 'ko');
   const [input, setInput] = useState('');
   const changeStoreRef = useRef<HTMLButtonElement>(null);
   const answerCardRef = useRef<HTMLDivElement>(null);
@@ -397,7 +396,7 @@ export function AvailabilitySurface() {
             <StoreContextLine
               store={store}
               locale={locale}
-              onToggleLocale={toggleLocale}
+              onSelectLocale={setLocale}
               onChangeStore={openSheet}
               changeButtonRef={changeStoreRef}
             />
@@ -450,7 +449,7 @@ export function AvailabilitySurface() {
             <StoreContextLine
               store={store}
               locale={locale}
-              onToggleLocale={toggleLocale}
+              onSelectLocale={setLocale}
               onChangeStore={openSheet}
               changeButtonRef={changeStoreRef}
             />
@@ -484,7 +483,7 @@ export function AvailabilitySurface() {
           <StoreContextLine
             store={store}
             locale={locale}
-            onToggleLocale={toggleLocale}
+            onSelectLocale={setLocale}
             onChangeStore={openSheet}
             changeButtonRef={changeStoreRef}
           />
