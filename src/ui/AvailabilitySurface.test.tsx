@@ -84,16 +84,16 @@ test('default surface shows the purpose headline', () => {
   expect(screen.getByText('바코드를 스캔하거나 상품명을 입력해 보세요')).toBeInTheDocument();
 });
 
-test('the locale toggle switches guidance to English and persists the choice', async () => {
+test('the locale control switches guidance to English and persists the choice', async () => {
   const user = userEvent.setup();
   render(<AvailabilitySurface />);
-  await user.click(screen.getByRole('button', { name: '영어로 보기' }));
+  await user.click(screen.getByRole('button', { name: 'EN' }));
   expect(screen.getByRole('button', { name: 'Scan' })).toBeInTheDocument();
   expect(screen.getByText('Check if this store has it')).toBeInTheDocument();
   // Match tokens stay Korean (D069) while guidance translates.
   expect(screen.getByText('DAISO 명동역점')).toBeInTheDocument();
   expect(localStorage.getItem('daiso.locale')).toBe('en');
-  await user.click(screen.getByRole('button', { name: 'Switch to Korean' }));
+  await user.click(screen.getByRole('button', { name: 'KO' }));
   expect(screen.getByRole('button', { name: '바코드 스캔' })).toBeInTheDocument();
 });
 

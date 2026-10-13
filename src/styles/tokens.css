@@ -32,18 +32,20 @@
   --tint-error: #fdeceb;
   --tint-neutral: #ececea;
 
-  /* Primary action: the scan entry is the single filled button in the app. White on
-     #e60012 ≈ 4.8:1 — pinned in contrast.test.ts alongside the B14 rows. */
-  --action-bg: var(--color-accent);
+  /* Ink primary (taste-2): near-black CTA + white text. The DAISO red read cheap at
+     button scale, so red leaves the action system entirely — --color-accent stays as
+     a brand reserve, referenced by nothing rendered. Pinned in contrast.test.ts. */
+  --action-bg: #1b1b1d;
   --action-fg: #ffffff;
-  --focus-ring: 2px solid var(--color-accent);
+  --focus-ring: 2px solid var(--action-bg);
 
   --surface-solid: var(--color-bg);
   --text-primary: var(--color-text);
   --text-secondary: #595959;
   --surface-glass-tint: rgba(255, 255, 255, 0.92); /* light; ≥4.5:1 worst-case composite incl. --color-success (B14) */
   --surface-glass-tint-raised: rgba(255, 255, 255, 0.96); /* adaptive: hover/focus move toward legibility (visibly above the 0.92 base) */
-  --glass-blur: 8px;
+  --glass-blur: 16px; /* taste-clarity: doubled for visible depth. GPU watch: mid-range
+     Android field check on deploy — blur is the most expensive layer here (G3). */
   --glass-text-shadow: 0 1px 2px rgba(255, 255, 255, 0.4);
   --surface-scrim: rgba(0, 0, 0, 0.4);
   --glass-border: 1px solid var(--color-neutral-border);
@@ -57,8 +59,8 @@
     --color-bg: #121212;
     --color-text: #f2f2f2;
     --color-accent: #ff4d5e;
-    /* Near-black on #ff4d5e ≈ 5.8:1 — white would be ≈3.2:1 and fail, so the dark
-       primary flips its foreground (contrast.test.ts pins both themes). */
+    /* Dark primary flips to near-white (iOS idiom) with near-black text. */
+    --action-bg: #f5f5f5;
     --action-fg: #121212;
     --ground: #000000;
     --surface-solid: #1c1c1e;

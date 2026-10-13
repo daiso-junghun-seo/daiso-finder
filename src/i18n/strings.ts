@@ -14,8 +14,7 @@ export interface CopyTable {
   readonly SCAN_BUTTON_LABEL: string;
   readonly STORE_CHANGE_BUTTON: string;
   readonly SEARCH_INPUT_LABEL: string;
-  readonly LOCALE_TOGGLE_TO_EN: string;
-  readonly LOCALE_TOGGLE_TO_KO: string;
+  readonly LOCALE_GROUP_LABEL: string;
   readonly LOADING_CARD_COPY: string;
   readonly LOADING_DELAY_LINE: string;
   readonly ERROR_CACHED_BANNER: string;

@@ -214,10 +214,9 @@ for (const { name, tokens } of THEMES) {
 
   // The keyboard ring paints on the app's own surfaces (opaque, per-theme) — not over
   // arbitrary imagery like glass tints, so the per-theme solid pair is the honest check.
-  test(`[${name}] --color-accent focus ring on --surface-solid holds ≥4.5:1`, () => {
-    expect(solidRatio(tokens, '--color-accent', '--surface-solid')).toBeGreaterThanOrEqual(
-      THRESHOLD,
-    );
+  // It rides --action-bg (ink/near-white), not brand red (taste-2 rationing).
+  test(`[${name}] --action-bg focus ring on --surface-solid holds ≥4.5:1`, () => {
+    expect(solidRatio(tokens, '--action-bg', '--surface-solid')).toBeGreaterThanOrEqual(THRESHOLD);
   });
 
   // Refine (2026-10-12-ui-refine-design.md): status pills + banner tint. Opaque pairs.

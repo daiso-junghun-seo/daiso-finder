@@ -7,7 +7,7 @@ test('renders the Bible store line and a labeled 매장 변경 button', () => {
     <StoreContextLine
       store={{ strCd: '0', strNm: '명동역점' }}
       locale="ko"
-      onToggleLocale={() => {}}
+      onSelectLocale={() => {}}
     />,
   );
   expect(screen.getByText('다이소 명동역점')).toBeInTheDocument();
@@ -20,7 +20,7 @@ test('매장 변경 invokes the change handler', async () => {
     <StoreContextLine
       store={{ strCd: '0', strNm: '명동역점' }}
       locale="ko"
-      onToggleLocale={() => {}}
+      onSelectLocale={() => {}}
       onChangeStore={onChangeStore}
     />,
   );
@@ -28,16 +28,19 @@ test('매장 변경 invokes the change handler', async () => {
   expect(onChangeStore).toHaveBeenCalled();
 });
 
-test('the locale toggle shows the target language and calls back (match tokens stay Korean)', async () => {
-  const onToggleLocale = vi.fn();
+test('the segmented control presses the CURRENT language, not the target', async () => {
+  const onSelectLocale = vi.fn();
   render(
     <StoreContextLine
       store={{ strCd: '0', strNm: '명동역점' }}
       locale="ko"
-      onToggleLocale={onToggleLocale}
+      onSelectLocale={onSelectLocale}
     />,
   );
-  await userEvent.click(screen.getByRole('button', { name: '영어로 보기' }));
-  expect(onToggleLocale).toHaveBeenCalled();
+  // ko pressed, EN unpressed — the state the old target-only toggle misreported.
+  expect(screen.getByRole('button', { name: 'KO' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: 'EN' })).toHaveAttribute('aria-pressed', 'false');
+  await userEvent.click(screen.getByRole('button', { name: 'EN' }));
+  expect(onSelectLocale).toHaveBeenCalledWith('en');
   expect(screen.getByText('다이소 명동역점')).toBeInTheDocument();
 });

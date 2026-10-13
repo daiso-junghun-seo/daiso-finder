@@ -12,30 +12,44 @@ import { strings } from '../../i18n/strings';
 export function StoreContextLine({
   store,
   locale,
-  onToggleLocale,
+  onSelectLocale,
   onChangeStore,
   changeButtonRef,
 }: {
   store: StoreContext;
   locale: Locale;
-  onToggleLocale: () => void;
+  onSelectLocale: (locale: Locale) => void;
   onChangeStore?: () => void;
   changeButtonRef?: Ref<HTMLButtonElement>;
 }) {
   const S = strings(locale);
-  const toEnglish = locale === 'ko';
   return (
     <div className="store-context-line text-caption" id="store-line">
       <span>{S.storeLine(store.strNm)}</span>
       <span className="store-context-actions">
-        <button
-          type="button"
-          className="text-label locale-toggle"
-          aria-label={toEnglish ? S.LOCALE_TOGGLE_TO_EN : S.LOCALE_TOGGLE_TO_KO}
-          onClick={onToggleLocale}
-        >
-          {toEnglish ? 'EN' : 'KO'}
-        </button>
+        {/* Segmented language control (iOS idiom at 44px): the pressed segment shows the
+            CURRENT language — the single-toggle it replaces showed only the target, which
+            read as the current state. Both segments stay ≥44px (Interface §6 wins over the
+            32pt idiom). */}
+        <fieldset className="locale-segmented">
+          <legend className="visually-hidden">{S.LOCALE_GROUP_LABEL}</legend>
+          <button
+            type="button"
+            className="text-label"
+            aria-pressed={locale === 'ko'}
+            onClick={() => onSelectLocale('ko')}
+          >
+            KO
+          </button>
+          <button
+            type="button"
+            className="text-label"
+            aria-pressed={locale === 'en'}
+            onClick={() => onSelectLocale('en')}
+          >
+            EN
+          </button>
+        </fieldset>
         <button ref={changeButtonRef} type="button" className="text-label" onClick={onChangeStore}>
           {S.STORE_CHANGE_BUTTON}
         </button>

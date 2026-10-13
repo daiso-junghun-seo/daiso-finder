@@ -13,8 +13,7 @@ export const SEARCH_PLACEHOLDER = 'Product name or scan barcode';
 export const SCAN_BUTTON_LABEL = 'Scan';
 export const STORE_CHANGE_BUTTON = 'Change store';
 export const SEARCH_INPUT_LABEL = 'Search products';
-export const LOCALE_TOGGLE_TO_EN = 'Switch to English';
-export const LOCALE_TOGGLE_TO_KO = 'Switch to Korean';
+export const LOCALE_GROUP_LABEL = 'Display language';
 
 export const LOADING_CARD_COPY = 'Checking this store’s stock…';
 export const LOADING_DELAY_LINE = 'The connection is slow, taking a little longer.';
