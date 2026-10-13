@@ -47,6 +47,7 @@ test('English announcements order like ko and drop the removed inStock CTA too',
   expect(en).toHaveLength(ko.length);
   expect(en).not.toContain(STR.en.SUCCESS_IN_STOCK_CTA);
   expect(STR.en.RETRY_BUTTON).toBe('Retry');
-  // EN price line: translated unit, identical digits, Korean floor/zone (D069).
-  expect(en).toContain('₩2,000 · 11층 56번');
+  // EN price line: translated unit, identical digits, English floor/zone grammar (D069:
+  // digits match, signage risk recorded in §B46).
+  expect(en).toContain('₩2,000 · 11F · No. 56');
 });

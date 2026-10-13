@@ -32,10 +32,12 @@ rethink user-centered within the contract.
 - `src/i18n/locale.ts`: `Locale`, `resolveLocale({search, stored, navigator})`
   precedence `?lang=` > stored > navigator(en*→en) > ko. Pure + tested.
 - `src/i18n/locale-storage.ts`: `daiso.locale`, validated, best-effort (G3 pattern).
-- `src/i18n/en.ts`: full English mirror. Guidance translates; match tokens stay
-  Korean (product/store names, prices, floors/zones, image alts of product names).
+- `src/i18n/en.ts`: full English mirror. Guidance translates; names/prices/alts stay
+  Korean, floors/zones translate GRAMMAR only since §B46 (`11F · No. 56`, digits
+  identical — signage risk recorded there).
   Relative times get `formatRelativeTimeEn` (Today/Yesterday/Mon d, h AM/PM, no
-  minutes — mirrors the ko truncation rule). Restock DATE stays Korean-rendered
+  minutes — mirrors the ko truncation rule). Prices use `₩2,000` (§B45: digits
+  identical). Restock DATE stays Korean-rendered
   (answer carries formatted `lchDay`, ISO lost upstream) — flagged follow-up, not
   silent: `Expected around ${lchDay}.`
 - `src/i18n/strings.ts`: explicit `CopyTable` interface + `STR` record + runtime

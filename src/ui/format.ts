@@ -10,7 +10,16 @@ export function formatPrice(price: number, locale: Locale = 'ko'): string {
     : `${price.toLocaleString('ko-KR')}원`;
 }
 
-export function formatLocation(location: StoreLocation): string {
+export function formatLocation(location: StoreLocation, locale: Locale = 'ko'): string {
+  if (locale === 'en') {
+    // Digits stay identical (the matchable part — D069); only the grammar words move:
+    // `11층 56번` → `11F · No. 56`, `지하 1층 56번` → `B1 · No. 56`. Recorded risk (§B46):
+    // if store signage turns out Korean-only, English grammar misdirects — revert on evidence.
+    const floor = location.floor.startsWith('-')
+      ? `B${location.floor.slice(1)}`
+      : `${location.floor}F`;
+    return `${floor} · No. ${location.zone}`;
+  }
   const floor = location.floor.startsWith('-')
     ? `지하 ${location.floor.slice(1)}층`
     : `${location.floor}층`;

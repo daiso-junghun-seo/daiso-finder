@@ -22,6 +22,14 @@ test('formatLocation renders floor and zone as "N층 M번"', () => {
   expect(formatLocation({ floor: '11', zone: '56' })).toBe('11층 56번');
 });
 
+test('formatLocation in English renders digits identically with English grammar', () => {
+  expect(formatLocation({ floor: '11', zone: '56' }, 'en')).toBe('11F · No. 56');
+  expect(formatLocation({ floor: '-1', zone: '56' }, 'en')).toBe('B1 · No. 56');
+  expect(formatLocation({ floor: '11', zone: '56' }, 'ko')).toBe(
+    formatLocation({ floor: '11', zone: '56' }),
+  );
+});
+
 test('formatRelativeTimeKo: same calendar day renders "오늘 오전/오후 H시"', () => {
   const now = new Date(2026, 6, 15, 9, 30).getTime();
   const observed = new Date(2026, 6, 15, 7, 5).getTime();

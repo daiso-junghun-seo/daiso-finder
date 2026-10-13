@@ -25,8 +25,8 @@ export function AnswerCard({
   ui: NonDefaultUiState;
   policy: DataOwnerPolicy;
   nowMs: number;
-  // Guidance language for every line in this card (D069 — match tokens stay Korean
-  // regardless). Optional with a ko default (same defaulting as ScannerOverlay) so tests
+  // Guidance language for every line in this card. Product/store names, prices and
+  // image alts stay Korean (D069); floor/zone grammar follows the locale (§B46). Optional with a ko default (same defaulting as ScannerOverlay) so tests
   // and future callers that forget it degrade to the default language, never to nothing —
   // production always passes the store locale explicitly.
   locale?: Locale;
@@ -202,7 +202,7 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy, loca
         </p>
         {primary && (
           <p className="text-heading price-line">
-            {formatPrice(answer.price, locale)} · {formatLocation(primary)}
+            {formatPrice(answer.price, locale)} · {formatLocation(primary, locale)}
           </p>
         )}
         <p className="text-caption">
