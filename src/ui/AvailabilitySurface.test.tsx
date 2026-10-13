@@ -152,12 +152,19 @@ describe('store change (D082)', () => {
 describe('keep product on store switch (2026-10-13)', () => {
   test('planStoreSwitch stays on Default and on blank lookups, keeps the rest', () => {
     const loading = { state: 'loading', query: '밀폐용기', slow: false } as const;
-    expect(planStoreSwitch({ state: 'default' }, { keyword: '밀폐용기', scan: false })).toBeNull();
+    const typed = { kind: 'typed', keyword: '밀폐용기' } as const;
+    const blank = { kind: 'typed', keyword: '   ' } as const;
+    const scanned = { kind: 'scan', value: '19987' } as const;
+    const tapped = {
+      kind: 'candidate',
+      candidate: { pdNo: '19987', name: '리빙 밀폐용기 1.2L', price: 2000 },
+    } as const;
+    expect(planStoreSwitch({ state: 'default' }, typed)).toBeNull();
     expect(planStoreSwitch({ state: 'default' }, null)).toBeNull();
-    expect(planStoreSwitch(loading, { keyword: '   ', scan: false })).toBeNull();
-    const typed = { keyword: '밀폐용기', scan: false };
+    expect(planStoreSwitch(loading, blank)).toBeNull();
+    expect(planStoreSwitch(loading, { kind: 'scan', value: '  ' })).toBeNull();
     expect(planStoreSwitch(loading, typed)).toBe(typed);
-    const scanned = { keyword: '19987', scan: true };
+    expect(planStoreSwitch(loading, tapped)).toBe(tapped);
     expect(
       planStoreSwitch(
         {

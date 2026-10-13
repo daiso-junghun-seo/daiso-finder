@@ -7,13 +7,12 @@ store) — app-owned wiring, §B44.
 
 ## Behavior
 
-- Surface retains the last submitted lookup: `{ keyword, scan }` — typed submit
-  and candidate taps store `{keyword, scan:false}` (candidate taps keep the NAME;
-  a re-search may legitimately land on the candidate list again); scan decodes
-  store `{value, scan:true}` (pdNo identity preserved via the scan path).
+- Surface retains the last submitted lookup: typed submits keep the keyword
+  (re-searched); candidate taps keep the WHOLE candidate (exact pdNo identity via
+  runByPdNo, no re-search); scan decodes keep the value (verbatim pdNo via runByScan).
 - On store select: `selectStore(next)` as today, then if a retained lookup exists
-  with a non-blank keyword, re-run it — `runByScan` for scans (verbatim pdNo,
-  no candidate detour), `runQuery` otherwise. No `recordSearch` bump (no dup).
+  (blank keywords retain nothing), re-run it under the new store. No `recordSearch`
+  bump (not a new submit).
 - Default state (no retained lookup, or blank) behaves exactly as today.
 - Stale-run safety comes free: both pipelines claim fresh run tokens and guard
   on `isCurrentRun` against the NEW store.
