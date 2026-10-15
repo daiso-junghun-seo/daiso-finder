@@ -13,7 +13,13 @@ import {
   runByScan,
   runQuery,
 } from './AvailabilitySurface';
-import { RECENT_SEARCHES_LABEL, RESULTS_NOTICE, SCAN_BUTTON_LABEL, emptyBody } from './copy';
+import {
+  RECENT_SEARCHES_LABEL,
+  RECENT_VIEWS_LABEL,
+  RESULTS_NOTICE,
+  SCAN_BUTTON_LABEL,
+  emptyBody,
+} from './copy';
 import { useAvailabilityStore } from './store';
 
 // A search step that finds no literal candidates — forces runQuery straight to the availability path
@@ -597,6 +603,44 @@ describe('recent searches', () => {
     await userEvent.click(screen.getByRole('button', { name: '밀폐용기' }));
     await userEvent.click(await screen.findByRole('button', { name: /리빙 밀폐용기 1\.2L/ }));
     expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+  });
+});
+
+describe('recent views (§B47)', () => {
+  beforeEach(() => {
+    useAvailabilityStore.setState({ recentSearches: [], recentViews: [] });
+  });
+
+  test('with no resolved answer yet renders no 최근 본 상품 caption', () => {
+    render(<AvailabilitySurface />);
+    expect(screen.queryByText(RECENT_VIEWS_LABEL)).not.toBeInTheDocument();
+  });
+
+  test('resolving a candidate records the product, listed back on Default with its price', async () => {
+    render(<AvailabilitySurface />);
+    await userEvent.type(screen.getByLabelText('상품 검색'), '밀폐용기{Enter}');
+    await userEvent.click(await screen.findByRole('button', { name: /리빙 밀폐용기 1\.2L/ }));
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    act(() => {
+      useAvailabilityStore.setState({ ui: { state: 'default' } });
+    });
+    expect(screen.getByText(RECENT_VIEWS_LABEL)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /리빙 밀폐용기 1\.2L · 2,000원/ }),
+    ).toBeInTheDocument();
+  });
+
+  test('tapping a recent view re-runs the lookup straight to Success (pdNo identity, no re-search)', async () => {
+    render(<AvailabilitySurface />);
+    await userEvent.type(screen.getByLabelText('상품 검색'), '밀폐용기{Enter}');
+    await userEvent.click(await screen.findByRole('button', { name: /리빙 밀폐용기 1\.2L/ }));
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    act(() => {
+      useAvailabilityStore.setState({ ui: { state: 'default' } });
+    });
+    await userEvent.click(screen.getByRole('button', { name: /리빙 밀폐용기 1\.2L · 2,000원/ }));
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    expect(searchControl.calls).not.toContain('리빙 밀폐용기 1.2L');
   });
 });
 

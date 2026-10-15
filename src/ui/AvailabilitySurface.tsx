@@ -14,6 +14,7 @@ import type { ProductCandidate, StoreContext, StoreEvent, UiState } from '../dom
 import { strings } from '../i18n/strings';
 import { createIndexedDbCache } from '../infra/cache-storage';
 import { createQueryRunner } from '../infra/query-cache';
+import { type RecentView, viewFromResult } from '../infra/recent-views';
 import { loadStoreContext } from '../infra/store-context';
 import { AnswerCard } from './AnswerCard';
 import { LiveRegion } from './a11y/LiveRegion';
@@ -23,6 +24,7 @@ import { ScannerOverlay } from './components/ScannerOverlay';
 import { StoreContextLine } from './components/StoreContextLine';
 import { StoreSelectionSheet } from './components/StoreSelectionSheet';
 import { announcementFor } from './copy';
+import { formatPrice } from './format';
 import { useAvailabilityStore } from './store';
 
 // Placeholder store for the Inc-0 sweep only — the sheet exists (D082); this is now only the E2E
@@ -152,6 +154,14 @@ export function planStoreSwitch(
   return last;
 }
 
+// View-recording seam (§B47): every pipeline that resolves an answer records a recent view.
+// Production records into the zustand store (persisted to localStorage); tests inject a spy.
+export type OnView = (view: RecentView) => void;
+
+function defaultOnView(view: RecentView): void {
+  useAvailabilityStore.getState().recordView(view);
+}
+
 // Live typed-search pipeline (search-first, Interface §copy-table AI-low): every submitted keyword is
 // searched for literal candidates FIRST. ≥2 → show the candidate list (a pre-answer state; picking one
 // re-queries via runByPdNo). 0 or 1 → fall straight through to the availability pipeline — 1 candidate
@@ -162,10 +172,11 @@ export async function runQuery(
   store: StoreContext,
   keyword: string,
   dispatch: (event: StoreEvent) => void,
-  deps: { search?: CandidateSearch; runner?: QueryOutcomeRunner } = {},
+  deps: { search?: CandidateSearch; runner?: QueryOutcomeRunner; onView?: OnView } = {},
 ) {
   const search = deps.search ?? ((k: string) => productSearch.search(k));
   const runner = deps.runner ?? liveQueryRunner;
+  const onView = deps.onView ?? defaultOnView;
   const token = ++latestRunToken;
   dispatch({ type: 'SUBMIT', query: keyword }); // → loading(query=keyword)
   let candidates: ProductCandidate[];
@@ -201,6 +212,8 @@ export async function runQuery(
   // NOT runKeyword. In the 1-candidate path runKeyword is the candidate's name, which never equals the
   // loading query; comparing against it would always mismatch and silently drop every 1-candidate outcome.
   if (!isCurrentRun(useAvailabilityStore.getState(), { keyword, strCd: store.strCd })) return;
+  // Only resolved answers become recent views — candidates/NO_MATCH/FAILURE never do.
+  if (event.type === 'RESULT') onView(viewFromResult(runKeyword, pdNo, event.answer, Date.now()));
   dispatch(event);
 }
 
@@ -211,6 +224,7 @@ export async function runByPdNo(
   candidate: ProductCandidate,
   dispatch: (event: StoreEvent) => void,
   runner: QueryOutcomeRunner = liveQueryRunner,
+  onView: OnView = defaultOnView,
 ) {
   const token = ++latestRunToken;
   dispatch({ type: 'SELECT_CANDIDATE', query: candidate.name, pdNo: candidate.pdNo }); // → loading(query=candidate.name)
@@ -225,6 +239,8 @@ export async function runByPdNo(
     !isCurrentRun(useAvailabilityStore.getState(), { keyword: candidate.name, strCd: store.strCd })
   )
     return;
+  if (event.type === 'RESULT')
+    onView(viewFromResult(candidate.name, candidate.pdNo, event.answer, Date.now()));
   dispatch(event);
 }
 
@@ -238,6 +254,7 @@ export async function runByScan(
   value: string,
   dispatch: (event: StoreEvent) => void,
   runner: QueryOutcomeRunner = liveQueryRunner,
+  onView: OnView = defaultOnView,
 ) {
   const token = ++latestRunToken;
   dispatch({ type: 'SUBMIT', query: value, origin: 'scan' }); // → loading(query=value, origin=scan)
@@ -250,6 +267,9 @@ export async function runByScan(
   if (token !== latestRunToken) return;
   if (!isCurrentRun(useAvailabilityStore.getState(), { keyword: value, strCd: store.strCd }))
     return;
+  // The recorded view carries the resolved product name, not the digit string (B30-6's recall
+  // rationale holds for searches; a named product row has recall value).
+  if (event.type === 'RESULT') onView(viewFromResult(value, value, event.answer, Date.now()));
   dispatch(event);
 }
 
@@ -263,6 +283,7 @@ export function AvailabilitySurface() {
   const selectStore = useAvailabilityStore((s) => s.selectStore);
   const recentSearches = useAvailabilityStore((s) => s.recentSearches);
   const recordSearch = useAvailabilityStore((s) => s.recordSearch);
+  const recentViews = useAvailabilityStore((s) => s.recentViews);
   const scannerOpen = useAvailabilityStore((s) => s.scannerOpen);
   const openScanner = useAvailabilityStore((s) => s.openScanner);
   const closeScanner = useAvailabilityStore((s) => s.closeScanner);
@@ -464,6 +485,46 @@ export function AvailabilitySurface() {
                       }}
                     >
                       {keyword}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* Owner-exception §B47: resolved products, most-recent-first. Dual class reuses the
+              recent-searches rhythm (no new CSS); rows re-run the lookup, never show availability
+              (a row is a shortcut, not an answer — D061). */}
+          {recentViews.length > 0 && (
+            <div className="recent-searches recent-views">
+              <p className="text-caption">{S.RECENT_VIEWS_LABEL}</p>
+              <ul>
+                {recentViews.map((view) => (
+                  <li key={view.key}>
+                    <button
+                      type="button"
+                      className="text-body"
+                      onClick={() => {
+                        // Exact pdNo identity when the view resolved one (runByPdNo); otherwise the
+                        // typed keyword goes search-first — the same two paths a fresh submit takes.
+                        if (view.pdNo && view.price !== undefined) {
+                          const candidate = {
+                            pdNo: view.pdNo,
+                            name: view.name,
+                            price: view.price,
+                            imageUrl: view.imageUrl,
+                          };
+                          lastSubmit.current = { kind: 'candidate', candidate };
+                          void runByPdNo(store, candidate, dispatch);
+                        } else {
+                          setInput(view.query);
+                          recordSearch(view.query);
+                          lastSubmit.current = { kind: 'typed', keyword: view.query };
+                          void runQuery(store, view.query, dispatch);
+                        }
+                      }}
+                    >
+                      {view.name}
+                      {view.price !== undefined && ` · ${formatPrice(view.price, locale)}`}
                     </button>
                   </li>
                 ))}

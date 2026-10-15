@@ -8,6 +8,12 @@ import {
   nextRecentSearches,
   saveRecentSearches,
 } from '../infra/recent-searches';
+import {
+  type RecentView,
+  loadRecentViews,
+  nextRecentViews,
+  saveRecentViews,
+} from '../infra/recent-views';
 import { loadStoreContext, saveStoreContext } from '../infra/store-context';
 
 interface AvailabilityStore {
@@ -18,6 +24,8 @@ interface AvailabilityStore {
   // states and every availability judgement are untouched by opening a viewfinder.
   scannerOpen: boolean;
   recentSearches: string[];
+  // Owner-exception §B47: products with a resolved answer, most-recent-first (max 5).
+  recentViews: RecentView[];
   // Guidance language (ko default). Match tokens (product/store names, prices, floors/zones)
   // never translate (D069) — this only picks which guidance table renders (i18n/strings).
   locale: Locale;
@@ -28,11 +36,13 @@ interface AvailabilityStore {
   closeScanner: () => void;
   selectStore: (store: StoreContext) => void;
   recordSearch: (keyword: string) => void;
+  recordView: (view: RecentView) => void;
   setLocale: (locale: Locale) => void;
 }
 
 const persisted = loadStoreContext();
 const persistedRecent = loadRecentSearches();
+const persistedViews = loadRecentViews();
 // ?lang= is read once at boot (a shared link pins its language); the toggle persists after.
 const initialLocale =
   typeof window === 'undefined'
@@ -49,6 +59,7 @@ export const useAvailabilityStore = create<AvailabilityStore>((set) => ({
   sheetOpen: persisted === null,
   scannerOpen: false,
   recentSearches: persistedRecent,
+  recentViews: persistedViews,
   locale: initialLocale,
   dispatch: (event) => set((s) => ({ ui: reduce(s.ui, event) })),
   openSheet: () => set({ sheetOpen: true }),
@@ -65,6 +76,12 @@ export const useAvailabilityStore = create<AvailabilityStore>((set) => ({
       const next = nextRecentSearches(s.recentSearches, keyword);
       saveRecentSearches(next);
       return { recentSearches: next };
+    }),
+  recordView: (view) =>
+    set((s) => {
+      const next = nextRecentViews(s.recentViews, view);
+      saveRecentViews(next);
+      return { recentViews: next };
     }),
   setLocale: (locale) =>
     set(() => {

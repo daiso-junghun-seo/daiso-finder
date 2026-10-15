@@ -123,6 +123,9 @@ export function factsFor(answer: AvailabilityAnswer): AnswerFacts {
 
 export const RECENT_SEARCHES_LABEL = 'Recent';
 
+// Owner-exception §B47 (explicit): no Bible slot — en draft of the ko draft above.
+export const RECENT_VIEWS_LABEL = 'Recently viewed';
+
 export const RESULTS_NOTICE = 'These are search results. Scanning is more accurate.';
 
 export const SCAN_AIM_GUIDE = `Fill the frame with the square code next to '계산바코드'.`;
