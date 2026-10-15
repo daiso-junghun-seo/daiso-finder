@@ -49,11 +49,12 @@ test('share text in English moves units, never names or digits (B45/B46)', () =>
   expect(text).toContain('Total ₩4,000');
 });
 
-test('JSON export round-trips; garbage never becomes a list', () => {
+test('JSON export round-trips; garbage, half-shapes and empty lists never become a list', () => {
   expect(parseCartImport(exportCartJson(cart))).toEqual(cart);
   expect(parseCartImport('{not json')).toBeNull();
   expect(parseCartImport(JSON.stringify({ storeCd: '001' }))).toBeNull();
   expect(parseCartImport(JSON.stringify({ ...cart, items: [{ id: 1 }] }))).toBeNull();
+  expect(parseCartImport(JSON.stringify({ ...cart, items: [] }))).toBeNull();
 });
 
 test('imported rows merge with the same dedup/caps as adding by hand', () => {

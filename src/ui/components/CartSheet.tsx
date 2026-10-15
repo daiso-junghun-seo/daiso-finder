@@ -43,7 +43,7 @@ export function CartSheet({
   // no timers, no stale notes on reopen.
   const [importText, setImportText] = useState('');
   const [note, setNote] = useState<{ id: number; text: string } | null>(null);
-  const [fallbackText, setFallbackText] = useState<string | null>(null);
+  const [fallback, setFallback] = useState<{ text: string; label: string } | null>(null);
   const announce = (text: string) => setNote((n) => ({ id: (n?.id ?? 0) + 1, text }));
 
   // Modal dialogs must receive focus on open (Interface §6) — the sheet pattern: 닫기 takes it.
@@ -72,14 +72,14 @@ export function CartSheet({
     if (outcome === 'shared') return;
     if (outcome === 'dismissed') return;
     if (await copyText(text)) announce(S.CART_COPIED);
-    else setFallbackText(text);
+    else setFallback({ text, label: S.CART_SHARE_TEXT_LABEL });
   };
 
   const exportJson = async () => {
     if (!cart) return;
     const text = exportCartJson(cart);
     if (await copyText(text)) announce(S.CART_COPIED);
-    else setFallbackText(text);
+    else setFallback({ text, label: S.CART_EXPORT_TEXT_LABEL });
   };
 
   const submitImport = () => {
@@ -186,13 +186,13 @@ export function CartSheet({
             {note.text}
           </p>
         )}
-        {fallbackText !== null && (
+        {fallback !== null && (
           <>
             <p className="text-caption">{S.CART_COPY_FAILED}</p>
             <textarea
               readOnly
-              aria-label={S.CART_SHARE_TEXT_LABEL}
-              value={fallbackText}
+              aria-label={fallback.label}
+              value={fallback.text}
               rows={6}
               onFocus={(e) => e.target.select()}
             />

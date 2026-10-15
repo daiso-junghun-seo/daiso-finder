@@ -30,11 +30,12 @@ export function exportCartJson(cart: StoreCart): string {
   return JSON.stringify(cart);
 }
 
-// Strict: anything that is not exactly a StoreCart is rejected (never a half-loaded list).
+// Strict: anything that is not exactly a NON-EMPTY StoreCart is rejected (never a half-loaded
+// list, never a nothing-happened "success" that announces 0개).
 export function parseCartImport(text: string): StoreCart | null {
   try {
     const parsed: unknown = JSON.parse(text);
-    return isValidCart(parsed) ? parsed : null;
+    return isValidCart(parsed) && parsed.items.length > 0 ? parsed : null;
   } catch {
     return null;
   }

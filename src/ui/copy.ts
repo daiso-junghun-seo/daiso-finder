@@ -246,6 +246,7 @@ export const CART_IMPORT_CONFIRM = '불러오기';
 export const CART_COPIED = '복사했어요';
 export const CART_COPY_FAILED = '복사하지 못했어요. 아래 텍스트를 직접 선택해 주세요.';
 export const CART_SHARE_TEXT_LABEL = '공유할 내용';
+export const CART_EXPORT_TEXT_LABEL = '내보낸 내용';
 export const CART_IMPORT_FAILED = '가져오지 못했어요. 복사한 내용이 맞는지 확인해 주세요.';
 export const CART_UNCHECKED_MARK = '(합계 제외)';
 export function cartImportDoneLabel(count: number): string {
