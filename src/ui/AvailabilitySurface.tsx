@@ -10,15 +10,24 @@ import {
 import { type Scenario, mockAnswers } from '../adapters/mock/fixtures';
 import { createMockRepository } from '../adapters/mock/mockRepository';
 import { defaultPolicy } from '../domain/policy';
-import type { ProductCandidate, StoreContext, StoreEvent, UiState } from '../domain/types';
+import type {
+  AvailabilityAnswer,
+  Freshness,
+  ProductCandidate,
+  StoreContext,
+  StoreEvent,
+  UiState,
+} from '../domain/types';
 import { strings } from '../i18n/strings';
 import { createIndexedDbCache } from '../infra/cache-storage';
+import { type CartItem, cartFor, cartQtyCount, cartTotal, itemFromAnswer } from '../infra/cart';
 import { createQueryRunner } from '../infra/query-cache';
 import { type RecentView, viewFromResult } from '../infra/recent-views';
 import { loadStoreContext } from '../infra/store-context';
 import { AnswerCard } from './AnswerCard';
 import { LiveRegion } from './a11y/LiveRegion';
 import { CandidateList } from './components/CandidateList';
+import { CartSheet } from './components/CartSheet';
 import { GlassSurface } from './components/GlassSurface';
 import { ScannerOverlay } from './components/ScannerOverlay';
 import { StoreContextLine } from './components/StoreContextLine';
@@ -154,6 +163,25 @@ export function planStoreSwitch(
   return last;
 }
 
+// The priced answer behind a state, when one exists (success + locationMissing + staleCache +
+// error/cached — every kind EXCEPT the priceless notCarried/franchise). 담기 exists only here:
+// priceless answers get no button (§B47), so itemFromAnswer's undefined is unreachable, not a branch.
+export function pricedAnswerOf(
+  ui: UiState,
+): { answer: AvailabilityAnswer; freshness: Freshness | null; query: string } | null {
+  const found =
+    ui.state === 'success'
+      ? { answer: ui.answer, freshness: ui.freshness, query: ui.query }
+      : ui.state === 'partial' && ui.trigger !== 'franchise'
+        ? { answer: ui.answer, freshness: ui.freshness, query: ui.query }
+        : ui.state === 'error' && ui.variant === 'cached'
+          ? { answer: ui.answer, freshness: ui.freshness, query: ui.query }
+          : null;
+  // A stale-cached negative (e.g. notCarried) carries no price — no total, no walk-to, no button.
+  if (!found || !('price' in found.answer)) return null;
+  return found;
+}
+
 // View-recording seam (§B47): every pipeline that resolves an answer records a recent view.
 // Production records into the zustand store (persisted to localStorage); tests inject a spy.
 export type OnView = (view: RecentView) => void;
@@ -284,6 +312,14 @@ export function AvailabilitySurface() {
   const recentSearches = useAvailabilityStore((s) => s.recentSearches);
   const recordSearch = useAvailabilityStore((s) => s.recordSearch);
   const recentViews = useAvailabilityStore((s) => s.recentViews);
+  const carts = useAvailabilityStore((s) => s.carts);
+  const cartOpen = useAvailabilityStore((s) => s.cartOpen);
+  const openCart = useAvailabilityStore((s) => s.openCart);
+  const closeCart = useAvailabilityStore((s) => s.closeCart);
+  const addItem = useAvailabilityStore((s) => s.addItem);
+  const setItemQty = useAvailabilityStore((s) => s.setItemQty);
+  const toggleItemChecked = useAvailabilityStore((s) => s.toggleItemChecked);
+  const removeCartItem = useAvailabilityStore((s) => s.removeItem);
   const scannerOpen = useAvailabilityStore((s) => s.scannerOpen);
   const openScanner = useAvailabilityStore((s) => s.openScanner);
   const closeScanner = useAvailabilityStore((s) => s.closeScanner);
@@ -291,7 +327,9 @@ export function AvailabilitySurface() {
   const setLocale = useAvailabilityStore((s) => s.setLocale);
   const S = strings(locale);
   const [input, setInput] = useState('');
+  const [cartNotice, setCartNotice] = useState<{ id: number; text: string } | null>(null);
   const changeStoreRef = useRef<HTMLButtonElement>(null);
+  const cartButtonRef = useRef<HTMLButtonElement>(null);
   const answerCardRef = useRef<HTMLDivElement>(null);
   const scanButtonRef = useRef<HTMLButtonElement>(null);
   // Last submitted lookup (UI-shell memory, not domain): kept across store switches so the
@@ -300,6 +338,7 @@ export function AvailabilitySurface() {
   const lastSubmit = useRef<SubmittedQuery | null>(null);
   const wasSheetOpen = useRef(sheetOpen);
   const wasScannerOpen = useRef(scannerOpen);
+  const wasCartOpen = useRef(cartOpen);
 
   useEffect(() => {
     // The ?scenario= harness drives the Playwright state sweep against the MOCK pipeline. It must never
@@ -323,6 +362,12 @@ export function AvailabilitySurface() {
     if (wasScannerOpen.current && !scannerOpen) scanButtonRef.current?.focus();
     wasScannerOpen.current = scannerOpen;
   }, [scannerOpen]);
+
+  // Closing the cart sheet returns focus to the 장바구니 opener — never <body> (sheet contract).
+  useEffect(() => {
+    if (wasCartOpen.current && !cartOpen) cartButtonRef.current?.focus();
+    wasCartOpen.current = cartOpen;
+  }, [cartOpen]);
 
   // Memoised on purpose: ScannerOverlay's scan effect has deps [scanner, onDecoded], so a fresh inline
   // arrow on every parent render would abort the in-flight scan and restart the camera each time the
@@ -351,6 +396,64 @@ export function AvailabilitySurface() {
     else if (keep.kind === 'candidate') void runByPdNo(next, keep.candidate, dispatch);
     else void runQuery(next, keep.keyword, dispatch);
   };
+
+  // Owner-exception §B47: snapshot the priced answer into this store's list. pdNo identity comes
+  // from the retained submit (candidate/scan carry it, typed keywords don't) — the same source
+  // the recheck below reuses, so add and recheck can never disagree on identity.
+  const handleAddToCart = () => {
+    if (!store) return;
+    const priced = pricedAnswerOf(ui);
+    if (!priced) return; // unreachable: 담기 renders only for priced answers
+    const last = lastSubmit.current;
+    const pdNo =
+      last?.kind === 'candidate'
+        ? last.candidate.pdNo
+        : last?.kind === 'scan'
+          ? last.value
+          : undefined;
+    const item = itemFromAnswer(
+      priced.query,
+      pdNo,
+      priced.answer,
+      priced.freshness?.observedAt ?? Date.now(),
+      Date.now(),
+    );
+    if (!item) return; // unreachable (priced gate above) — never a silent wrong row
+    addItem(store, item);
+    setCartNotice((n) => ({ id: (n?.id ?? 0) + 1, text: S.CART_ADDED_NOTICE }));
+  };
+
+  // Per-item 다시 확인: the SAME two paths a fresh submit takes (exact pdNo when the row
+  // resolved one, search-first otherwise). The sheet closes first — the answer lands on the
+  // surface behind it, never inside an inert modal. Not a new submit: no recent-search bump
+  // (retry semantics, B15).
+  const handleRecheckItem = (item: CartItem) => {
+    if (!store) return;
+    closeCart();
+    if (item.pdNo) {
+      const candidate = {
+        pdNo: item.pdNo,
+        name: item.name,
+        price: item.price,
+        imageUrl: item.imageUrl,
+      };
+      lastSubmit.current = { kind: 'candidate', candidate };
+      void runByPdNo(store, candidate, dispatch);
+    } else {
+      lastSubmit.current = { kind: 'typed', keyword: item.query };
+      void runQuery(store, item.query, dispatch);
+    }
+  };
+
+  // Active store's list + the honest count caption for the other stores' lists.
+  const activeCart = store ? cartFor(carts, store.strCd) : null;
+  const activeCartCount = activeCart ? cartQtyCount(activeCart) : 0;
+  const activeCartTotal = activeCart ? cartTotal(activeCart) : 0;
+  const otherStoreCount = store
+    ? Object.entries(carts).filter(([cd, c]) => cd !== store.strCd && c.items.length > 0).length
+    : 0;
+  // The link is a shortcut to a memo, not content — hidden while every list is empty.
+  const showCartLink = activeCartCount > 0 || otherStoreCount > 0;
 
   const sheet = (
     <StoreSelectionSheet
@@ -449,9 +552,41 @@ export function AvailabilitySurface() {
     </>
   );
 
-  // While a modal (sheet or scanner) is open the background is inert (aria-modal made real): unreachable
-  // by keyboard and hidden from AT. First run renders the sheet alone, so no container exists to mark.
-  const backgroundInert = sheetOpen || scannerOpen ? '' : undefined;
+  // Owner-exception §B47: the cart sheet is a modal sibling like the store sheet and the
+  // viewfinder — same scrim, same inert background, same focus-return, rendered LAST so DOM
+  // order keeps it above the rest (no z-index anywhere in src/styles/**).
+  const cartModal = cartOpen && store && (
+    <>
+      <div className="sheet-scrim" aria-hidden="true" />
+      <CartSheet
+        cart={activeCart}
+        otherStoreCount={otherStoreCount}
+        locale={locale}
+        onClose={closeCart}
+        onSetQty={(id, qty) => setItemQty(store.strCd, id, qty)}
+        onToggle={(id) => toggleItemChecked(store.strCd, id)}
+        onRemove={(id) => removeCartItem(store.strCd, id)}
+        onRecheck={handleRecheckItem}
+      />
+    </>
+  );
+
+  // One-line shortcut to the memo (§B47): a link, not content — hidden while every list is empty
+  // so Default keeps its single primary action. The count/total label IS the add feedback (I4):
+  // it updates on the same commit as the snapshot write, and the notice below announces it.
+  const cartLink = showCartLink && (
+    <button ref={cartButtonRef} type="button" className="text-body cart-link" onClick={openCart}>
+      {S.cartLinkLabel(activeCartCount, activeCartTotal)}
+    </button>
+  );
+  const cartNoticeRegion = cartNotice && (
+    <LiveRegion key={cartNotice.id} message={cartNotice.text} visuallyHidden />
+  );
+
+  // While a modal (sheet, scanner, or cart) is open the background is inert (aria-modal made real):
+  // unreachable by keyboard and hidden from AT. First run renders the sheet alone, so no container
+  // exists to mark.
+  const backgroundInert = sheetOpen || scannerOpen || cartOpen ? '' : undefined;
 
   if (ui.state === 'default') {
     return (
@@ -531,6 +666,8 @@ export function AvailabilitySurface() {
               </ul>
             </div>
           )}
+          {cartLink}
+          {cartNoticeRegion}
           {searchBar}
         </div>
         {sheetOpen && (
@@ -540,6 +677,7 @@ export function AvailabilitySurface() {
           </>
         )}
         {scannerModal}
+        {cartModal}
       </main>
     );
   }
@@ -578,12 +716,15 @@ export function AvailabilitySurface() {
           </>
         )}
         {scannerModal}
+        {cartModal}
       </main>
     );
   }
 
   const nowMs = Date.now();
   const announcement = announcementFor(ui, defaultPolicy, nowMs, locale).join('. ');
+  // 담기 exists only for priced answers (§B47) — priceless kinds render no button at all.
+  const priced = pricedAnswerOf(ui);
 
   return (
     <main>
@@ -605,6 +746,7 @@ export function AvailabilitySurface() {
           locale={locale}
           cardRef={answerCardRef}
           onScan={openScanner}
+          onAdd={priced ? handleAddToCart : undefined}
           onRetry={() => {
             void runQuery(store, ui.query, dispatch);
             // The retry button unmounts on the Loading swap — move focus to the persistent card
@@ -612,6 +754,8 @@ export function AvailabilitySurface() {
             answerCardRef.current?.focus();
           }}
         />
+        {cartLink}
+        {cartNoticeRegion}
         {searchBar}
       </div>
       {sheetOpen && (
@@ -621,6 +765,7 @@ export function AvailabilitySurface() {
         </>
       )}
       {scannerModal}
+      {cartModal}
     </main>
   );
 }

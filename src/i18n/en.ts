@@ -126,6 +126,33 @@ export const RECENT_SEARCHES_LABEL = 'Recent';
 // Owner-exception §B47 (explicit): no Bible slot — en draft of the ko draft above.
 export const RECENT_VIEWS_LABEL = 'Recently viewed';
 
+// ── Shopping list (owner-exception §B47, explicit) ───────────────────────────────────────────
+export const ADD_TO_CART_BUTTON = 'Add';
+export const CART_ADDED_NOTICE = 'Added to your list';
+export const CART_TITLE = 'Shopping list';
+export const CART_EMPTY_NOTE = 'Nothing here yet. Press Add on an answer card.';
+export const CART_SNAPSHOT_NOTE =
+  'Saved info from when you added it. Check again for today’s stock.';
+export const CART_CLOSE = 'Close';
+export const CART_QTY_DECREASE = 'Decrease quantity';
+export const CART_QTY_INCREASE = 'Increase quantity';
+export const CART_REMOVE_BUTTON = 'Remove';
+export function cartLinkLabel(count: number, total: number): string {
+  return `List ${count} · ${formatPrice(total, 'en')}`;
+}
+export function cartTotalLabel(total: number): string {
+  return `Total ${formatPrice(total, 'en')}`;
+}
+export function cartQtyText(qty: number): string {
+  return `${qty}`;
+}
+export function cartCheckLabel(name: string): string {
+  return `Include ${name} in total`;
+}
+export function cartOtherStoresLabel(count: number): string {
+  return `Lists in ${count} other stores`;
+}
+
 export const RESULTS_NOTICE = 'These are search results. Scanning is more accurate.';
 
 export const SCAN_AIM_GUIDE = `Fill the frame with the square code next to '계산바코드'.`;

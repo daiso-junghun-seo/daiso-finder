@@ -4,6 +4,7 @@ import { mockAnswers } from '../adapters/mock/fixtures';
 import { defaultPolicy } from '../domain/policy';
 import { AnswerCard } from './AnswerCard';
 import {
+  ADD_TO_CART_BUTTON,
   ERROR_CACHED_BANNER,
   ERROR_NO_CACHE_BODY,
   LIVE_FRESHNESS_CAPTION,
@@ -242,6 +243,45 @@ test('success inStock (ample qty) shows live freshness, price/location, and the 
   // 위치 보기 removed 2026-10-12 (owner: dead stub — §B40). Its string still lives in
   // factsFor for Flow 2's restoration, but no control may promise it meanwhile.
   expect(screen.queryByRole('button', { name: SUCCESS_IN_STOCK_CTA })).not.toBeInTheDocument();
+  // No onAdd passed — priceless or not, without the handler there is no button at all.
+  expect(screen.queryByRole('button', { name: ADD_TO_CART_BUTTON })).not.toBeInTheDocument();
+});
+
+test('담기 (§B47) renders only with onAdd, as a non-primary L3 action', async () => {
+  const onAdd = vi.fn();
+  const { rerender } = render(
+    <AnswerCard
+      ui={{
+        state: 'success',
+        query: '밀폐용기',
+        answer: mockAnswers.inStock,
+        freshness: { class: 'live', observedAt: NOW },
+      }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+      onAdd={onAdd}
+    />,
+  );
+  const add = screen.getByRole('button', { name: ADD_TO_CART_BUTTON });
+  // Single-primary rule (§B47): the L3 text action must never wear the primary fill.
+  expect(add).toHaveClass('cart-add-button');
+  expect(add).not.toHaveClass('cta--primary');
+  await userEvent.click(add);
+  expect(onAdd).toHaveBeenCalledTimes(1);
+
+  rerender(
+    <AnswerCard
+      ui={{
+        state: 'success',
+        query: '밀폐용기',
+        answer: mockAnswers.inStock,
+        freshness: { class: 'live', observedAt: NOW },
+      }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+    />,
+  );
+  expect(screen.queryByRole('button', { name: ADD_TO_CART_BUTTON })).not.toBeInTheDocument();
 });
 
 test('success hero order is name → status → price/location → freshness (peak glance)', () => {
