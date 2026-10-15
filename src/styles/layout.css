@@ -217,6 +217,77 @@ input:focus-visible {
   margin-top: 12px; /* feed rhythm (refine-3): the 8px Interface minimum, breathed out */
 }
 
+/* Owner-exception §B47 — shopping list. The sheet reuses the store sheet's bottom-sheet
+   placement (same scrim/focus contract); rows reuse the 8px+ row rhythm. The 담기 action
+   is an L3 text action, never a filled primary — no new color role, AA pairs untouched. */
+.cart-sheet {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  max-height: 85dvh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.cart-sheet > section {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.cart-sheet__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.cart-sheet__row {
+  display: flex;
+  gap: var(--space-md);
+  align-items: flex-start;
+}
+
+.cart-sheet li + li {
+  margin-top: 8px;
+}
+
+.cart-sheet__facts {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cart-sheet__qty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cart-sheet__row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: none;
+}
+
+/* The one-line shortcut to the memo (Default + answer states): full-width link, hidden while
+   every list is empty so the landing keeps its single primary action. */
+.cart-link {
+  width: 100%;
+  text-align: left;
+  margin-top: var(--space-md);
+}
+
+/* 담기: L3 text action — same paint as every control (the global button rule owns 44px +
+   focus), no primary fill so the single-primary rule still holds (§B47). */
+.cart-add-button {
+  margin-top: var(--space-sm);
+}
+
 /* A candidate row is one flex line: fixed photo, name takes the row, price hugs right.
    Rows read as cards: radius + room, name weighted, price plain (UI polish). */
 .candidate-list button {

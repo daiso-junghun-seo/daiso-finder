@@ -19,6 +19,7 @@ export function AnswerCard({
   nowMs,
   locale,
   onRetry,
+  onAdd,
   onScan,
   cardRef,
 }: {
@@ -33,6 +34,10 @@ export function AnswerCard({
   // Wired ONLY to the four 다시 확인 renders (error/cached, error/noCache, partial/locationMissing,
   // partial/staleCache): re-runs the retained query (B15). All other CTAs stay inert stubs.
   onRetry?: () => void;
+  // Owner-exception §B47: adds the priced answer to the per-store shopping list. Rendered as an
+  // L3 text action WITHOUT cta--primary — the single-primary rule still holds (B47-1). The surface
+  // passes it only for priced answers; priceless kinds (notCarried/franchise) get no button.
+  onAdd?: () => void;
   // Wired ONLY to the Empty render (Bible Interface §4: the Empty card carries its own scan CTA).
   // Scan-origin empties reuse it as the scan retry.
   onScan?: () => void;
@@ -42,7 +47,7 @@ export function AnswerCard({
 }) {
   return (
     <GlassSurface className="answer-card" tabIndex={-1} surfaceRef={cardRef}>
-      {renderBody(ui, policy, nowMs, locale, onRetry, onScan)}
+      {renderBody(ui, policy, nowMs, locale, onRetry, onAdd, onScan)}
     </GlassSurface>
   );
 }
@@ -53,6 +58,7 @@ function renderBody(
   nowMs: number,
   locale: Locale = 'ko',
   onRetry?: () => void,
+  onAdd?: () => void,
   onScan?: () => void,
 ) {
   // One destructure instead of 20 imports: every bare copy name below resolves through the
@@ -106,12 +112,12 @@ function renderBody(
       return null;
     case 'error':
       return ui.variant === 'cached'
-        ? renderErrorCached(ui.answer, ui.freshness.observedAt, nowMs, locale, onRetry)
+        ? renderErrorCached(ui.answer, ui.freshness.observedAt, nowMs, locale, onRetry, onAdd)
         : renderErrorNoCache(locale, onRetry);
     case 'success':
-      return renderSuccess(ui.answer, policy, locale);
+      return renderSuccess(ui.answer, policy, locale, onAdd);
     case 'partial':
-      return renderPartial(ui, nowMs, locale, onRetry);
+      return renderPartial(ui, nowMs, locale, onRetry, onAdd);
   }
 }
 
@@ -121,8 +127,10 @@ function renderErrorCached(
   nowMs: number,
   locale: Locale,
   onRetry?: () => void,
+  onAdd?: () => void,
 ) {
   const {
+    ADD_TO_CART_BUTTON,
     ERROR_CACHED_BANNER,
     RETRY_BUTTON,
     cachedFreshnessCaption,
@@ -167,6 +175,7 @@ function renderErrorCached(
       <button type="button" className="text-label cta--primary" onClick={onRetry}>
         {RETRY_BUTTON}
       </button>
+      {addButton(ADD_TO_CART_BUTTON, onAdd)}
     </div>
   );
 }
@@ -186,8 +195,19 @@ function renderErrorNoCache(locale: Locale, onRetry?: () => void) {
   );
 }
 
-function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy, locale: Locale) {
-  const { LIVE_FRESHNESS_CAPTION, extraPositionsLabel, factsFor, lowQtyCaption } = strings(locale);
+function renderSuccess(
+  answer: AvailabilityAnswer,
+  policy: DataOwnerPolicy,
+  locale: Locale,
+  onAdd?: () => void,
+) {
+  const {
+    ADD_TO_CART_BUTTON,
+    LIVE_FRESHNESS_CAPTION,
+    extraPositionsLabel,
+    factsFor,
+    lowQtyCaption,
+  } = strings(locale);
   const facts = factsFor(answer, locale);
   if (answer.kind === 'inStock') {
     const [primary, ...rest] = answer.locations;
@@ -217,6 +237,7 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy, loca
             unwired flow — a prominent dead button violates I4 feedback worse than its
             absence. facts.cta still carries the string for Flow 2, which restores this
             button wired. Siblings (대안 보기 etc.) stay until their flows land — §B40. */}
+        {addButton(ADD_TO_CART_BUTTON, onAdd)}
       </div>
     );
   }
@@ -237,6 +258,7 @@ function renderSuccess(answer: AvailabilityAnswer, policy: DataOwnerPolicy, loca
           {facts.secondaryCta}
         </button>
       )}
+      {addButton(ADD_TO_CART_BUTTON, onAdd)}
     </div>
   );
 }
@@ -246,8 +268,10 @@ function renderPartial(
   nowMs: number,
   locale: Locale,
   onRetry?: () => void,
+  onAdd?: () => void,
 ) {
   const {
+    ADD_TO_CART_BUTTON,
     PARTIAL_FRANCHISE_BODY,
     PARTIAL_FRANCHISE_CTA,
     PARTIAL_NO_LOCATION_CTA,
@@ -285,6 +309,7 @@ function renderPartial(
         <button type="button" className="text-label cta--primary" onClick={onRetry}>
           {PARTIAL_NO_LOCATION_CTA}
         </button>
+        {addButton(ADD_TO_CART_BUTTON, onAdd)}
       </div>
     );
   }
@@ -297,6 +322,18 @@ function renderPartial(
       <button type="button" className="text-label cta--primary" onClick={onRetry}>
         {PARTIAL_STALE_CACHE_CTA}
       </button>
+      {addButton(ADD_TO_CART_BUTTON, onAdd)}
     </div>
+  );
+}
+
+// Owner-exception §B47: the L3 text action for 담기. Deliberately NOT cta--primary —
+// the surface's 다시 확인/scan CTA stays the single primary (B47-1).
+function addButton(label: string, onAdd?: () => void) {
+  if (!onAdd) return null;
+  return (
+    <button type="button" className="text-label cart-add-button" onClick={onAdd}>
+      {label}
+    </button>
   );
 }

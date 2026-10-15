@@ -9,6 +9,7 @@ import {
   type QueryOutcomeRunner,
   isCurrentRun,
   planStoreSwitch,
+  pricedAnswerOf,
   runByPdNo,
   runByScan,
   runQuery,
@@ -641,6 +642,103 @@ describe('recent views (§B47)', () => {
     await userEvent.click(screen.getByRole('button', { name: /리빙 밀폐용기 1\.2L · 2,000원/ }));
     expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
     expect(searchControl.calls).not.toContain('리빙 밀폐용기 1.2L');
+  });
+});
+
+describe('shopping list (§B47)', () => {
+  beforeEach(() => {
+    useAvailabilityStore.setState({
+      recentSearches: [],
+      recentViews: [],
+      carts: {},
+      cartOpen: false,
+    });
+  });
+
+  async function resolveInStock() {
+    render(<AvailabilitySurface />);
+    await userEvent.type(screen.getByLabelText('상품 검색'), '밀폐용기{Enter}');
+    await userEvent.click(await screen.findByRole('button', { name: /리빙 밀폐용기 1\.2L/ }));
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+  }
+
+  test('pricedAnswerOf gates 담기: priced answers pass, everything else gets nothing', () => {
+    expect(
+      pricedAnswerOf({
+        state: 'success',
+        query: 'q',
+        answer: mockAnswers.inStock,
+        freshness: { class: 'live', observedAt: 1 },
+      }),
+    ).not.toBeNull();
+    // Priceless kinds (stale-cached negatives included) never get a button.
+    expect(
+      pricedAnswerOf({
+        state: 'success',
+        query: 'q',
+        answer: mockAnswers.notCarried,
+        freshness: { class: 'live', observedAt: 1 },
+      }),
+    ).toBeNull();
+    expect(
+      pricedAnswerOf({
+        state: 'partial',
+        trigger: 'franchise',
+        query: 'q',
+        answer: mockAnswers.franchise,
+        freshness: null,
+      }),
+    ).toBeNull();
+    expect(pricedAnswerOf({ state: 'default' })).toBeNull();
+    expect(pricedAnswerOf({ state: 'loading', query: 'q', slow: false })).toBeNull();
+  });
+
+  test('priceless answers render no 담기 on the surface', () => {
+    render(<AvailabilitySurface />);
+    act(() => {
+      useAvailabilityStore.getState().dispatch({
+        type: 'RESULT',
+        answer: mockAnswers.notCarried,
+        freshness: { class: 'live', observedAt: Date.now() },
+      });
+    });
+    expect(
+      screen.getByText('이 매장에서는 팔지 않는 상품이에요. 근처 매장을 보여드릴게요.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '담기' })).not.toBeInTheDocument();
+  });
+
+  test('담기 snapshots the answer; the link shows count and total and announces it', async () => {
+    await resolveInStock();
+    await userEvent.click(screen.getByRole('button', { name: '담기' }));
+    expect(screen.getByRole('button', { name: '장바구니 1개 · 2,000원' })).toBeInTheDocument();
+    expect(screen.getByText('장바구니에 담았어요')).toBeInTheDocument();
+    // Re-adding bumps 담을 수량 instead of duplicating.
+    await userEvent.click(screen.getByRole('button', { name: '담기' }));
+    expect(screen.getByRole('button', { name: '장바구니 2개 · 4,000원' })).toBeInTheDocument();
+  });
+
+  test('the sheet lists the snapshot; the stepper moves the total; recheck re-resolves', async () => {
+    await resolveInStock();
+    await userEvent.click(screen.getByRole('button', { name: '담기' }));
+    await userEvent.click(screen.getByRole('button', { name: /장바구니 1개/ }));
+    expect(screen.getByRole('dialog', { name: '장바구니 · 명동역점' })).toBeInTheDocument();
+    expect(screen.getByText('합계 2,000원')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '수량 늘리기' }));
+    expect(screen.getByText('합계 4,000원')).toBeInTheDocument();
+    // Per-item 다시 확인 closes the sheet and lands a fresh answer behind it.
+    await userEvent.click(screen.getByRole('button', { name: '다시 확인' }));
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '장바구니 · 명동역점' })).not.toBeInTheDocument();
+  });
+
+  test('closing the sheet returns focus to the 장바구니 opener', async () => {
+    await resolveInStock();
+    await userEvent.click(screen.getByRole('button', { name: '담기' }));
+    const opener = screen.getByRole('button', { name: /장바구니 1개/ });
+    await userEvent.click(opener);
+    await userEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(opener).toHaveFocus();
   });
 });
 

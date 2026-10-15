@@ -211,6 +211,34 @@ export const RECENT_SEARCHES_LABEL = '최근 검색';
 // app draft pending Bible ratification, same path as the scan drafts below.
 export const RECENT_VIEWS_LABEL = '최근 본 상품';
 
+// ── Shopping list (owner-exception §B47, explicit) ───────────────────────────────────────────
+// App drafts pending Bible ratification. `담을 수량` is always the shopper's intended count,
+// never a stock count — the label carries that distinction, not just the number.
+export const ADD_TO_CART_BUTTON = '담기';
+export const CART_ADDED_NOTICE = '장바구니에 담았어요';
+export const CART_TITLE = '장바구니';
+export const CART_EMPTY_NOTE = '아직 담은 상품이 없어요. 답 카드에서 담기를 눌러 보세요.';
+export const CART_SNAPSHOT_NOTE = '담을 당시 정보예요. 오늘 재고는 다시 확인해 주세요.';
+export const CART_CLOSE = '닫기';
+export const CART_QTY_DECREASE = '수량 줄이기';
+export const CART_QTY_INCREASE = '수량 늘리기';
+export const CART_REMOVE_BUTTON = '삭제';
+export function cartLinkLabel(count: number, total: number): string {
+  return `장바구니 ${count}개 · ${formatPrice(total)}`;
+}
+export function cartTotalLabel(total: number): string {
+  return `합계 ${formatPrice(total)}`;
+}
+export function cartQtyText(qty: number): string {
+  return `${qty}개`;
+}
+export function cartCheckLabel(name: string): string {
+  return `${name} 합계에 포함`;
+}
+export function cartOtherStoresLabel(count: number): string {
+  return `다른 매장 리스트 ${count}곳`;
+}
+
 // Interface §copy-table (AI low / literal results notice). This fallback-first feature has no AI
 // confidence model, so the literal-results framing (not the "이걸 찾으시나요?" AI-suggestion tier) applies.
 export const RESULTS_NOTICE = '검색 결과예요. 바코드를 스캔하면 더 정확해요.';

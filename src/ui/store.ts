@@ -4,6 +4,16 @@ import { initialState, reduce } from '../domain/state-machine';
 import type { StoreContext, StoreEvent, UiState } from '../domain/types';
 import { type Locale, loadLocale, resolveLocale, saveLocale } from '../i18n/locale';
 import {
+  type CartItem,
+  type Carts,
+  addToCart,
+  loadCarts,
+  removeItem,
+  saveCarts,
+  setItemQty,
+  toggleItemChecked,
+} from '../infra/cart';
+import {
   loadRecentSearches,
   nextRecentSearches,
   saveRecentSearches,
@@ -26,6 +36,10 @@ interface AvailabilityStore {
   recentSearches: string[];
   // Owner-exception §B47: products with a resolved answer, most-recent-first (max 5).
   recentViews: RecentView[];
+  // Owner-exception §B47: per-store shopping-list memos (local-only snapshots, never claims).
+  carts: Carts;
+  // Cart-sheet visibility is UI-SHELL state like sheetOpen/scannerOpen — not a 7th UiState.
+  cartOpen: boolean;
   // Guidance language (ko default). Match tokens (product/store names, prices, floors/zones)
   // never translate (D069) — this only picks which guidance table renders (i18n/strings).
   locale: Locale;
@@ -37,12 +51,19 @@ interface AvailabilityStore {
   selectStore: (store: StoreContext) => void;
   recordSearch: (keyword: string) => void;
   recordView: (view: RecentView) => void;
+  addItem: (store: StoreContext, item: CartItem) => void;
+  setItemQty: (storeCd: string, id: string, qty: number) => void;
+  toggleItemChecked: (storeCd: string, id: string) => void;
+  removeItem: (storeCd: string, id: string) => void;
+  openCart: () => void;
+  closeCart: () => void;
   setLocale: (locale: Locale) => void;
 }
 
 const persisted = loadStoreContext();
 const persistedRecent = loadRecentSearches();
 const persistedViews = loadRecentViews();
+const persistedCarts = loadCarts();
 // ?lang= is read once at boot (a shared link pins its language); the toggle persists after.
 const initialLocale =
   typeof window === 'undefined'
@@ -60,6 +81,8 @@ export const useAvailabilityStore = create<AvailabilityStore>((set) => ({
   scannerOpen: false,
   recentSearches: persistedRecent,
   recentViews: persistedViews,
+  carts: persistedCarts,
+  cartOpen: false,
   locale: initialLocale,
   dispatch: (event) => set((s) => ({ ui: reduce(s.ui, event) })),
   openSheet: () => set({ sheetOpen: true }),
@@ -83,6 +106,32 @@ export const useAvailabilityStore = create<AvailabilityStore>((set) => ({
       saveRecentViews(next);
       return { recentViews: next };
     }),
+  addItem: (store, item) =>
+    set((s) => {
+      const next = addToCart(s.carts, store.strCd, store.strNm, item);
+      saveCarts(next);
+      return { carts: next };
+    }),
+  setItemQty: (storeCd, id, qty) =>
+    set((s) => {
+      const next = setItemQty(s.carts, storeCd, id, qty);
+      saveCarts(next);
+      return { carts: next };
+    }),
+  toggleItemChecked: (storeCd, id) =>
+    set((s) => {
+      const next = toggleItemChecked(s.carts, storeCd, id);
+      saveCarts(next);
+      return { carts: next };
+    }),
+  removeItem: (storeCd, id) =>
+    set((s) => {
+      const next = removeItem(s.carts, storeCd, id);
+      saveCarts(next);
+      return { carts: next };
+    }),
+  openCart: () => set({ cartOpen: true }),
+  closeCart: () => set({ cartOpen: false }),
   setLocale: (locale) =>
     set(() => {
       saveLocale(locale);
