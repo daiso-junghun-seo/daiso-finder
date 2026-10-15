@@ -238,6 +238,19 @@ export function cartCheckLabel(name: string): string {
 export function cartOtherStoresLabel(count: number): string {
   return `다른 매장 리스트 ${count}곳`;
 }
+export const CART_SHARE_BUTTON = '공유하기';
+export const CART_EXPORT_BUTTON = '내보내기';
+export const CART_IMPORT_BUTTON = '가져오기';
+export const CART_IMPORT_LABEL = '가져올 내용 붙여넣기';
+export const CART_IMPORT_CONFIRM = '불러오기';
+export const CART_COPIED = '복사했어요';
+export const CART_COPY_FAILED = '복사하지 못했어요. 아래 텍스트를 직접 선택해 주세요.';
+export const CART_SHARE_TEXT_LABEL = '공유할 내용';
+export const CART_IMPORT_FAILED = '가져오지 못했어요. 복사한 내용이 맞는지 확인해 주세요.';
+export const CART_UNCHECKED_MARK = '(합계 제외)';
+export function cartImportDoneLabel(count: number): string {
+  return `${count}개 상품을 불러왔어요`;
+}
 
 // Interface §copy-table (AI low / literal results notice). This fallback-first feature has no AI
 // confidence model, so the literal-results framing (not the "이걸 찾으시나요?" AI-suggestion tier) applies.

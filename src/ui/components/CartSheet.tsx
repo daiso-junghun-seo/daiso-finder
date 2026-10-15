@@ -3,12 +3,14 @@
 // SNAPSHOTS (price · location · our observation time), never today's stock. Today's stock
 // comes only from an explicit per-item 다시 확인, which the surface runs and which lands as
 // a normal answer behind this sheet (the sheet closes first — background is inert while open).
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Locale } from '../../i18n/locale';
 import { strings } from '../../i18n/strings';
 import type { StoreCart } from '../../infra/cart';
 import { cartTotal } from '../../infra/cart';
 import type { CartItem } from '../../infra/cart';
+import { copyText, nativeShare } from '../../infra/text-share';
+import { buildShareText, exportCartJson } from '../cart-share';
 import { formatLocation, formatPrice } from '../format';
 import { GlassSurface } from './GlassSurface';
 
@@ -21,6 +23,7 @@ export function CartSheet({
   onToggle,
   onRemove,
   onRecheck,
+  onImportJson,
 }: {
   // The ACTIVE store's cart (null = empty for this store — the note renders, not a blank sheet).
   cart: StoreCart | null;
@@ -31,9 +34,17 @@ export function CartSheet({
   onToggle: (id: string) => void;
   onRemove: (id: string) => void;
   onRecheck: (item: CartItem) => void;
+  // Parses pasted JSON into this store's list; returns what happened for the status line.
+  onImportJson: (text: string) => { ok: boolean; count: number };
 }) {
   const S = strings(locale);
   const closeRef = useRef<HTMLButtonElement>(null);
+  // Sheet-local transfer state: the sheet unmounts on close, so feedback resets with it —
+  // no timers, no stale notes on reopen.
+  const [importText, setImportText] = useState('');
+  const [note, setNote] = useState<{ id: number; text: string } | null>(null);
+  const [fallbackText, setFallbackText] = useState<string | null>(null);
+  const announce = (text: string) => setNote((n) => ({ id: (n?.id ?? 0) + 1, text }));
 
   // Modal dialogs must receive focus on open (Interface §6) — the sheet pattern: 닫기 takes it.
   useEffect(() => {
@@ -51,6 +62,35 @@ export function CartSheet({
   }, [onClose]);
 
   const total = cart ? cartTotal(cart) : 0;
+
+  // Transfer paths (§B47 slice 3): OS sheet first, clipboard second, hand-select last.
+  // 'dismissed' (user waved the OS sheet off) reports nothing — retrying is one tap away.
+  const share = async () => {
+    if (!cart) return;
+    const text = buildShareText(cart, locale);
+    const outcome = await nativeShare(text);
+    if (outcome === 'shared') return;
+    if (outcome === 'dismissed') return;
+    if (await copyText(text)) announce(S.CART_COPIED);
+    else setFallbackText(text);
+  };
+
+  const exportJson = async () => {
+    if (!cart) return;
+    const text = exportCartJson(cart);
+    if (await copyText(text)) announce(S.CART_COPIED);
+    else setFallbackText(text);
+  };
+
+  const submitImport = () => {
+    const result = onImportJson(importText);
+    if (result.ok) {
+      setImportText('');
+      announce(S.cartImportDoneLabel(result.count));
+    } else {
+      announce(S.CART_IMPORT_FAILED);
+    }
+  };
 
   return (
     <GlassSurface className="cart-sheet">
@@ -119,6 +159,43 @@ export function CartSheet({
               ))}
             </ul>
             <p className="text-heading">{S.cartTotalLabel(total)}</p>
+            <div className="cart-sheet__share">
+              <button type="button" className="text-label" onClick={share}>
+                {S.CART_SHARE_BUTTON}
+              </button>
+              <button type="button" className="text-label" onClick={exportJson}>
+                {S.CART_EXPORT_BUTTON}
+              </button>
+              <details className="cart-sheet__import">
+                <summary>{S.CART_IMPORT_BUTTON}</summary>
+                <textarea
+                  aria-label={S.CART_IMPORT_LABEL}
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  rows={3}
+                />
+                <button type="button" className="text-label" onClick={submitImport}>
+                  {S.CART_IMPORT_CONFIRM}
+                </button>
+              </details>
+            </div>
+          </>
+        )}
+        {note && (
+          <p role="status" className="text-caption" key={note.id}>
+            {note.text}
+          </p>
+        )}
+        {fallbackText !== null && (
+          <>
+            <p className="text-caption">{S.CART_COPY_FAILED}</p>
+            <textarea
+              readOnly
+              aria-label={S.CART_SHARE_TEXT_LABEL}
+              value={fallbackText}
+              rows={6}
+              onFocus={(e) => e.target.select()}
+            />
           </>
         )}
         {otherStoreCount > 0 && (

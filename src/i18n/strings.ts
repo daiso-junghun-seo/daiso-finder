@@ -57,6 +57,17 @@ export interface CopyTable {
   cartQtyText(qty: number): string;
   cartCheckLabel(name: string): string;
   cartOtherStoresLabel(count: number): string;
+  readonly CART_SHARE_BUTTON: string;
+  readonly CART_EXPORT_BUTTON: string;
+  readonly CART_IMPORT_BUTTON: string;
+  readonly CART_IMPORT_LABEL: string;
+  readonly CART_IMPORT_CONFIRM: string;
+  readonly CART_COPIED: string;
+  readonly CART_COPY_FAILED: string;
+  readonly CART_SHARE_TEXT_LABEL: string;
+  readonly CART_IMPORT_FAILED: string;
+  readonly CART_UNCHECKED_MARK: string;
+  cartImportDoneLabel(count: number): string;
   readonly RESULTS_NOTICE: string;
   readonly SCAN_AIM_GUIDE: string;
   readonly SCAN_AIM_GUIDE_TOKEN: string;

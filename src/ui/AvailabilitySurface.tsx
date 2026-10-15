@@ -26,6 +26,7 @@ import { type RecentView, viewFromResult } from '../infra/recent-views';
 import { loadStoreContext } from '../infra/store-context';
 import { AnswerCard } from './AnswerCard';
 import { LiveRegion } from './a11y/LiveRegion';
+import { parseCartImport } from './cart-share';
 import { CandidateList } from './components/CandidateList';
 import { CartSheet } from './components/CartSheet';
 import { GlassSurface } from './components/GlassSurface';
@@ -320,6 +321,7 @@ export function AvailabilitySurface() {
   const setItemQty = useAvailabilityStore((s) => s.setItemQty);
   const toggleItemChecked = useAvailabilityStore((s) => s.toggleItemChecked);
   const removeCartItem = useAvailabilityStore((s) => s.removeItem);
+  const importCart = useAvailabilityStore((s) => s.importCart);
   const scannerOpen = useAvailabilityStore((s) => s.scannerOpen);
   const openScanner = useAvailabilityStore((s) => s.openScanner);
   const closeScanner = useAvailabilityStore((s) => s.closeScanner);
@@ -445,6 +447,15 @@ export function AvailabilitySurface() {
     }
   };
 
+  // Pasted-JSON import lands in THIS store's list with the same dedup/caps as adding by
+  // hand (mergeImportedCart). Strict parse: garbage reports failure, never a half-loaded list.
+  const handleImportJson = (text: string): { ok: boolean; count: number } => {
+    if (!store) return { ok: false, count: 0 };
+    const parsed = parseCartImport(text);
+    if (!parsed) return { ok: false, count: 0 };
+    importCart(store.strCd, store.strNm, parsed);
+    return { ok: true, count: parsed.items.length };
+  };
   // Active store's list + the honest count caption for the other stores' lists.
   const activeCart = store ? cartFor(carts, store.strCd) : null;
   const activeCartCount = activeCart ? cartQtyCount(activeCart) : 0;
@@ -567,6 +578,7 @@ export function AvailabilitySurface() {
         onToggle={(id) => toggleItemChecked(store.strCd, id)}
         onRemove={(id) => removeCartItem(store.strCd, id)}
         onRecheck={handleRecheckItem}
+        onImportJson={handleImportJson}
       />
     </>
   );
