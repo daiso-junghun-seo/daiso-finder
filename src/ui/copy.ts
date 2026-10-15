@@ -207,6 +207,10 @@ export function announcementFor(
 // recent-searches list.
 export const RECENT_SEARCHES_LABEL = '최근 검색';
 
+// Owner-exception §B47 (explicit): the Bible L-table has no recently-viewed slot —
+// app draft pending Bible ratification, same path as the scan drafts below.
+export const RECENT_VIEWS_LABEL = '최근 본 상품';
+
 // Interface §copy-table (AI low / literal results notice). This fallback-first feature has no AI
 // confidence model, so the literal-results framing (not the "이걸 찾으시나요?" AI-suggestion tier) applies.
 export const RESULTS_NOTICE = '검색 결과예요. 바코드를 스캔하면 더 정확해요.';

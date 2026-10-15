@@ -42,6 +42,7 @@ export interface CopyTable {
   readonly STORE_SELECT_NO_LOCATION_NOTE: string;
   readonly PARTIAL_NO_LOCATION_NOTE: string;
   readonly RECENT_SEARCHES_LABEL: string;
+  readonly RECENT_VIEWS_LABEL: string;
   readonly RESULTS_NOTICE: string;
   readonly SCAN_AIM_GUIDE: string;
   readonly SCAN_AIM_GUIDE_TOKEN: string;
