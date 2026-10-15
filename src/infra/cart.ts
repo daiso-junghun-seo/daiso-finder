@@ -157,7 +157,7 @@ function isValidItem(v: unknown): v is CartItem {
   );
 }
 
-function isValidCart(v: unknown): v is StoreCart {
+export function isValidCart(v: unknown): v is StoreCart {
   if (typeof v !== 'object' || v === null) return false;
   const o = v as Record<string, unknown>;
   return (

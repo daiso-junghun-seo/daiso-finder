@@ -1,5 +1,5 @@
 // src/ui/components/CartSheet.test.tsx — owner-exception §B47 slice 2.
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { StoreCart } from '../../infra/cart';
 import { CartSheet } from './CartSheet';
@@ -29,6 +29,7 @@ const handlers = () => ({
   onToggle: vi.fn(),
   onRemove: vi.fn(),
   onRecheck: vi.fn(),
+  onImportJson: vi.fn(() => ({ ok: true, count: 2 })),
 });
 
 test('rows show the snapshot with the honesty caption, the total, and wired actions', async () => {
@@ -86,4 +87,48 @@ test('locale="en" renders English guidance with Korean names and moved units (B4
   expect(screen.getByText('리빙 밀폐용기 1.2L')).toBeInTheDocument();
   expect(screen.getByText('₩2,000 · 11F · No. 56')).toBeInTheDocument();
   expect(screen.getByText('Total ₩2,000')).toBeInTheDocument();
+});
+
+test('공유하기 copies the memo text when no OS sheet exists, and reports it', async () => {
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: async () => {} },
+  });
+  const h = handlers();
+  render(<CartSheet cart={cart} otherStoreCount={0} locale="ko" {...h} />);
+  await userEvent.click(screen.getByRole('button', { name: '공유하기' }));
+  expect(await screen.findByText('복사했어요')).toBeInTheDocument();
+  Reflect.deleteProperty(navigator, 'clipboard');
+});
+
+test('공유하기 with no share sheet and no clipboard falls back to hand-select text', async () => {
+  Reflect.deleteProperty(navigator, 'clipboard');
+  const h = handlers();
+  render(<CartSheet cart={cart} otherStoreCount={0} locale="ko" {...h} />);
+  await userEvent.click(screen.getByRole('button', { name: '공유하기' }));
+  expect(
+    await screen.findByText('복사하지 못했어요. 아래 텍스트를 직접 선택해 주세요.'),
+  ).toBeInTheDocument();
+  const fallback = screen.getByLabelText('공유할 내용');
+  expect((fallback as HTMLTextAreaElement).value).toContain('명동역점 장바구니');
+  expect((fallback as HTMLTextAreaElement).value).toContain('합계 2,000원');
+});
+
+test('가져오기 loads pasted JSON through onImportJson and reports the count; garbage fails honestly', async () => {
+  const h = handlers();
+  render(<CartSheet cart={cart} otherStoreCount={0} locale="ko" {...h} />);
+  const box = screen.getByLabelText('가져올 내용 붙여넣기');
+  // fireEvent, not userEvent.type: pasted JSON contains braces, which the keyboard parser
+  // rejects — pasting is also what the shopper does.
+  fireEvent.change(box, { target: { value: '{"storeCd":"001"}' } });
+  await userEvent.click(screen.getByRole('button', { name: '불러오기' }));
+  expect(h.onImportJson).toHaveBeenCalledWith('{"storeCd":"001"}');
+  expect(await screen.findByText('2개 상품을 불러왔어요')).toBeInTheDocument();
+
+  h.onImportJson.mockReturnValue({ ok: false, count: 0 });
+  fireEvent.change(box, { target: { value: 'garbage' } });
+  await userEvent.click(screen.getByRole('button', { name: '불러오기' }));
+  expect(
+    await screen.findByText('가져오지 못했어요. 복사한 내용이 맞는지 확인해 주세요.'),
+  ).toBeInTheDocument();
 });

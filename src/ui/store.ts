@@ -6,6 +6,7 @@ import { type Locale, loadLocale, resolveLocale, saveLocale } from '../i18n/loca
 import {
   type CartItem,
   type Carts,
+  type StoreCart,
   addToCart,
   loadCarts,
   removeItem,
@@ -25,6 +26,7 @@ import {
   saveRecentViews,
 } from '../infra/recent-views';
 import { loadStoreContext, saveStoreContext } from '../infra/store-context';
+import { mergeImportedCart } from './cart-share';
 
 interface AvailabilityStore {
   ui: UiState;
@@ -55,6 +57,7 @@ interface AvailabilityStore {
   setItemQty: (storeCd: string, id: string, qty: number) => void;
   toggleItemChecked: (storeCd: string, id: string) => void;
   removeItem: (storeCd: string, id: string) => void;
+  importCart: (storeCd: string, storeName: string, imported: StoreCart) => void;
   openCart: () => void;
   closeCart: () => void;
   setLocale: (locale: Locale) => void;
@@ -127,6 +130,12 @@ export const useAvailabilityStore = create<AvailabilityStore>((set) => ({
   removeItem: (storeCd, id) =>
     set((s) => {
       const next = removeItem(s.carts, storeCd, id);
+      saveCarts(next);
+      return { carts: next };
+    }),
+  importCart: (storeCd, storeName, imported) =>
+    set((s) => {
+      const next = mergeImportedCart(s.carts, storeCd, storeName, imported);
       saveCarts(next);
       return { carts: next };
     }),

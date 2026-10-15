@@ -152,6 +152,20 @@ export function cartCheckLabel(name: string): string {
 export function cartOtherStoresLabel(count: number): string {
   return `Lists in ${count} other stores`;
 }
+export const CART_SHARE_BUTTON = 'Share';
+export const CART_EXPORT_BUTTON = 'Export';
+export const CART_IMPORT_BUTTON = 'Import';
+export const CART_IMPORT_LABEL = 'Paste exported text';
+export const CART_IMPORT_CONFIRM = 'Load';
+export const CART_COPIED = 'Copied';
+export const CART_COPY_FAILED = 'Could not copy. Select the text below by hand.';
+export const CART_SHARE_TEXT_LABEL = 'Text to share';
+export const CART_EXPORT_TEXT_LABEL = 'Exported text';
+export const CART_IMPORT_FAILED = 'Could not load it. Check the copied text.';
+export const CART_UNCHECKED_MARK = '(excluded)';
+export function cartImportDoneLabel(count: number): string {
+  return `Loaded ${count} items`;
+}
 
 export const RESULTS_NOTICE = 'These are search results. Scanning is more accurate.';
 

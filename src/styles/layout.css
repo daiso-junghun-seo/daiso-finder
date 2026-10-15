@@ -282,6 +282,43 @@ input:focus-visible {
   margin-top: var(--space-md);
 }
 
+/* Transfer row (§B47 slice 3): share/export/import + status line + hand-select fallback.
+   Textareas reuse the control paint (same tokens → same AA pairs); summary keeps 44px. */
+.cart-sheet__share {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: var(--space-md);
+}
+
+.cart-sheet__import {
+  flex-basis: 100%;
+}
+
+.cart-sheet__import summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.cart-sheet textarea {
+  width: 100%;
+  min-height: 88px;
+  font: inherit;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-neutral-border);
+  background: var(--surface-solid);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+
+.cart-sheet textarea:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
 /* 담기: L3 text action — same paint as every control (the global button rule owns 44px +
    focus), no primary fill so the single-primary rule still holds (§B47). */
 .cart-add-button {

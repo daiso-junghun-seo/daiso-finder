@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { mockAnswers } from '../adapters/mock/fixtures';
 import type { ProductSearchPort, ScannerPort } from '../domain/ports';
@@ -83,6 +83,12 @@ beforeEach(() => {
     sheetOpen: false,
     scannerOpen: false,
     locale: 'ko',
+    // Slice state (§B47) resets here too: an open cart sheet is a modal — leaking it across
+    // tests makes every later getByRole('dialog') match twice.
+    carts: {},
+    cartOpen: false,
+    recentViews: [],
+    recentSearches: [],
   });
 });
 
@@ -739,6 +745,36 @@ describe('shopping list (§B47)', () => {
     await userEvent.click(opener);
     await userEvent.click(screen.getByRole('button', { name: '닫기' }));
     expect(opener).toHaveFocus();
+  });
+
+  test('pasted JSON imports into this store’s list with the same caps', async () => {
+    await resolveInStock();
+    await userEvent.click(screen.getByRole('button', { name: '담기' }));
+    await userEvent.click(screen.getByRole('button', { name: /장바구니 1개/ }));
+    const incoming = JSON.stringify({
+      storeCd: '001',
+      storeName: '명동역점',
+      items: [
+        {
+          id: '9',
+          name: '수납 바구니',
+          query: '수납',
+          price: 3000,
+          qty: 1,
+          checked: true,
+          addedAt: 1,
+          observedAt: 1,
+        },
+      ],
+    });
+    // fireEvent, not userEvent.type: pasted JSON contains braces (see CartSheet.test).
+    fireEvent.change(screen.getByLabelText('가져올 내용 붙여넣기'), {
+      target: { value: incoming },
+    });
+    await userEvent.click(screen.getByRole('button', { name: '불러오기' }));
+    expect(await screen.findByText('1개 상품을 불러왔어요')).toBeInTheDocument();
+    expect(screen.getByText('수납 바구니')).toBeInTheDocument();
+    expect(screen.getByText('합계 5,000원')).toBeInTheDocument();
   });
 });
 
