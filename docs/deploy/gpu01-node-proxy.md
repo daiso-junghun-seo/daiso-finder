@@ -4,9 +4,10 @@
 > the earlier CF Workers probe in the runtime-resolution doc) was gated on the **owner's ToS/robots
 > review**. **✅ CLEARED 2026-10-12 (owner verdict: 열린 URL 이용이라 이슈 없음)** — robots.txt는 크롤러
 > 규율이고 이 앱은 사용자 조회당 API 1회의 읽기 전용 호출(우회·대량수집 없음)이므로. Nothing in this
-> document has been run against gpu01 (no gpu01 access from the clearing session's box). This runbook
-> exists so deployment is a paperwork-free `git pull` + `systemctl restart` once port/hostname are
-> chosen — it is not itself authorization to deploy.
+> document has been run against gpu01 (no gpu01 access from the session that cleared the gate). This
+> runbook exists so deployment is a paperwork-free `git pull` + `systemctl restart` once port/hostname are
+> chosen — it is not itself authorization to deploy. The blocker is now **operational** (host/port
+> decision + gpu01 access), not legal.
 
 Design source: [`docs/superpowers/specs/2026-07-23-runtime-resolution.md`](../superpowers/specs/2026-07-23-runtime-resolution.md)
 (Option C). Server implementation: [`scripts/dev-proxy.mjs`](../../scripts/dev-proxy.mjs) — the same file
@@ -44,7 +45,8 @@ switch, only the two env vars above.
 
 - gpu01 access (`mosh gpu01` / `ssh gpu01`), matching the existing k-skill-proxy operator.
 - Node 20+ on gpu01 (`node --version`) — the proxy uses only `node:http`, `node:fs`, `node:path`,
-  `node:url`, and `esbuild` (already a transitive devDependency via Vite; no new production dependency).
+  `node:url`, and `esbuild`. `esbuild` is a **direct `dependencies` entry** (promoted in `e10dae2`), so a
+  `--omit=dev` install keeps the runtime bundler.
 - `systemd --user` available for the deploying account, with **lingering enabled** so the service survives
   logout: `loginctl enable-linger <user>` (one-time, needs root/sudo — same requirement k-skill-proxy has).
 - A TLS-terminating public entry point (Cloudflare Tunnel or reverse proxy — see §4). **This is the piece
@@ -99,18 +101,19 @@ SEARCH_BASE=https://www.daisomall.co.kr
 
 ```bash
 cd ~/apps/daiso-finder-proxy
-npm ci --omit=dev            # esbuild is a transitive devDependency of vite — see note below
+npm ci                       # FULL install — vitest/vite/tsc are devDependencies; the build needs them
 npm run build                # tsc -b && vite build → dist/
+npm prune --omit=dev         # keep only runtime deps (esbuild is a direct dependency)
 ```
 
+> **Why not `npm ci --omit=dev` first?** `npm run build` is `tsc -b && vite build`, and both `typescript`
+> and `vite` are devDependencies — a `--omit=dev` install has no build toolchain. Build with the full
+> install, then prune. (An earlier revision of this section had the order wrong; the sketch in §7 was
+> already correct: full `ci` → build → rsync → `ci --omit=dev`.)
+>
 > **Note on `esbuild`**: `scripts/dev-proxy.mjs` imports `esbuild` directly at runtime to bundle
 > `functions/api/*.ts` into Node-runnable ESM (no logic reimplementation — see the file's header comment).
-> Today `esbuild` is only a *transitive* devDependency (via `vite`), which is fine for `npm ci` (no
-> `--omit=dev`) but would be missing under `--omit=dev`. **Before the first production deploy, promote
-> `esbuild` to a direct `dependencies` entry in `package.json`** (or run `npm ci` without `--omit=dev` on
-> gpu01) so the proxy doesn't depend on devDependency install behavior. This is a one-line follow-up, not
-> done here since it touches `package.json` dependency shape beyond what this task's diff should carry
-> silently — flagging it explicitly instead.
+> It was promoted to a direct `dependencies` entry in `e10dae2`, so `--omit=dev`/`npm prune` keeps it.
 
 If Shape A (serves `dist/`): the build above is required before every start. If Shape B (`SERVE_STATIC=0`):
 `dist/` is not read by the proxy, but `npm run build` is still how the CF Pages side gets its artifact —
@@ -246,6 +249,5 @@ job — omitted from the sketch above for brevity, not because it's unneeded.
 - No systemd unit was installed anywhere.
 - No `.env` with real values exists anywhere in this repo or was created on any host.
 
-**Next real step is the owner's ToS/robots review (§ blocking note at top).** Once that clears: pick a
-port (§3) and hostname (§6), promote `esbuild` to a direct dependency (§4 note), then this runbook's steps
-1–7 execute in order.
+**Next real step**: pick a port (§3) and hostname (§6), then run §1–7 on gpu01. The ToS/robots gate is
+already cleared (2026-10-12); what remains is operational access, not a legal review.

@@ -12,12 +12,14 @@ Product Bible이 정의한 **참조 제품(reference product)**의 구현체입�
 
 ## 상태
 
-**Increment 0(PWA 셸 + 신선도-네이티브 데이터 레이어) 완료 · Increment 1 Flow 1(Availability Check) 코어 구축 완료.** 6상태 UI·Bible-ver바팀 카피·D082 매장 선택·D083 glass·타이핑 검색(현재 mock 데이터)·재시도가 `main`에 있습니다(로드맵 Phase 0~6 완료 + 최종 리뷰 통과 후 머지). 실 데이터 배선(A9)·바코드·최근 검색·AI 해석 레이어·재입고 구독·다국어는 데이터 오너 자료/결정 대기로 잔여.
+**Increment 0(PWA 셸 + 데이터 레이어) · Increment 1 Flow 1(Availability Check) · §B47 쇼핑리스트(최근 본·장바구니·공유) 완료.** 실 daisomall 어댑터·바코드 스캔(DataMatrix)·최근 검색·D082 매장 선택·D083 glass·6상태 UI·한/영 카피가 `main`에 로컬 머지되어 있습니다. 로컬에서는 `npm run dev:live`로 실 데이터 전체 플로우가 동작합니다.
 
-게이트: vitest 191 · tsc · biome · Playwright 14, 전부 green.
+게이트(2026-11-07, `main` 실측): **vitest 733/733 · tsc clean · biome clean(140 files) · Playwright 29/29 · build 성공**(엔트리 211.24 kB / gzip 68.49 kB, precache 21 entries / 344.77 KiB).
+
+**미완 — 배포 선결**: 프로덕션 런타임이 아직 배포되지 않았습니다. CF Workers는 벤더 핑거프린트 403으로 막혀 Node 프록시 경로를 씁니다(런북: [`docs/deploy/gpu01-node-proxy.md`](docs/deploy/gpu01-node-proxy.md)). 원격 저장소·CI도 아직 없습니다(로컬 전용). AI 해석 레이어·재입고 구독은 데이터 오너 자료/결정 대기입니다.
 
 - 거버넌스·권위: [`CLAUDE.md`](CLAUDE.md), [`AGENTS.md`](AGENTS.md)
-- 현재 상태·다음 작업: [`docs/HANDOFF.md`](docs/HANDOFF.md) · 실행 원장: [`.superpowers/sdd/progress.md`](.superpowers/sdd/progress.md)
+- 현재 상태·다음 작업: [`docs/HANDOFF.md`](docs/HANDOFF.md) · 결정 원장: [`docs/notes/open-questions.md`](docs/notes/open-questions.md)
 - 미해결 항목: [`docs/notes/open-questions.md`](docs/notes/open-questions.md) — (A) Bible 에스컬레이션 · (B) 앱-레벨 결정 · (C) 출시-후 가설
 - 킥오프 스펙: `../product-bible/docs/superpowers/specs/2026-07-13-daiso-finder-kickoff-and-workspace-design.md`
 

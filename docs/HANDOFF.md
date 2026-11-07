@@ -1,12 +1,40 @@
 # HANDOFF — DAISO Finder
 
-> 이 저장소에서 새 세션을 시작하면 **여기부터** 읽는다. 실행 원장(정본)은 [`.superpowers/sdd/progress.md`](../.superpowers/sdd/progress.md).
+> 이 저장소에서 새 세션을 시작하면 **여기부터** 읽는다. 결정·실행 원장은 [`docs/notes/open-questions.md`](notes/open-questions.md). `.superpowers/`는 `.gitignore` 대상이라 새 클론에는 존재하지 않는다 — 정본으로 링크하지 않는다.
 
-## 현재 상태 (2026-07-25/26)
+## 현재 상태 (2026-11-07 실측, `main`)
 
-**Increment 0(PWA 셸) + Flow 1(Availability Check) 코어 + 실 데이터 배선 + 라이브 스모크 검증까지 완료 — 전부 `main`에 로컬 머지(원격 푸시·공개 배포 없음).** 앱은 **로컬에서 실 daisomall 데이터로 전체 플로우가 동작**한다(`npm run dev:live`, dev-proxy). 단 **프로덕션 배포는 런타임 차단 + ToS 게이트로 대기 중**(아래 🔴).
+**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 로컬 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **원격 푸시·공개 배포는 아직 없다.**
 
-**게이트(main, DataMatrix 정정까지 머지 후 — tip `9570096`)**: vitest **346/346**, tsc clean, biome clean, Playwright **18/18**(dev 15 + preview 3), build 성공(zxing = 별도 지연청크, 엔트리 **172.41 kB**에 zxing 없음, 지연 청크 91.96 kB). src+dist에 시크릿 부재.
+**게이트(2026-11-07 실측)**: vitest **733/733**(59 files), tsc clean, biome clean(140 files), Playwright **29/29**(dev 26 + preview 3), build 성공(엔트리 **211.24 kB** / gzip 68.49 kB, CSS 12.66 kB, precache **21 entries / 344.77 KiB**).
+
+### 이번 웨이브에서 닫은 것 (2026-11-07)
+
+- **교차 매장 장바구니 import**: 다른 매장에서 내보낸 메모를 이 매장에 붙여넣으면 그 매장의 층/구역 스냅샷을 버린다(가격·이름·수량은 유지). 빈 목록에서도 가져오기가 가능해졌다. 입력은 64 KiB / 30행으로 제한.
+- **공유 취소**: 사용자가 OS 시트를 닫은 것(`cancelled`)과 실패(`failed`)를 분리 — 취소는 클립보드 부작용 없이 끝난다.
+- **로딩 지연 문구**: 아무도 dispatch하지 않던 `SLOW`를 배선해 1.2초 이후 `LOADING_DELAY_LINE`이 실제로 뜬다.
+- **pdNo 신원**: 검색 결과에 없는 pdNo는 다른 상품 이름/이미지와 짝지어지지 않고 409로 끝난다. 입력 길이·타입도 서버에서 제한.
+- **인증 재사용**: 벤더 핸드셰이크를 5분 캐시(401/403 재발급은 강제 새 토큰).
+- **프록시 하드닝**: body 16 KiB 상한·분당 rate limit·보안 헤더·없는 asset은 404(SPA fallback은 navigation만).
+- **IndexedDB 연결 재사용**, **adapter→ui import 금지 가드**, `kmToMeters`(테스트 전용) 제거.
+
+### 지금 남은 것 (우선순위)
+
+1. **원격 저장소·CI 없음** — 전체 커밋 이력이 이 PC에만 있다. 백업·리뷰·배포 경로가 전부 여기 걸려 있다. 최우선.
+2. **프로덕션 런타임 미배포** — ToS/robots 게이트는 2026-10-12 해제됐다(owner verdict). 남은 것은 호스트명·포트 결정과 [`docs/deploy/gpu01-node-proxy.md`](deploy/gpu01-node-proxy.md) §1–7 실행. CF workerd는 벤더 핑거프린트 403이라 Node 프록시가 유일 경로다.
+3. **§B47 나머지 커버리지** — 교차 매장 import는 E2E 1건으로 고정됐다. 공유 취소·최근 본·수량 상한은 아직 단위 테스트만 있다.
+4. **`AvailabilitySurface.tsx` 783줄** — 3개 파이프라인과 3개 렌더 분기가 중복된다. 다음 기능 전에 분해한다.
+5. **PWA precache 결정 미종결** — 진단 패널·zxing 청크 포함 여부(§B31-7). 배포 시점에 확정한다.
+
+### 최근 완료 (§B47, 상세는 원장)
+
+최근 본 상품(`1f2a582`) · 장바구니(`b6aa62e`) · 공유/내보내기/가져오기(`cf8868d`) — Bible Interface에 근거가 없는 스펙 갭을 owner가 **명시 예외**로 승인하고 구현했다(§B47-1). QR은 생성기 의존성 필요로 제외.
+
+---
+
+## 이력 (2026-07 ~ 08, 현재 상태가 아님)
+
+> 아래 기록은 당시의 게이트 수치와 브랜치 상태를 그대로 보존한 이력이다. 현재 수치와 혼동하지 말 것.
 
 ### ✅ 완료 (2026-07-27) — 온스크린 진단 패널 `feat/dev-diagnostics-panel` (로컬 전용, `main` 미병합)
 **7태스크 전부 구현 완료, 전부 로컬 커밋(푸시·PR·배포 없음).** 브랜치 `feat/dev-diagnostics-panel`(`main` `9570096`에서 분기):
