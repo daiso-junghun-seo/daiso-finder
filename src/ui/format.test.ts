@@ -4,7 +4,6 @@ import {
   formatPrice,
   formatRelativeTimeEn,
   formatRelativeTimeKo,
-  kmToMeters,
 } from './format';
 
 test('formatPrice adds the Korean won suffix with thousands separators', () => {
@@ -76,12 +75,6 @@ test('formatLchDay returns empty string for empty input (no NaN leak)', () => {
 
 test('formatLchDay returns empty string for a malformed date (no NaN leak)', () => {
   expect(formatLchDay('2026-07')).toBe('');
-});
-
-test('kmToMeters rounds kilometers to whole meters', () => {
-  expect(kmToMeters(9.9)).toBe(9900);
-  expect(kmToMeters(0.12)).toBe(120);
-  expect(kmToMeters(0.1204)).toBe(120);
 });
 
 test('formatRelativeTimeEn mirrors the ko rules in English (day bands + truncated hours)', () => {

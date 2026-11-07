@@ -27,20 +27,9 @@ export function formatLocation(location: StoreLocation, locale: Locale = 'ko'): 
 }
 
 // Upstream lchDay is 'YYYY-MM-DD'; the Bible copy ("{lchDay} 전후에 들어올 예정") wants "M월 D일"
-// (daiso formatLchDay). App-owned presentation decision (open-questions §B).
-export function formatLchDay(iso: string): string {
-  const parts = iso.split('-');
-  const month = Number(parts[1]);
-  const day = Number(parts[2]);
-  if (parts.length !== 3 || Number.isNaN(month) || Number.isNaN(day)) return '';
-  return `${month}월 ${day}일`;
-}
-
-// km→m for the D082 distance label (selStr km is a float). App-owned; surfaced only in the GPS-nearby
-// pass (out of scope here) — util + test only.
-export function kmToMeters(km: number): number {
-  return Math.round(km * 1000);
-}
+// (daiso formatLchDay). The conversion lives in domain/ so adapters never import ui/ — re-exported
+// here because this is where presentation callers (and the original tests) expect it.
+export { formatLchDay } from '../domain/lch-day';
 
 // Korean relative-time for the freshness caption (Interface §4 example: "어제 오후 6시").
 // App-level formatting decision — Bible gives only the example string, not the algorithm (open-questions.md B12).

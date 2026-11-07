@@ -3,8 +3,8 @@
 // franchise refinement ("franchise AND no location") and the §4.1 invariant guard. Unmatched → UnmappableAnswerError
 // (safe fallback; NEVER a fabricated Success — Engineering §7 read-only, no optimistic availability).
 import { UnmappableAnswerError } from '../../domain/errors';
+import { formatLchDay } from '../../domain/lch-day';
 import type { AvailabilityAnswer } from '../../domain/types';
-import { formatLchDay } from '../../ui/format';
 import type { RawStoreObservation } from './rawObservation';
 
 export function mapStoreObservation(o: RawStoreObservation): AvailabilityAnswer {

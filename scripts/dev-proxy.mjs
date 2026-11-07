@@ -28,6 +28,8 @@ import fs from 'node:fs';
 //   UPSTREAM_BASE     fapi.daisomall.co.kr override
 //   SEARCH_BASE       www.daisomall.co.kr override
 //   DIAG_TIMING       '1' adds Server-Timing (upstream leg durations)   default off
+//   MAX_BODY_BYTES    request body cap for /api/*                       default 16384
+//   RATE_LIMIT_PER_MIN requests per client per minute on /api/*          default 120 (0 = off)
 // process.env always wins; .dev.vars (gitignored) is a local-only fallback so `npm run dev:live` needs no
 // exported env vars. Never logged: JWT, x-dm-uid, Authorization/Bearer, request/response bodies.
 //
@@ -45,6 +47,38 @@ const HOST = process.env.HOST || '127.0.0.1';
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8790;
 const ALLOW_ORIGIN = process.env.ALLOW_ORIGIN || null;
 const SERVE_STATIC = process.env.SERVE_STATIC !== '0';
+// An availability body is a ~100-byte JSON object; 16 KiB is already generous. The cap exists so a
+// single request cannot make the proxy buffer arbitrary memory.
+const MAX_BODY_BYTES = process.env.MAX_BODY_BYTES ? Number(process.env.MAX_BODY_BYTES) : 16 * 1024;
+// Loopback-bound in production (the tunnel connects to 127.0.0.1), so keying on the socket address
+// would put every visitor in one bucket. Prefer Cloudflare's client header when it is present; a
+// direct caller can spoof it, but direct callers are already inside the host.
+const RATE_LIMIT_PER_MIN = process.env.RATE_LIMIT_PER_MIN
+  ? Number(process.env.RATE_LIMIT_PER_MIN)
+  : 120;
+const rateBuckets = new Map();
+
+function clientKey(req) {
+  const cf = req.headers['cf-connecting-ip'];
+  return typeof cf === 'string' && cf ? cf : (req.socket.remoteAddress ?? 'unknown');
+}
+
+// Fixed-window counter. Small and deliberately boring: this is a blast-radius guard, not billing.
+function allowRequest(req) {
+  if (!(RATE_LIMIT_PER_MIN > 0)) return true;
+  const now = Date.now();
+  const key = clientKey(req);
+  const bucket = rateBuckets.get(key);
+  if (!bucket || now >= bucket.resetAt) {
+    if (rateBuckets.size > 10_000) {
+      for (const [k, b] of rateBuckets) if (now >= b.resetAt) rateBuckets.delete(k);
+    }
+    rateBuckets.set(key, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  bucket.count += 1;
+  return bucket.count <= RATE_LIMIT_PER_MIN;
+}
 
 function loadDevVars() {
   const vars = {};
@@ -109,10 +143,22 @@ const MIME = {
   '.map': 'application/json',
 };
 
-function serveStatic(url, res) {
-  let filePath = path.join(DIST, url.pathname === '/' ? 'index.html' : url.pathname.slice(1));
-  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory())
+function serveStatic(req, url, res) {
+  const requested = url.pathname === '/' ? '/index.html' : url.pathname;
+  let filePath = path.join(DIST, requested.slice(1));
+  const missing = !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory();
+  if (missing) {
+    // SPA fallback only for navigations. A missing hashed asset must 404 — returning index.html
+    // with 200 makes a stale SW/chunk look like a valid response and hides the real failure.
+    const looksLikeAsset = path.extname(requested) !== '';
+    const wantsHtml = String(req.headers.accept ?? '').includes('text/html');
+    if (looksLikeAsset || !wantsHtml) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('not found');
+      return;
+    }
     filePath = path.join(DIST, 'index.html');
+  }
   fs.readFile(filePath, (err, data) => {
     if (err) {
       res.writeHead(404, { 'content-type': 'text/plain' });
@@ -162,7 +208,17 @@ async function handleApi(req, res, url, handlers, env) {
     return;
   }
   const chunks = [];
-  for await (const c of req) chunks.push(c);
+  let size = 0;
+  for await (const c of req) {
+    size += c.length;
+    if (size > MAX_BODY_BYTES) {
+      res.writeHead(413, { 'content-type': 'application/json', connection: 'close' });
+      res.end(JSON.stringify({ error: 'payload_too_large' }));
+      req.destroy();
+      return;
+    }
+    chunks.push(c);
+  }
   const request = new Request(`http://${HOST}${url.pathname}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -222,16 +278,28 @@ async function main() {
     const start = process.hrtime.bigint();
     const url = new URL(req.url ?? '/', `http://${HOST}:${PORT}`);
     res.on('finish', () => logRequest(req.method ?? '?', url.pathname, res.statusCode, start));
+    // Baseline headers for every response. No CSP here: the built index.html and the PWA runtime
+    // inject inline bootstrap code, so a wrong policy would break the app rather than protect it.
+    res.setHeader('x-content-type-options', 'nosniff');
+    res.setHeader('x-frame-options', 'DENY');
+    res.setHeader('referrer-policy', 'no-referrer');
 
     const run = async () => {
       if (req.method === 'GET' && url.pathname === '/health') return handleHealth(res);
-      if (url.pathname.startsWith('/api/')) return handleApi(req, res, url, handlers, env);
+      if (url.pathname.startsWith('/api/')) {
+        if (!allowRequest(req)) {
+          res.writeHead(429, { 'content-type': 'application/json', 'retry-after': '60' });
+          res.end(JSON.stringify({ error: 'rate_limited' }));
+          return;
+        }
+        return handleApi(req, res, url, handlers, env);
+      }
       if (!SERVE_STATIC) {
         res.writeHead(404, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ error: 'not_found' }));
         return;
       }
-      return serveStatic(url, res);
+      return serveStatic(req, url, res);
     };
 
     run().catch((e) => {
