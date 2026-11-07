@@ -7,6 +7,7 @@ import type { ProductCandidate, StoreEvent } from '../domain/types';
 import {
   AvailabilitySurface,
   type QueryOutcomeRunner,
+  SLOW_HINT_MS,
   isCurrentRun,
   planStoreSwitch,
   pricedAnswerOf,
@@ -311,6 +312,34 @@ describe('staleness guard (F2)', () => {
       false,
     );
     expect(isCurrentRun({ ui: loading, store: null }, started)).toBe(false);
+  });
+
+  test('a run slower than SLOW_HINT_MS arms the delay line; a fast one never does', async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveRun: (event: StoreEvent) => void = () => {};
+      const heldRunner = () =>
+        new Promise<StoreEvent>((resolve) => {
+          resolveRun = resolve;
+        });
+      const dispatch = useAvailabilityStore.getState().dispatch;
+      const pending = runQuery(storeA, '밀폐용기', dispatch, {
+        search: noCandidates,
+        runner: heldRunner,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(useAvailabilityStore.getState().ui).toMatchObject({ state: 'loading', slow: false });
+      await vi.advanceTimersByTimeAsync(SLOW_HINT_MS - 1);
+      expect(useAvailabilityStore.getState().ui).toMatchObject({ slow: false });
+      await vi.advanceTimersByTimeAsync(1);
+      expect(useAvailabilityStore.getState().ui).toMatchObject({ state: 'loading', slow: true });
+      resolveRun({ type: 'FAILURE', cache: { kind: 'noCache' } });
+      await pending;
+      // The pipeline's finally cleared the timer — no SLOW can land after the run settled.
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('a stale outcome is dropped after selectStore (old store answer never lands)', async () => {

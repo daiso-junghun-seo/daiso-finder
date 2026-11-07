@@ -35,7 +35,8 @@ export function CartSheet({
   onRemove: (id: string) => void;
   onRecheck: (item: CartItem) => void;
   // Parses pasted JSON into this store's list; returns what happened for the status line.
-  onImportJson: (text: string) => { ok: boolean; count: number };
+  // crossStore = the memo came from another store, so its floor/zone snapshots were dropped.
+  onImportJson: (text: string) => { ok: boolean; count: number; crossStore: boolean };
 }) {
   const S = strings(locale);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -64,13 +65,13 @@ export function CartSheet({
   const total = cart ? cartTotal(cart) : 0;
 
   // Transfer paths (§B47 slice 3): OS sheet first, clipboard second, hand-select last.
-  // 'dismissed' (user waved the OS sheet off) reports nothing — retrying is one tap away.
+  // A cancel is the user's decision — no clipboard side effect. Only an actual failure
+  // (or a missing API) falls back to copy, so dismissal is never mistaken for "shared".
   const share = async () => {
     if (!cart) return;
     const text = buildShareText(cart, locale);
     const outcome = await nativeShare(text);
-    if (outcome === 'shared') return;
-    if (outcome === 'dismissed') return;
+    if (outcome === 'shared' || outcome === 'cancelled') return;
     if (await copyText(text)) announce(S.CART_COPIED);
     else setFallback({ text, label: S.CART_SHARE_TEXT_LABEL });
   };
@@ -86,7 +87,11 @@ export function CartSheet({
     const result = onImportJson(importText);
     if (result.ok) {
       setImportText('');
-      announce(S.cartImportDoneLabel(result.count));
+      announce(
+        result.crossStore
+          ? S.cartImportCrossStoreLabel(result.count)
+          : S.cartImportDoneLabel(result.count),
+      );
     } else {
       announce(S.CART_IMPORT_FAILED);
     }
@@ -159,28 +164,34 @@ export function CartSheet({
               ))}
             </ul>
             <p className="text-heading">{S.cartTotalLabel(total)}</p>
-            <div className="cart-sheet__share">
+          </>
+        )}
+        {/* Import is NOT gated on a non-empty list: the common transfer case is exactly a fresh
+            store whose list is empty (the memo comes from the other store). Share/Export need rows. */}
+        <div className="cart-sheet__share">
+          {cart && cart.items.length > 0 && (
+            <>
               <button type="button" className="text-label" onClick={share}>
                 {S.CART_SHARE_BUTTON}
               </button>
               <button type="button" className="text-label" onClick={exportJson}>
                 {S.CART_EXPORT_BUTTON}
               </button>
-              <details className="cart-sheet__import">
-                <summary>{S.CART_IMPORT_BUTTON}</summary>
-                <textarea
-                  aria-label={S.CART_IMPORT_LABEL}
-                  value={importText}
-                  onChange={(e) => setImportText(e.target.value)}
-                  rows={3}
-                />
-                <button type="button" className="text-label" onClick={submitImport}>
-                  {S.CART_IMPORT_CONFIRM}
-                </button>
-              </details>
-            </div>
-          </>
-        )}
+            </>
+          )}
+          <details className="cart-sheet__import">
+            <summary>{S.CART_IMPORT_BUTTON}</summary>
+            <textarea
+              aria-label={S.CART_IMPORT_LABEL}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              rows={3}
+            />
+            <button type="button" className="text-label" onClick={submitImport}>
+              {S.CART_IMPORT_CONFIRM}
+            </button>
+          </details>
+        </div>
         {note && (
           <p role="status" className="text-caption" key={note.id}>
             {note.text}

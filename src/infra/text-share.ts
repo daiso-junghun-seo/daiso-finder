@@ -16,15 +16,19 @@ export function canNativeShare(): boolean {
   );
 }
 
-// 'shared' = the OS took it (it confirms). 'dismissed' = the user waved it off or it errored —
-// the caller falls back to copy, so dismissal is never a dead end. 'unavailable' = no API.
-export async function nativeShare(text: string): Promise<'shared' | 'dismissed' | 'unavailable'> {
+// 'shared' = the OS took it. 'cancelled' = the user closed the sheet on purpose (no fallback —
+// copying after a cancel would be an unrequested side effect). 'failed' = the sheet errored, so
+// the caller falls back to copy. 'unavailable' = no Web Share API at all.
+export async function nativeShare(
+  text: string,
+): Promise<'shared' | 'cancelled' | 'failed' | 'unavailable'> {
   const nav = navigator as Navigator & { share?: (data: { text: string }) => Promise<void> };
   if (typeof nav.share !== 'function') return 'unavailable';
   try {
     await nav.share({ text });
     return 'shared';
-  } catch {
-    return 'dismissed';
+  } catch (err) {
+    const name = (err as { name?: unknown } | null)?.name;
+    return name === 'AbortError' ? 'cancelled' : 'failed';
   }
 }

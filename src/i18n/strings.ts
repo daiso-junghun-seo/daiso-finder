@@ -69,6 +69,7 @@ export interface CopyTable {
   readonly CART_IMPORT_FAILED: string;
   readonly CART_UNCHECKED_MARK: string;
   cartImportDoneLabel(count: number): string;
+  cartImportCrossStoreLabel(count: number): string;
   readonly RESULTS_NOTICE: string;
   readonly SCAN_AIM_GUIDE: string;
   readonly SCAN_AIM_GUIDE_TOKEN: string;

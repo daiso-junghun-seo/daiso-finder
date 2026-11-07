@@ -26,7 +26,7 @@ import { type RecentView, viewFromResult } from '../infra/recent-views';
 import { loadStoreContext } from '../infra/store-context';
 import { AnswerCard } from './AnswerCard';
 import { LiveRegion } from './a11y/LiveRegion';
-import { parseCartImport } from './cart-share';
+import { isCrossStoreImport, parseCartImport } from './cart-share';
 import { CandidateList } from './components/CandidateList';
 import { CartSheet } from './components/CartSheet';
 import { GlassSurface } from './components/GlassSurface';
@@ -137,6 +137,20 @@ export function isCurrentRun(
 // authoritative (F6). It is process-wide and only ever increases; no test depends on its absolute value.
 let latestRunToken = 0;
 
+// Interface §3: the delay line appears only once the wait stops feeling instant. Nothing dispatched
+// SLOW before this, so ui.slow (and LOADING_DELAY_LINE) was unreachable in production even though the
+// reducer, the copy and their tests all existed. Each pipeline arms it after entering loading and
+// clears it in a finally, so a fast answer never leaves a pending timer behind.
+export const SLOW_HINT_MS = 1200;
+
+export function armSlowHint(
+  dispatch: (event: StoreEvent) => void,
+  ms: number = SLOW_HINT_MS,
+): () => void {
+  const timer = setTimeout(() => dispatch({ type: 'SLOW' }), ms);
+  return () => clearTimeout(timer);
+}
+
 // Testability seam for runQuery's search step (search-first flow): production searches the live/mock
 // ProductSearchPort; tests inject a controllable search to exercise the candidate-count branches below.
 export type CandidateSearch = (keyword: string) => Promise<ProductCandidate[]>;
@@ -208,42 +222,47 @@ export async function runQuery(
   const onView = deps.onView ?? defaultOnView;
   const token = ++latestRunToken;
   dispatch({ type: 'SUBMIT', query: keyword }); // → loading(query=keyword)
-  let candidates: ProductCandidate[];
+  const stopSlowHint = armSlowHint(dispatch);
   try {
-    candidates = await search(keyword);
-  } catch {
-    // A search failure degrades to "no literal candidates" — falls through to the keyword availability
-    // path below rather than hanging or erroring the whole run (F1: never a silent hang).
-    candidates = [];
-  }
-  if (token !== latestRunToken) return; // superseded while searching
-  if (candidates.length >= 2) {
+    let candidates: ProductCandidate[];
+    try {
+      candidates = await search(keyword);
+    } catch {
+      // A search failure degrades to "no literal candidates" — falls through to the keyword availability
+      // path below rather than hanging or erroring the whole run (F1: never a silent hang).
+      candidates = [];
+    }
+    if (token !== latestRunToken) return; // superseded while searching
+    if (candidates.length >= 2) {
+      if (!isCurrentRun(useAvailabilityStore.getState(), { keyword, strCd: store.strCd })) return;
+      dispatch({ type: 'CANDIDATES', query: keyword, candidates });
+      return;
+    }
+    // 0 or 1 candidate → availability. 1: use the chosen product's pdNo+name (unambiguous literal match).
+    // 0: keyword only (→ noMatch, or an answer, or FAILURE+cache — unchanged from the pre-candidates path).
+    const [onlyCandidate] = candidates;
+    const pdNo = onlyCandidate?.pdNo;
+    const runKeyword = onlyCandidate?.name ?? keyword;
+    let event: StoreEvent;
+    try {
+      event = await runner(store, runKeyword, pdNo);
+    } catch {
+      // Never a silent hang (Interface §3): a runner that THROWS (e.g. IndexedDB unavailable inside
+      // the runner's own failure path) still resolves the surface to error/noCache.
+      event = { type: 'FAILURE', cache: { kind: 'noCache' } };
+    }
+    // A newer run superseded this one (same keyword resubmitted, or a different one) → drop this outcome.
+    if (token !== latestRunToken) return;
+    // isCurrentRun compares against the LOADING state's query, which is the ORIGINAL submitted keyword —
+    // NOT runKeyword. In the 1-candidate path runKeyword is the candidate's name, which never equals the
+    // loading query; comparing against it would always mismatch and silently drop every 1-candidate outcome.
     if (!isCurrentRun(useAvailabilityStore.getState(), { keyword, strCd: store.strCd })) return;
-    dispatch({ type: 'CANDIDATES', query: keyword, candidates });
-    return;
+    // Only resolved answers become recent views — candidates/NO_MATCH/FAILURE never do.
+    if (event.type === 'RESULT') onView(viewFromResult(runKeyword, pdNo, event.answer, Date.now()));
+    dispatch(event);
+  } finally {
+    stopSlowHint();
   }
-  // 0 or 1 candidate → availability. 1: use the chosen product's pdNo+name (unambiguous literal match).
-  // 0: keyword only (→ noMatch, or an answer, or FAILURE+cache — unchanged from the pre-candidates path).
-  const [onlyCandidate] = candidates;
-  const pdNo = onlyCandidate?.pdNo;
-  const runKeyword = onlyCandidate?.name ?? keyword;
-  let event: StoreEvent;
-  try {
-    event = await runner(store, runKeyword, pdNo);
-  } catch {
-    // Never a silent hang (Interface §3): a runner that THROWS (e.g. IndexedDB unavailable inside
-    // the runner's own failure path) still resolves the surface to error/noCache.
-    event = { type: 'FAILURE', cache: { kind: 'noCache' } };
-  }
-  // A newer run superseded this one (same keyword resubmitted, or a different one) → drop this outcome.
-  if (token !== latestRunToken) return;
-  // isCurrentRun compares against the LOADING state's query, which is the ORIGINAL submitted keyword —
-  // NOT runKeyword. In the 1-candidate path runKeyword is the candidate's name, which never equals the
-  // loading query; comparing against it would always mismatch and silently drop every 1-candidate outcome.
-  if (!isCurrentRun(useAvailabilityStore.getState(), { keyword, strCd: store.strCd })) return;
-  // Only resolved answers become recent views — candidates/NO_MATCH/FAILURE never do.
-  if (event.type === 'RESULT') onView(viewFromResult(runKeyword, pdNo, event.answer, Date.now()));
-  dispatch(event);
 }
 
 // Candidate-tap pipeline: the shopper picked one literal candidate out of the list runQuery surfaced.
@@ -257,20 +276,28 @@ export async function runByPdNo(
 ) {
   const token = ++latestRunToken;
   dispatch({ type: 'SELECT_CANDIDATE', query: candidate.name, pdNo: candidate.pdNo }); // → loading(query=candidate.name)
-  let event: StoreEvent;
+  const stopSlowHint = armSlowHint(dispatch);
   try {
-    event = await runner(store, candidate.name, candidate.pdNo);
-  } catch {
-    event = { type: 'FAILURE', cache: { kind: 'noCache' } };
+    let event: StoreEvent;
+    try {
+      event = await runner(store, candidate.name, candidate.pdNo);
+    } catch {
+      event = { type: 'FAILURE', cache: { kind: 'noCache' } };
+    }
+    if (token !== latestRunToken) return;
+    if (
+      !isCurrentRun(useAvailabilityStore.getState(), {
+        keyword: candidate.name,
+        strCd: store.strCd,
+      })
+    )
+      return;
+    if (event.type === 'RESULT')
+      onView(viewFromResult(candidate.name, candidate.pdNo, event.answer, Date.now()));
+    dispatch(event);
+  } finally {
+    stopSlowHint();
   }
-  if (token !== latestRunToken) return;
-  if (
-    !isCurrentRun(useAvailabilityStore.getState(), { keyword: candidate.name, strCd: store.strCd })
-  )
-    return;
-  if (event.type === 'RESULT')
-    onView(viewFromResult(candidate.name, candidate.pdNo, event.answer, Date.now()));
-  dispatch(event);
 }
 
 // Scan pipeline: a decoded barcode is already an exact identifier, so it skips the literal candidate
@@ -287,19 +314,24 @@ export async function runByScan(
 ) {
   const token = ++latestRunToken;
   dispatch({ type: 'SUBMIT', query: value, origin: 'scan' }); // → loading(query=value, origin=scan)
-  let event: StoreEvent;
+  const stopSlowHint = armSlowHint(dispatch);
   try {
-    event = await runner(store, value, value);
-  } catch {
-    event = { type: 'FAILURE', cache: { kind: 'noCache' } };
+    let event: StoreEvent;
+    try {
+      event = await runner(store, value, value);
+    } catch {
+      event = { type: 'FAILURE', cache: { kind: 'noCache' } };
+    }
+    if (token !== latestRunToken) return;
+    if (!isCurrentRun(useAvailabilityStore.getState(), { keyword: value, strCd: store.strCd }))
+      return;
+    // The recorded view carries the resolved product name, not the digit string (B30-6's recall
+    // rationale holds for searches; a named product row has recall value).
+    if (event.type === 'RESULT') onView(viewFromResult(value, value, event.answer, Date.now()));
+    dispatch(event);
+  } finally {
+    stopSlowHint();
   }
-  if (token !== latestRunToken) return;
-  if (!isCurrentRun(useAvailabilityStore.getState(), { keyword: value, strCd: store.strCd }))
-    return;
-  // The recorded view carries the resolved product name, not the digit string (B30-6's recall
-  // rationale holds for searches; a named product row has recall value).
-  if (event.type === 'RESULT') onView(viewFromResult(value, value, event.answer, Date.now()));
-  dispatch(event);
 }
 
 export function AvailabilitySurface() {
@@ -449,12 +481,17 @@ export function AvailabilitySurface() {
 
   // Pasted-JSON import lands in THIS store's list with the same dedup/caps as adding by
   // hand (mergeImportedCart). Strict parse: garbage reports failure, never a half-loaded list.
-  const handleImportJson = (text: string): { ok: boolean; count: number } => {
-    if (!store) return { ok: false, count: 0 };
+  // crossStore tells the sheet that the imported rows lost their shelf snapshots.
+  const handleImportJson = (text: string): { ok: boolean; count: number; crossStore: boolean } => {
+    if (!store) return { ok: false, count: 0, crossStore: false };
     const parsed = parseCartImport(text);
-    if (!parsed) return { ok: false, count: 0 };
+    if (!parsed) return { ok: false, count: 0, crossStore: false };
     importCart(store.strCd, store.strNm, parsed);
-    return { ok: true, count: parsed.items.length };
+    return {
+      ok: true,
+      count: parsed.items.length,
+      crossStore: isCrossStoreImport(parsed, store.strCd),
+    };
   };
   // Active store's list + the honest count caption for the other stores' lists.
   const activeCart = store ? cartFor(carts, store.strCd) : null;

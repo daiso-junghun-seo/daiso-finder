@@ -252,6 +252,9 @@ export const CART_UNCHECKED_MARK = '(합계 제외)';
 export function cartImportDoneLabel(count: number): string {
   return `${count}개 상품을 불러왔어요`;
 }
+export function cartImportCrossStoreLabel(count: number): string {
+  return `${count}개 상품을 불러왔어요. 다른 매장에서 담은 위치는 표시하지 않아요.`;
+}
 
 // Interface §copy-table (AI low / literal results notice). This fallback-first feature has no AI
 // confidence model, so the literal-results framing (not the "이걸 찾으시나요?" AI-suggestion tier) applies.

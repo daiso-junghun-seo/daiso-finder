@@ -1,6 +1,12 @@
 // src/ui/cart-share.test.ts — owner-exception §B47 slice 3.
 import type { StoreCart } from '../infra/cart';
-import { buildShareText, exportCartJson, mergeImportedCart, parseCartImport } from './cart-share';
+import {
+  buildShareText,
+  exportCartJson,
+  isCrossStoreImport,
+  mergeImportedCart,
+  parseCartImport,
+} from './cart-share';
 
 const cart: StoreCart = {
   storeCd: '001',
@@ -55,6 +61,35 @@ test('JSON export round-trips; garbage, half-shapes and empty lists never become
   expect(parseCartImport(JSON.stringify({ storeCd: '001' }))).toBeNull();
   expect(parseCartImport(JSON.stringify({ ...cart, items: [{ id: 1 }] }))).toBeNull();
   expect(parseCartImport(JSON.stringify({ ...cart, items: [] }))).toBeNull();
+});
+
+test('oversized imports are rejected wholesale, never truncated into a short list', () => {
+  const many = {
+    ...cart,
+    items: Array.from({ length: 31 }, (_, i) => ({ ...cart.items[0], id: `${i}` })),
+  };
+  expect(parseCartImport(JSON.stringify(many))).toBeNull();
+  expect(parseCartImport(JSON.stringify({ ...cart, storeName: 'x'.repeat(70_000) }))).toBeNull();
+});
+
+test('cross-store import drops the other store’s shelf snapshot but keeps the row', () => {
+  const merged = mergeImportedCart({}, '002', '강남역점', cart);
+  const rows = merged['002']?.items ?? [];
+  expect(rows).toHaveLength(2);
+  expect(rows.find((i) => i.id === '1')?.location).toBeUndefined();
+  expect(rows.find((i) => i.id === '1')?.price).toBe(2000);
+  expect(rows.find((i) => i.id === '1')?.qty).toBe(2);
+  expect(merged['002']?.storeName).toBe('강남역점');
+});
+
+test('same-store import keeps the shelf snapshot', () => {
+  const merged = mergeImportedCart({}, '001', '명동역점', cart);
+  expect(merged['001']?.items.find((i) => i.id === '1')?.location).toEqual({
+    floor: '11',
+    zone: '56',
+  });
+  expect(isCrossStoreImport(cart, '001')).toBe(false);
+  expect(isCrossStoreImport(cart, '002')).toBe(true);
 });
 
 test('imported rows merge with the same dedup/caps as adding by hand', () => {

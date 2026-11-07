@@ -166,6 +166,9 @@ export const CART_UNCHECKED_MARK = '(excluded)';
 export function cartImportDoneLabel(count: number): string {
   return `Loaded ${count} items`;
 }
+export function cartImportCrossStoreLabel(count: number): string {
+  return `Loaded ${count} items. Shelf locations from the other store were cleared.`;
+}
 
 export const RESULTS_NOTICE = 'These are search results. Scanning is more accurate.';
 

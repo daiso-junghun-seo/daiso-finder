@@ -15,16 +15,26 @@ test('copyText resolves true/false, never throws', async () => {
   expect(await copyText('x')).toBe(false);
 });
 
-test('nativeShare reports shared/dismissed/unavailable without throwing', async () => {
+test('nativeShare separates cancel from failure, and never throws', async () => {
   const nav = navigator as Navigator & { share?: unknown };
   const original = nav.share;
   nav.share = async () => {};
   expect(await nativeShare('x')).toBe('shared');
   expect(canNativeShare()).toBe(true);
+
+  // The user closed the OS sheet: a decision, not an error — the caller must not copy instead.
+  const abort = Object.assign(new Error('cancelled'), { name: 'AbortError' });
   nav.share = async () => {
-    throw new Error('cancelled');
+    throw abort;
   };
-  expect(await nativeShare('x')).toBe('dismissed');
+  expect(await nativeShare('x')).toBe('cancelled');
+
+  // A real failure still gets a copy fallback.
+  nav.share = async () => {
+    throw new Error('boom');
+  };
+  expect(await nativeShare('x')).toBe('failed');
+
   Reflect.deleteProperty(navigator, 'share');
   expect(await nativeShare('x')).toBe('unavailable');
   expect(canNativeShare()).toBe(false);

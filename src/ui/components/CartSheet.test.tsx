@@ -29,7 +29,7 @@ const handlers = () => ({
   onToggle: vi.fn(),
   onRemove: vi.fn(),
   onRecheck: vi.fn(),
-  onImportJson: vi.fn(() => ({ ok: true, count: 2 })),
+  onImportJson: vi.fn(() => ({ ok: true, count: 2, crossStore: false })),
 });
 
 test('rows show the snapshot with the honesty caption, the total, and wired actions', async () => {
@@ -62,6 +62,14 @@ test('an empty cart renders the note — never rows or a total', () => {
     screen.getByText('아직 담은 상품이 없어요. 답 카드에서 담기를 눌러 보세요.'),
   ).toBeInTheDocument();
   expect(screen.queryByText(/합계/)).not.toBeInTheDocument();
+});
+
+test('an empty list still offers import (the fresh-store transfer case), but not share/export', () => {
+  const h = handlers();
+  render(<CartSheet cart={null} otherStoreCount={0} locale="ko" {...h} />);
+  expect(screen.getByText('가져오기')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '공유하기' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '내보내기' })).not.toBeInTheDocument();
 });
 
 test('other stores’ lists render as an honest count, never their rows', () => {
@@ -125,10 +133,23 @@ test('가져오기 loads pasted JSON through onImportJson and reports the count;
   expect(h.onImportJson).toHaveBeenCalledWith('{"storeCd":"001"}');
   expect(await screen.findByText('2개 상품을 불러왔어요')).toBeInTheDocument();
 
-  h.onImportJson.mockReturnValue({ ok: false, count: 0 });
+  h.onImportJson.mockReturnValue({ ok: false, count: 0, crossStore: false });
   fireEvent.change(box, { target: { value: 'garbage' } });
   await userEvent.click(screen.getByRole('button', { name: '불러오기' }));
   expect(
     await screen.findByText('가져오지 못했어요. 복사한 내용이 맞는지 확인해 주세요.'),
+  ).toBeInTheDocument();
+});
+
+test('a cross-store import says the other store’s shelf locations were cleared', async () => {
+  const h = handlers();
+  h.onImportJson.mockReturnValue({ ok: true, count: 2, crossStore: true });
+  render(<CartSheet cart={cart} otherStoreCount={0} locale="ko" {...h} />);
+  fireEvent.change(screen.getByLabelText('가져올 내용 붙여넣기'), {
+    target: { value: '{"storeCd":"002"}' },
+  });
+  await userEvent.click(screen.getByRole('button', { name: '불러오기' }));
+  expect(
+    await screen.findByText('2개 상품을 불러왔어요. 다른 매장에서 담은 위치는 표시하지 않아요.'),
   ).toBeInTheDocument();
 });

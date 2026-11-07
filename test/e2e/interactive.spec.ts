@@ -340,3 +340,53 @@ test.describe('diagnostics panel', () => {
     });
   }
 });
+
+// §B47 transfer guard, end-to-end: a memo captured in store 001 is pasted into store 002.
+// The row survives (name/price/qty) but 001's shelf snapshot must NOT appear under 002 — the
+// location is an observation of a physical shelf that does not exist in the other store.
+test('a pasted cart from another store imports without that store’s shelf location', async ({
+  page,
+}) => {
+  const memo = {
+    storeCd: '001',
+    storeName: '명동역점',
+    items: [
+      {
+        id: '19987',
+        name: '리빙 밀폐용기 1.2L',
+        query: '밀폐용기',
+        pdNo: '19987',
+        price: 2000,
+        location: { floor: '11', zone: '56' },
+        qty: 1,
+        checked: true,
+        addedAt: 1,
+        observedAt: 1,
+      },
+    ],
+  };
+  await page.addInitScript((cart) => {
+    localStorage.setItem('daiso.storeContext', JSON.stringify({ strCd: '002', strNm: '을지로점' }));
+    localStorage.setItem('daiso.carts.v1', JSON.stringify({ '001': cart }));
+  }, memo);
+
+  await page.goto('/');
+  // The empty active store still shows the cart entry point because another store has a list.
+  const cartLink = page.getByRole('button', { name: /^장바구니 0개/ });
+  await expect(cartLink).toBeVisible();
+  await cartLink.click();
+
+  // Import is reachable on an EMPTY list — that is the whole point of a cross-store transfer.
+  await page.getByText('가져오기', { exact: true }).click();
+  await page.getByLabel('가져올 내용 붙여넣기').fill(JSON.stringify(memo));
+  await page.getByRole('button', { name: '불러오기' }).click();
+
+  await expect(page.getByText(/다른 매장에서 담은 위치는 표시하지 않아요/)).toBeVisible();
+  await expect(page.getByText('리빙 밀폐용기 1.2L')).toBeVisible();
+  await expect(page.getByText(/11층 56번/)).toHaveCount(0);
+
+  const stored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('daiso.carts.v1') ?? '{}'),
+  );
+  expect(stored['002'].items[0].location).toBeUndefined();
+});
