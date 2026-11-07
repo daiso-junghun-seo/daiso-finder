@@ -139,7 +139,8 @@ function makeAuthedCall(cfg: UpstreamConfig, initial: DaisoAuth): AuthedCall {
   return async (url, body) => {
     let res = await fetch(url, { method: 'POST', headers: authHeaders(auth), body });
     if (res.status === 401 || res.status === 403) {
-      if (!reissue) reissue = requestAuth({ fapiBase: cfg.fapiBase, encKey: cfg.encKey });
+      if (!reissue)
+        reissue = requestAuth({ fapiBase: cfg.fapiBase, encKey: cfg.encKey, force: true });
       auth = await reissue;
       res = await fetch(url, { method: 'POST', headers: authHeaders(auth), body });
     }
@@ -208,10 +209,21 @@ async function handle(context: Ctx, timer: UpstreamTimer): Promise<Response> {
     return jsonResponse({ error: 'bad_request' }, 400);
   }
   const { strCd, keyword } = body;
-  if (!strCd || !keyword) return jsonResponse({ error: 'bad_request' }, 400);
+  // Shape and bound checks: a non-string would be stringified into the upstream URL, and these are
+  // the only two caller-controlled values that reach it (pdNo is validated against the search result).
+  if (typeof strCd !== 'string' || typeof keyword !== 'string') {
+    return jsonResponse({ error: 'bad_request' }, 400);
+  }
+  if (body.pdNo !== undefined && typeof body.pdNo !== 'string') {
+    return jsonResponse({ error: 'bad_request' }, 400);
+  }
+  const trimmedKeyword = keyword.trim();
+  if (!strCd || !trimmedKeyword || strCd.length > 32 || trimmedKeyword.length > 100) {
+    return jsonResponse({ error: 'bad_request' }, 400);
+  }
 
   // Wave 1 (parallel): product identity, franchise flag, auth handshake.
-  const productP = timer.leg('search', () => searchGoods(cfg.wwwBase, keyword, body.pdNo));
+  const productP = timer.leg('search', () => searchGoods(cfg.wwwBase, trimmedKeyword, body.pdNo));
   const directYnP = timer.leg('str', () => fetchDirectYn(cfg.fapiBase, strCd));
   const authP = timer.leg('auth', () =>
     requestAuth({ fapiBase: cfg.fapiBase, encKey: cfg.encKey }),
@@ -222,10 +234,16 @@ async function handle(context: Ctx, timer: UpstreamTimer): Promise<Response> {
   const product = await productP.catch(() => undefined);
   if (product === undefined) return badGateway(); // SearchGoods unreachable/non-ok/non-JSON
   if (product === null) return jsonResponse({ noMatch: true }); // 0 results → NO_MATCH → Empty
+  // pdNo identity (B29): a caller-supplied pdNo must come back as THAT product. pickProductDoc
+  // falls back to a store-carryable doc when the pdNo is absent, which would pair this pdNo with
+  // another product's name/image — a quiet wrong answer. Fail loudly instead.
+  if (body.pdNo !== undefined && product.pdNo !== body.pdNo) {
+    return jsonResponse({ error: 'pdNo_not_found' }, 409);
+  }
 
   try {
     const [directYn, auth] = await Promise.all([directYnP, authP]);
-    const pdNo = body.pdNo ?? product.pdNo;
+    const pdNo = product.pdNo;
     const call = makeAuthedCall(cfg, auth);
 
     // NOTE: makeAuthedCall retries the same call once, after re-issuing the token, when the

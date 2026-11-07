@@ -8,6 +8,16 @@ export interface DaisoAuth {
   uid: string; // x-dm-uid
 }
 
+// The handshake is a full vendor round trip, so consecutive lookups reuse it for a short window.
+// 5 minutes is well under the observed vendor lifetime and is only a hint: makeAuthedCall still
+// forces a fresh token on 401/403, so an early expiry degrades to the old reissue path.
+const AUTH_TTL_MS = 5 * 60 * 1000;
+const cache = new Map<string, { auth: DaisoAuth; expiresAt: number }>();
+
+export function clearAuthCache(): void {
+  cache.clear();
+}
+
 function toBase64(bytes: Uint8Array): string {
   let bin = '';
   for (const b of bytes) bin += String.fromCharCode(b);
@@ -40,7 +50,14 @@ export async function requestAuth(deps: {
   encKey: string;
   fetchImpl?: typeof fetch;
   iv?: Uint8Array<ArrayBuffer>;
+  // A 401/403 retry must NOT re-read a cached bearer: the cache is exactly what just failed.
+  force?: boolean;
 }): Promise<DaisoAuth> {
+  const key = `${deps.fapiBase}\u0000${deps.encKey}`;
+  if (!deps.force) {
+    const hit = cache.get(key);
+    if (hit && hit.expiresAt > Date.now()) return hit.auth;
+  }
   const doFetch = deps.fetchImpl ?? fetch;
   const res = await doFetch(`${deps.fapiBase}${PATHS.auth}`, { method: 'GET' });
   if (!res.ok) throw new Error(`auth ${res.status}`);
@@ -48,5 +65,7 @@ export async function requestAuth(deps: {
   const uid = res.headers.get('x-dm-uid') ?? '';
   if (!jwt || !uid) throw new Error('auth: missing jwt/uid');
   const iv = deps.iv ?? crypto.getRandomValues(new Uint8Array(16));
-  return { bearer: await encryptJwt(jwt, deps.encKey, iv), uid };
+  const auth = { bearer: await encryptJwt(jwt, deps.encKey, iv), uid };
+  cache.set(key, { auth, expiresAt: Date.now() + AUTH_TTL_MS });
+  return auth;
 }

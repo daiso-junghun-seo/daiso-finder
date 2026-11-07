@@ -1,4 +1,8 @@
-import { encryptJwt, requestAuth } from './daisoAuth';
+import { clearAuthCache, encryptJwt, requestAuth } from './daisoAuth';
+
+beforeEach(() => {
+  clearAuthCache();
+});
 
 const KEY = 'PRE_AUTH_ENC_KEY'; // 16 ASCII bytes → AES-128
 const IV = new Uint8Array(16); // fixed IV for deterministic assertions
@@ -53,4 +57,39 @@ test('requestAuth throws when the auth endpoint fails or omits jwt/uid', async (
   await expect(
     requestAuth({ fapiBase: 'x', encKey: KEY, fetchImpl: noUid, iv: IV }),
   ).rejects.toThrow();
+});
+
+test('requestAuth reuses the handshake for its TTL, and force bypasses the cache', async () => {
+  let calls = 0;
+  const fetchImpl = (async () => {
+    calls++;
+    return new Response('the.jwt.token', {
+      status: 200,
+      headers: { 'x-dm-uid': 'uid-123' },
+    });
+  }) as typeof fetch;
+  const first = await requestAuth({
+    fapiBase: 'https://fapi.cache',
+    encKey: KEY,
+    fetchImpl,
+    iv: IV,
+  });
+  const second = await requestAuth({
+    fapiBase: 'https://fapi.cache',
+    encKey: KEY,
+    fetchImpl,
+    iv: IV,
+  });
+  expect(calls).toBe(1);
+  expect(second).toEqual(first);
+
+  // A 401/403 retry must get a NEW bearer, not the one that just failed.
+  await requestAuth({
+    fapiBase: 'https://fapi.cache',
+    encKey: KEY,
+    fetchImpl,
+    iv: IV,
+    force: true,
+  });
+  expect(calls).toBe(2);
 });

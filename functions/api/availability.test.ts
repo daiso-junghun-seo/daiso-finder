@@ -1,7 +1,11 @@
+import { clearAuthCache } from '../_lib/daisoAuth';
 import { onRequestPost } from './availability';
 
 const ENV = { PRE_AUTH_ENC_KEY: 'PRE_AUTH_ENC_KEY' };
 const originalFetch = globalThis.fetch;
+beforeEach(() => {
+  clearAuthCache();
+});
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
@@ -136,7 +140,7 @@ test('pdNo-identity: an explicit pdNo picks that doc for identity (not docs[0])'
   expect(body.data.imageUrl).toBe('https://cdn.daisomall.co.kr/file/PD/other.jpg');
 });
 
-test('pdNo-identity: an unmatched explicit pdNo falls back to the keyword base-pick identity', async () => {
+test('pdNo-identity: an unmatched explicit pdNo is a 409, never another product’s identity', async () => {
   route([
     ['/auth/request', authOk],
     ['SearchGoods', searchOk([PROD])],
@@ -158,13 +162,10 @@ test('pdNo-identity: an unmatched explicit pdNo falls back to the keyword base-p
   const res = await onRequestPost(
     req({ strCd: '10803', keyword: '밀폐용기', pdNo: 'no-such-pdno' }),
   );
-  const body = (await res.json()) as { data: { pdNo: string; productName: string; price: number } };
-  // An unmatched pdNo drops to the keyword base-pick (here the sole doc PROD, which is carryable);
-  // the requested (unmatched) pdNo still echoes through the pre-existing `body.pdNo ?? product.pdNo`
-  // line (unchanged) — this test is only about which doc supplies productName/price identity.
-  expect(body.data.pdNo).toBe('no-such-pdno');
-  expect(body.data.productName).toBe('리빙 밀폐용기 1.2L');
-  expect(body.data.price).toBe(2000);
+  // pickProductDoc still falls back to the keyword base-pick internally, but the handler must NOT
+  // pair the unmatched pdNo with that doc's name/image — that was a quiet wrong answer. 409 instead.
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({ error: 'pdNo_not_found' });
 });
 
 test('base-priority: no pdNo prefers a store-carryable base over a leading online-only doc', async () => {
@@ -566,4 +567,18 @@ test('emits no Server-Timing without DIAG_TIMING', async () => {
   route([['/auth/request', authOk], ['SearchGoods', searchOk([PROD])], ...locStck]);
   const res = await onRequestPost(req({ strCd: '10803', keyword: '밀폐용기' }));
   expect(res.headers.get('server-timing')).toBeNull();
+});
+
+test('non-string or oversized fields are rejected before any upstream call', async () => {
+  let called = false;
+  globalThis.fetch = (async () => {
+    called = true;
+    return new Response('', { status: 500 });
+  }) as typeof fetch;
+  expect((await onRequestPost(req({ strCd: 10803, keyword: '밀폐용기' }))).status).toBe(400);
+  expect((await onRequestPost(req({ strCd: '10803', keyword: 'x'.repeat(101) }))).status).toBe(400);
+  expect(
+    (await onRequestPost(req({ strCd: '10803', keyword: '밀폐용기', pdNo: 12345 }))).status,
+  ).toBe(400);
+  expect(called).toBe(false);
 });
