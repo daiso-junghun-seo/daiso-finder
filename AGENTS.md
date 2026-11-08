@@ -25,7 +25,7 @@ Canon에 답 있으면 따른다. 없거나 모순이면 **중단·질문**. 스
 
 0. PWA 골격 + 데이터 계층(어댑터 심 + mock)
 1. Flow 1 Availability Check (체인 완결 — 지금 가능)
-2. Flow 2 In-Store Navigation (D077 비준 후)
-3. Flow 3 Alternative Discovery (D076 비준 후)
+2. Flow 2 In-Store Navigation (D078로 D077 계약 비준 완료 — 2026-07-13)
+3. Flow 3 Alternative Discovery (D078로 D076 계약 비준 완료 — 2026-07-13)
 
-현재 상태·다음 작업: `docs/HANDOFF.md`.
+현재 상태·다음 작업: `docs/HANDOFF.md`. 단계 계획: `docs/ROADMAP.md`.
