@@ -2,14 +2,15 @@
 
 > 이 저장소에서 새 세션을 시작하면 **여기부터** 읽는다. 결정·실행 원장은 [`docs/notes/open-questions.md`](notes/open-questions.md). `.superpowers/`는 `.gitignore` 대상이라 새 클론에는 존재하지 않는다 — 정본으로 링크하지 않는다.
 
-## 현재 상태 (2026-11-07 실측, `main`)
+## 현재 상태 (2026-11-08 실측, `main`)
 
 **Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 로컬 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **원격 푸시·공개 배포는 아직 없다.**
 
-**게이트(2026-11-07 실측)**: vitest **733/733**(59 files), tsc clean, biome clean(140 files), Playwright **29/29**(dev 26 + preview 3), build 성공(엔트리 **211.24 kB** / gzip 68.49 kB, CSS 12.66 kB, precache **21 entries / 344.77 KiB**).
+**게이트(2026-11-08 실측)**: vitest **743/743**(59 files), tsc clean, biome clean(140 files), Playwright **36/36**(dev 33 + preview 3), build 성공(엔트리 **211.30 kB** / gzip 68.50 kB, CSS 14.14 kB, precache **21 entries / 346.28 KiB**).
 
-### 이번 웨이브에서 닫은 것 (2026-11-07)
+### 이번 웨이브에서 닫은 것 (2026-11-07 ~ 08)
 
+- **레이아웃 하드닝**(§B48): 렌더 페이지를 390×844·375×667·320×568·1280×800에서 실측한 뒤 수정. 375×667에서 가격·`담기`가 도킹 바에 가려지고 320×568에서는 가격이 전부 가려지던 문제, 스크롤 시 답 카드가 매장 바를 덮던 스태킹, 데스크톱 시트가 1280px 전체를 차지하고 카트 시트 패딩이 0이던 문제, UA 기본값(content-box·블록 마진·음절 중간 줄바꿈)을 제거. CSS 텍스트 가드 + 렌더 기하 E2E 7건으로 잠갔다.
 - **교차 매장 장바구니 import**: 다른 매장에서 내보낸 메모를 이 매장에 붙여넣으면 그 매장의 층/구역 스냅샷을 버린다(가격·이름·수량은 유지). 빈 목록에서도 가져오기가 가능해졌다. 입력은 64 KiB / 30행으로 제한.
 - **공유 취소**: 사용자가 OS 시트를 닫은 것(`cancelled`)과 실패(`failed`)를 분리 — 취소는 클립보드 부작용 없이 끝난다.
 - **로딩 지연 문구**: 아무도 dispatch하지 않던 `SLOW`를 배선해 1.2초 이후 `LOADING_DELAY_LINE`이 실제로 뜬다.
@@ -23,7 +24,7 @@
 1. **원격 저장소·CI 없음** — 전체 커밋 이력이 이 PC에만 있다. 백업·리뷰·배포 경로가 전부 여기 걸려 있다. 최우선.
 2. **프로덕션 런타임 미배포** — ToS/robots 게이트는 2026-10-12 해제됐다(owner verdict). 남은 것은 호스트명·포트 결정과 [`docs/deploy/gpu01-node-proxy.md`](deploy/gpu01-node-proxy.md) §1–7 실행. CF workerd는 벤더 핑거프린트 403이라 Node 프록시가 유일 경로다.
 3. **§B47 나머지 커버리지** — 교차 매장 import는 E2E 1건으로 고정됐다. 공유 취소·최근 본·수량 상한은 아직 단위 테스트만 있다.
-4. **`AvailabilitySurface.tsx` 783줄** — 3개 파이프라인과 3개 렌더 분기가 중복된다. 다음 기능 전에 분해한다.
+4. **`AvailabilitySurface.tsx` 821줄** — 3개 파이프라인과 3개 렌더 분기가 중복된다. 다음 기능 전에 분해한다.
 5. **PWA precache 결정 미종결** — 진단 패널·zxing 청크 포함 여부(§B31-7). 배포 시점에 확정한다.
 
 ### 최근 완료 (§B47, 상세는 원장)
