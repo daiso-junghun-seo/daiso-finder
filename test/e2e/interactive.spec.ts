@@ -1,5 +1,5 @@
 // test/e2e/interactive.spec.ts — live search, retry-adjacent store change, and first run (Phase 5).
-import { type Locator, expect, test } from '@playwright/test';
+import { type Locator, type Page, expect, test } from '@playwright/test';
 
 // Bible §4 empty-state sentence for the query 락앤락같은통 (emptyBody in src/ui/copy.ts).
 const EMPTY_BODY =
@@ -139,6 +139,32 @@ function overflowPx(inner: Box, outer: Box): number {
   );
 }
 
+// Layout-hardening fixtures (2026-11-08). The mock catalogue points at the vendor CDN, which
+// this sandbox cannot reach; a 1px PNG keeps <img> mounted. The answer photo's box is now
+// width:100% + max-height (CSS), so its geometry no longer depends on the bitmap's size.
+const PHOTO_1PX =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+async function seedPhone(page: Page, width: number, height: number) {
+  await page.setViewportSize({ width, height });
+  await page.addInitScript(() => {
+    localStorage.setItem('daiso.storeContext', JSON.stringify({ strCd: '001', strNm: '명동역점' }));
+  });
+  await page.route('**/cdn.daisomall.co.kr/**', (route) =>
+    route.fulfill({ contentType: 'image/png', body: Buffer.from(PHOTO_1PX, 'base64') }),
+  );
+}
+
+/** Search-first flow → candidate tap → definitive Success answer. */
+async function openSuccess(page: Page) {
+  await page.goto('/');
+  const input = page.getByLabel('상품 검색');
+  await input.fill('밀폐용기');
+  await input.press('Enter');
+  await page.getByRole('button', { name: /리빙 밀폐용기 1\.2L/ }).click();
+  await expect(page.getByText('이 매장에 있어요').first()).toBeVisible();
+}
+
 // The aiming square carries an instruction the shopper has to be able to obey — 네모에 꽉 채워 주세요
 // (SCAN_AIM_GUIDE). A square larger than the visible preview cannot be filled, and its lower brackets
 // land on the dialog background instead of the camera image. Presence assertions cannot see that, and
@@ -252,6 +278,9 @@ test.describe('usability floor (phone 390×844)', () => {
     expect(verticalOverlapPx(inputBox, scanBox), geometry).toBeGreaterThan(0);
     expect(overflowPx(inputBox, viewport), geometry).toBeLessThanOrEqual(0.5);
     expect(overflowPx(scanBox, viewport), geometry).toBeLessThanOrEqual(0.5);
+    // Same height, not just same row: content-box made the input 66px against a 45px
+    // button until the 2026-11-08 reset. 0.5px covers subpixel line-height rounding.
+    expect(Math.abs(inputBox.height - scanBox.height), geometry).toBeLessThanOrEqual(0.5);
   });
 
   test('candidate photos are bounded thumbs inside their rows', async ({ page }) => {
@@ -287,6 +316,124 @@ test.describe('usability floor (phone 390×844)', () => {
     const geometry = `photo ${photoBox.width}×${photoBox.height} · card ${cardBox.width}×${cardBox.height}`;
     expect(overflowPx(photoBox, cardBox), geometry).toBeLessThanOrEqual(0.5);
   });
+});
+
+// 2026-11-08 layout hardening. The audit measured these on a rendered page before any CSS was
+// written: at 375×667 the sticky dock covered the price line and 담기; at 320×568 the price was
+// completely behind it; at 1280 the fixed sheets spanned the whole viewport. Each test below is
+// the rendered geometry contract, not a CSS-text proxy.
+for (const viewport of [
+  { name: '390×844', width: 390, height: 844 },
+  { name: '375×667', width: 375, height: 667 },
+  { name: '320×568', width: 320, height: 568 },
+]) {
+  test(`the Success answer stays above the dock (${viewport.name})`, async ({ page }) => {
+    await seedPhone(page, viewport.width, viewport.height);
+    await openSuccess(page);
+
+    const cardBox = await boxOf(page.locator('.answer-card'), 'answer card');
+    const priceBox = await boxOf(page.locator('.price-line'), 'price · location line');
+    const addBox = await boxOf(page.locator('.cart-add-button'), '담기');
+    const dockBox = await boxOf(page.locator('.search-bar-surface'), 'search dock');
+    const geometry =
+      `card ${cardBox.width}×${cardBox.height} at y=${cardBox.y} · ` +
+      `price bottom=${priceBox.y + priceBox.height} · ` +
+      `add bottom=${addBox.y + addBox.height} · dock top=${dockBox.y}`;
+
+    // The answer is the peak moment: price/location and the next action must be readable
+    // without scrolling or lifting content out from behind the docked bar (Bible IA Rule 2).
+    expect(priceBox.y, geometry).toBeGreaterThanOrEqual(cardBox.y);
+    expect(priceBox.y + priceBox.height, geometry).toBeLessThanOrEqual(dockBox.y + 0.5);
+    expect(addBox.y + addBox.height, geometry).toBeLessThanOrEqual(dockBox.y + 0.5);
+    // No horizontal scroll at any of these widths (200% scale gets its own rule below).
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  });
+}
+
+test('the store name and its actions never overlap on a 320px phone', async ({ page }) => {
+  await seedPhone(page, 320, 568);
+  await page.goto('/');
+  const nameBox = await boxOf(page.locator('.store-context-line > span').first(), 'store name');
+  const actionsBox = await boxOf(page.locator('.store-context-actions'), 'store actions');
+  const geometry = `name [${nameBox.x}, ${nameBox.x + nameBox.width}] · actions x=${actionsBox.x} y=${actionsBox.y}`;
+  // Either the actions sit to the right of a shorter name, or flex-wrap moved them to
+  // their own row. What must never happen is the pre-fix overlap (actions started 30px
+  // inside the name at this width).
+  const onOneRow = nameBox.x + nameBox.width <= actionsBox.x + 0.5;
+  const wrapped = actionsBox.y >= nameBox.y + nameBox.height - 0.5;
+  expect(onOneRow || wrapped, geometry).toBe(true);
+});
+
+test('the sticky store bar stays above the scrolling answer card (390×480)', async ({ page }) => {
+  await seedPhone(page, 390, 480);
+  await openSuccess(page);
+  await page.evaluate(() => window.scrollTo(0, 300));
+  await page.waitForTimeout(150);
+
+  const barBox = await boxOf(page.locator('.store-context-surface'), 'store bar');
+  const point = {
+    x: barBox.x + barBox.width / 2,
+    y: barBox.y + Math.min(20, barBox.height / 2),
+  };
+  // The answer card is glass (backdrop-filter + transform), which used to paint over the
+  // earlier-in-DOM sticky bar. The one scoped z-index fixes it; this measures the paint.
+  expect(
+    await page.evaluate(
+      ({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.store-context-surface'),
+      point,
+    ),
+  ).toBe(true);
+});
+
+test('desktop store sheet stays inside the 480px app frame', async ({ page }) => {
+  await seedPhone(page, 1280, 800);
+  await page.goto('/');
+  await page.getByRole('button', { name: '매장 변경' }).click();
+  const sheetBox = await boxOf(page.locator('.store-selection-sheet'), 'store sheet');
+  const geometry = `sheet ${sheetBox.width}px at x=${sheetBox.x}`;
+  expect(sheetBox.width, geometry).toBeLessThanOrEqual(480.5);
+  expect(Math.abs(sheetBox.x - (1280 - 480) / 2), geometry).toBeLessThanOrEqual(0.5);
+
+  // The store bar's z-index must not escape .surface-content's isolation: the scrim has
+  // to be the topmost thing where the bar would otherwise be.
+  const barBox = await boxOf(page.locator('.store-context-surface'), 'store bar');
+  const topClass = await page.evaluate(
+    ({ x, y }) => document.elementFromPoint(x, y)?.className ?? '',
+    { x: barBox.x + barBox.width / 2, y: barBox.y + Math.min(20, barBox.height / 2) },
+  );
+  expect(topClass).toContain('sheet-scrim');
+});
+
+test('desktop cart sheet stays inside the app frame, with a gutter and a real checkbox hit area', async ({
+  page,
+}) => {
+  await seedPhone(page, 1280, 800);
+  await openSuccess(page);
+  await page.getByRole('button', { name: '담기' }).first().click();
+  await page.getByRole('button', { name: /^장바구니/ }).click();
+  await page.waitForTimeout(200);
+
+  const sheetBox = await boxOf(page.locator('.cart-sheet'), 'cart sheet');
+  const titleBox = await boxOf(page.locator('#cart-title'), 'cart title');
+  const checkBox = await boxOf(page.locator('.cart-sheet input[type="checkbox"]'), 'checkbox');
+  const checkHitBox = await boxOf(page.locator('.cart-sheet__check'), 'checkbox hit area');
+  const geometry =
+    `sheet ${sheetBox.width}px at x=${sheetBox.x} · title x=${titleBox.x} · ` +
+    `box ${checkBox.width}×${checkBox.height} in ${checkHitBox.width}×${checkHitBox.height}`;
+
+  expect(sheetBox.width, geometry).toBeLessThanOrEqual(480.5);
+  expect(Math.abs(sheetBox.x - (1280 - 480) / 2), geometry).toBeLessThanOrEqual(0.5);
+  // The sheet had zero padding: the title started at x=0 against the glass edge.
+  expect(titleBox.x - sheetBox.x, geometry).toBeGreaterThanOrEqual(16);
+  // A 44px UA checkbox rendered before the control-specific rule; the box is 24px and the
+  // label carries the touch target.
+  expect(checkBox.width, geometry).toBeLessThanOrEqual(24.5);
+  expect(checkHitBox.width, geometry).toBeGreaterThanOrEqual(44);
+  expect(checkHitBox.height, geometry).toBeGreaterThanOrEqual(44);
+  // Import sits below the fold at 800px until the section's own scroll engages; it must be
+  // reachable by scrolling, not clipped by the sheet's old fixed-height section.
+  await expect(page.getByText('가져오기', { exact: true })).toBeVisible();
 });
 
 test.describe('diagnostics panel', () => {
