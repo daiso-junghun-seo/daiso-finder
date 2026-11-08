@@ -4,7 +4,7 @@
 
 ## 현재 상태 (2026-11-08 실측, `main`)
 
-**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 로컬 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **원격 푸시·공개 배포는 아직 없다.**
+**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **공개 원격·CI·`main` 보호는 2026-11-08 적용됐고(공개 저장소), 공개 배포는 아직 없다.**
 
 **게이트(2026-11-08 실측)**: vitest **743/743**(59 files), tsc clean, biome clean(140 files), Playwright **36/36**(dev 33 + preview 3), build 성공(엔트리 **211.30 kB** / gzip 68.50 kB, CSS 14.14 kB, precache **21 entries / 346.28 KiB**).
 
@@ -21,11 +21,10 @@
 
 ### 지금 남은 것 (우선순위)
 
-1. **원격 저장소·CI 없음** — 전체 커밋 이력이 이 PC에만 있다. 백업·리뷰·배포 경로가 전부 여기 걸려 있다. 최우선.
-2. **프로덕션 런타임 미배포** — ToS/robots 게이트는 2026-10-12 해제됐다(owner verdict). 남은 것은 호스트명·포트 결정과 [`docs/deploy/gpu01-node-proxy.md`](deploy/gpu01-node-proxy.md) §1–7 실행. CF workerd는 벤더 핑거프린트 403이라 Node 프록시가 유일 경로다.
-3. **§B47 나머지 커버리지** — 교차 매장 import는 E2E 1건으로 고정됐다. 공유 취소·최근 본·수량 상한은 아직 단위 테스트만 있다.
-4. **`AvailabilitySurface.tsx` 821줄** — 3개 파이프라인과 3개 렌더 분기가 중복된다. 다음 기능 전에 분해한다.
-5. **PWA precache 결정 미종결** — 진단 패널·zxing 청크 포함 여부(§B31-7). 배포 시점에 확정한다.
+1. **프로덕션 런타임 미배포** — ToS/robots 게이트는 2026-10-12 해제됐다(owner verdict). 남은 것은 호스트명·포트 결정과 [`docs/deploy/gpu01-node-proxy.md`](deploy/gpu01-node-proxy.md) §1–7 실행. CF workerd는 벤더 핑거프린트 403이라 Node 프록시가 유일 경로다.
+2. **§B47 나머지 커버리지** — 교차 매장 import는 E2E 1건으로 고정됐다. 공유 취소·최근 본·수량 상한은 아직 단위 테스트만 있다.
+3. **`AvailabilitySurface.tsx` 821줄** — 3개 파이프라인과 3개 렌더 분기가 중복된다. 다음 기능 전에 분해한다(P1).
+4. **PWA precache 결정 미종결** — 진단 패널·zxing 청크 포함 여부(§B31-7). P1에서 측정 후 확정한다.
 
 ### 최근 완료 (§B47, 상세는 원장)
 

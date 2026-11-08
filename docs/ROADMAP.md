@@ -4,10 +4,10 @@
 
 ## 현재 위치 (2026-11-08)
 
-- Increment 0 + Flow 1 + §B47 쇼핑리스트까지 `main`에 로컬 완료.
+- Increment 0 + Flow 1 + §B47 쇼핑리스트까지 `main`에 완료, 공개 원격(`daiso-junghun-seo/daiso-finder`)에 push됨.
 - 게이트: vitest **743/743**, tsc clean, biome clean(140), Playwright **36/36**, build 성공(211.30 kB / gzip 68.50 kB).
 - Flow 2·3는 **D078(2026-07-13)로 계약 비준 완료** — 구현을 막는 것은 코드가 아니라 아래 "결정 필요" 항목이다.
-- 남은 가장 큰 위험은 기능이 아니라 **원격·CI·배포·필드 검증의 부재**다.
+- 남은 가장 큰 위험은 기능이 아니라 **배포·필드 검증의 부재**다.
 
 ## 원칙
 
@@ -19,7 +19,7 @@
 
 | 단계 | 기간(집중) | 내용 | 종료 조건 | 상태 |
 |---|---|---|---|---|
-| **P0 안전망** | 1–2일 | 비공개 원격, CI(tsc·biome·vitest·build·Playwright), fresh-clone drill, push | 다른 디렉터리 클론에서 전 게이트 green, CI `main` green | 진행 중 |
+| **P0 안전망** | 1–2일 | 공개 원격, CI(tsc·biome·vitest·build·Playwright), fresh-clone drill, `main` 보호 | 다른 디렉터리 클론에서 전 게이트 green, CI `main` green | 완료 (2026-11-08) |
 | **P1 구조 정리** | 3–5일 | `AvailabilitySurface` 분해, `AGENTS.md` D078 정정, coverage 기준선, axe E2E, PWA precache 결정(§B31-7) | 동작 불변, 파일 ≤300줄, 번들 +5% 이내 | 대기 |
 | **P2 Flow 2** | 5–7일 | D077: data-in-hand 렌더, refresh 트리거(진입·resume·pull·`못 찾겠어요` 1회), 비블로킹, stale→Partial, stock-gone exit | tap→card <100ms(fetch 0회), 주기 타이머 없음 테스트, 6상태 E2E | 대기 |
 | **P3 Flow 3** | 7–10일 | D076: similar 분기 + entry matrix + 3행 바운드 + 단일 스탬프 + 통짜 캐시. nearby는 mock/포트까지 | no-dead-end E2E, mall은 Empty에서만, nearby는 데이터 확정 시 | 대기 |
@@ -27,12 +27,12 @@
 
 ### P0 체크리스트
 
-- [x] 비공개 원격 생성(`daiso-junghun-seo/daiso-finder`)
+- [x] 공개 원격 생성·전환(`daiso-junghun-seo/daiso-finder`) — 무료 플랜에서 보호 기능을 쓰기 위해 공개로 전환(2026-11-08). 비밀키 흔적 없음, `.dev.vars`·터널 스크립트는 미추적.
 - [x] CI 워크플로(`.github/workflows/ci.yml`)
 - [x] Node 버전 고정(`.nvmrc`)
 - [x] 첫 `main` push에서 CI green (run [42485492011](https://github.com/daiso-junghun-seo/daiso-finder/actions/runs/42485492011), 1m52s)
 - [x] 빈 디렉터리 fresh clone에서 전 게이트 재현 (typecheck·lint·743 테스트·build·36 e2e green)
-- [ ] `main` 보호: force-push·삭제 금지, PR에는 `gates` 필수
+- [x] `main` 보호: force-push·삭제 금지, PR에는 `gates` 필수 (직접 push는 허용, `enforce_admins: false`)
 
 ### P1 체크리스트
 
@@ -56,7 +56,7 @@
 
 | # | 결정 | 막는 것 | 다음 행동 |
 |---|---|---|---|
-| D1 | 원격 공개 범위·호스트 | — | **완료: 비공개 GitHub** |
+| D1 | 원격 공개 범위·호스트 | — | **완료: 공개 GitHub (2026-11-08 전환, `main` 보호 적용)** |
 | D2 | 배포 도메인·포트(gpu01) | P4 | 호스트/프록시 문서 §1–7 실행 |
 | D3 | 매장 좌표·매장 스코프 데이터(A8/A9) | Flow 3 nearby, 매장 디렉터리 실데이터 | data-owner 확인 → data-contract 갱신 |
 | D4 | Flow 2 열린 경험 질문 2개(도보 중 위치 이동, 품절 외 부정 상태 변화) | P2 엣지 | Bible 에스컬레이션 |
