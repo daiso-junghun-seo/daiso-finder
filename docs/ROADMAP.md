@@ -30,8 +30,8 @@
 - [x] 비공개 원격 생성(`daiso-junghun-seo/daiso-finder`)
 - [x] CI 워크플로(`.github/workflows/ci.yml`)
 - [x] Node 버전 고정(`.nvmrc`)
-- [ ] 첫 `main` push에서 CI green
-- [ ] 빈 디렉터리 fresh clone에서 전 게이트 재현
+- [x] 첫 `main` push에서 CI green (run [42485492011](https://github.com/daiso-junghun-seo/daiso-finder/actions/runs/42485492011), 1m52s)
+- [x] 빈 디렉터리 fresh clone에서 전 게이트 재현 (typecheck·lint·743 테스트·build·36 e2e green)
 - [ ] `main` 보호: force-push·삭제 금지, PR에는 `gates` 필수
 
 ### P1 체크리스트
