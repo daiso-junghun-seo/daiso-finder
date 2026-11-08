@@ -2,6 +2,9 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './test/e2e',
+  // CI keeps a trace only when a test fails; the HTML report is the artifact to open.
+  reporter: [['list'], ['html', { open: 'never' }]],
+  use: { trace: 'retain-on-failure' },
   webServer: [
     { command: 'npm run dev', port: 5173, reuseExistingServer: true },
     {
