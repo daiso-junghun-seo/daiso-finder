@@ -2,8 +2,9 @@
 // Store-context display (Interface §2 IA: "always present and always correctable").
 // 매장 변경 opens the D082 store-selection sheet via the injected handler; the surface may pass a
 // ref to the button so the modal sheet can restore focus to its opener on close (Interface §6).
-// The locale toggle beside it shows the TARGET language (one 44px control — a KO|EN pair has no
-// room on 390px). It only switches guidance language; match tokens never translate (D069).
+// The locale control beside it is a KO|EN segmented pair (each segment ≥44px); the store line
+// wraps the pair to its own row when a narrow phone cannot hold the name and both actions.
+// It only switches guidance language; match tokens never translate (D069).
 import type { Ref } from 'react';
 import type { StoreContext } from '../../domain/types';
 import type { Locale } from '../../i18n/locale';

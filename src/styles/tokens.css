@@ -80,6 +80,27 @@
   }
 }
 
+/* Layout reset (2026-11-08-layout-hardening-design.md §1). Three UA defaults were
+   silently participating in layout: content-box made a 44px control 66px tall once
+   padding/border were added; the 1em block margins added an unowned 16px rhythm on
+   top of the designed 8px system; and Korean broke mid-word (`못했어 / 요.`). A reset
+   is the smallest fix that makes the declared numbers the rendered numbers. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body,
+h1,
+h2,
+h3,
+p,
+ul,
+ol {
+  margin: 0;
+}
+
 body {
   margin: 0;
   background-color: var(--ground);
@@ -87,6 +108,10 @@ body {
   font-family: var(--font-sans);
   font-size: var(--font-size-body);
   line-height: var(--line-height-body);
+  /* keep-all: Korean words break at spaces, not between syllables; overflow-wrap is
+     the emergency brake for a single unbroken token (URL, long store name). */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -49,6 +49,13 @@ test('rows show the snapshot with the honesty caption, the total, and wired acti
   expect(h.onSetQty).toHaveBeenCalledWith('12345', 0);
   await userEvent.click(screen.getByRole('checkbox', { name: '리빙 밀폐용기 1.2L 합계에 포함' }));
   expect(h.onToggle).toHaveBeenCalledWith('12345');
+  // The 44px hit area lives on the wrapping label (CSS: .cart-sheet__check), never on the
+  // checkbox itself — the shared input paint rule would otherwise render a 44px UA box.
+  expect(
+    screen
+      .getByRole('checkbox', { name: '리빙 밀폐용기 1.2L 합계에 포함' })
+      .closest('.cart-sheet__check'),
+  ).not.toBeNull();
   await userEvent.click(screen.getByRole('button', { name: '다시 확인' }));
   expect(h.onRecheck).toHaveBeenCalledTimes(1);
   await userEvent.click(screen.getByRole('button', { name: '삭제' }));

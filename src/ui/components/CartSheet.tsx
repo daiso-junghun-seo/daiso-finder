@@ -118,12 +118,14 @@ export function CartSheet({
             <ul className="cart-sheet__list">
               {cart.items.map((item) => (
                 <li key={item.id} className="cart-sheet__row">
-                  <input
-                    type="checkbox"
-                    aria-label={S.cartCheckLabel(item.name)}
-                    checked={item.checked}
-                    onChange={() => onToggle(item.id)}
-                  />
+                  <label className="cart-sheet__check">
+                    <input
+                      type="checkbox"
+                      aria-label={S.cartCheckLabel(item.name)}
+                      checked={item.checked}
+                      onChange={() => onToggle(item.id)}
+                    />
+                  </label>
                   <div className="cart-sheet__facts">
                     <p className="text-body">{item.name}</p>
                     <p className="text-caption">

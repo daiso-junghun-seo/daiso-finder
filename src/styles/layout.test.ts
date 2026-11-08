@@ -77,12 +77,17 @@ test('each aim-guide corner span draws a solid border and zeroes exactly two sid
   }
 });
 
-test('no z-index appears anywhere in layout.css — this codebase stacks by DOM order', () => {
-  // Comments in this file name z-index by name while documenting its deliberate absence (e.g.
-  // "No z-index: neither .sheet-scrim..."), so comments are stripped first — this checks for an
-  // actual declaration, not prose.
+// The codebase still stacks by DOM order EXCEPT for one measured exception: the answer card is
+// glass (backdrop-filter + transform → stacking context) and painted over the earlier-in-DOM sticky
+// store bar while scrolling. The bar needs z-index 1, but that must stay scoped: .surface-content's
+// isolation is what keeps it from climbing over the scrim and sheets. Pinning the count, the owner,
+// and the isolation guard makes a second rogue z-index or a deleted isolation fail here.
+test('exactly one z-index exists: the sticky store bar, scoped by .surface-content isolation', () => {
   const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
-  expect(withoutComments).not.toContain('z-index');
+  const declarations = withoutComments.match(/z-index\s*:/g) ?? [];
+  expect(declarations).toHaveLength(1);
+  expect(ruleFor('.store-context-surface')).toMatch(/z-index:\s*1;/);
+  expect(ruleFor('.surface-content')).toMatch(/isolation:\s*isolate;/);
 });
 
 // A POSITIVE assertion, deliberately. This file already learned once that a CSS guard made only of
@@ -193,7 +198,10 @@ test('.answer-card keeps text off the glass edge and photos inside the card', ()
   expect(ruleFor('.answer-card')).toMatch(/inset 0 1px 0/);
   const photo = ruleFor('.answer-card .product-photo');
   expect(photo).toMatch(/max-width:\s*100%/);
-  expect(photo).toMatch(/max-height:\s*260px/);
+  // Above-the-fold: the photo yields to short viewports; 260 stays the ceiling.
+  expect(photo).toMatch(/max-height:\s*clamp\(120px,\s*30vh,\s*260px\)/);
+  // A deterministic box, independent of the vendor bitmap's intrinsic size.
+  expect(photo).toMatch(/width:\s*100%/);
   expect(photo).toMatch(/border-radius:\s*var\(--radius-md\)/);
   expect(photo).toMatch(/object-fit:\s*contain/);
 });
@@ -363,4 +371,76 @@ test('.store-selection-sheet rows carry a CSS-only chevron', () => {
   const rule = ruleFor('.store-selection-sheet__nearby button::after');
   expect(rule).toContain('border-top:');
   expect(rule).toContain('rotate(45deg)');
+});
+
+// Layout hardening (2026-11-08) — geometry measured on rendered pages first, then pinned here.
+// Each rule below fixes a defect the audit reproduced at 390×844, 375×667, 320×568 or 1280×800.
+test('the search row aligns both controls and ellipsises the fixed placeholder', () => {
+  expect(ruleFor('.search-bar')).toMatch(/align-items:\s*stretch/);
+  expect(ruleFor('.search-bar input')).toMatch(/text-overflow:\s*ellipsis/);
+});
+
+test('the store line wraps its action cluster instead of overlapping the store name', () => {
+  const line = ruleFor('.store-context-line');
+  expect(line).toMatch(/flex-wrap:\s*wrap/);
+  expect(ruleFor('.store-context-line > span:first-child')).toMatch(/min-width:\s*0/);
+  const actions = ruleFor('.store-context-actions');
+  expect(actions).toMatch(/flex-wrap:\s*wrap/);
+  expect(actions).toMatch(/min-width:\s*0/);
+});
+
+test('the answer card centres with auto margins, never justify-content (overflow-safe)', () => {
+  expect(ruleFor('.answer-card')).toMatch(/display:\s*flex/);
+  expect(ruleFor('.answer-card')).toMatch(/flex-direction:\s*column/);
+  const inner = ruleFor('.answer-card > div');
+  expect(inner).toMatch(/margin-block:\s*auto/);
+  // height:100% never resolved against the grown flex item; justify-content would clip the
+  // card's top once the content exceeded the card on a short viewport.
+  expect(inner).not.toMatch(/justify-content/);
+  expect(inner).not.toMatch(/height:\s*100%/);
+});
+
+test('sheets stay inside the 480px app frame on desktop', () => {
+  for (const sheet of ['.store-selection-sheet', '.cart-sheet']) {
+    const rule = ruleFor(sheet);
+    expect(rule).toMatch(/max-width:\s*480px/);
+    expect(rule).toMatch(/margin-inline:\s*auto/);
+  }
+});
+
+test('the cart sheet has a gutter, a vertical beat, and its own scroll fallback', () => {
+  const section = ruleFor('.cart-sheet > section');
+  expect(section).toMatch(/padding:\s*var\(--space-lg\)/);
+  expect(section).toMatch(/gap:\s*var\(--space-sm\)/);
+  expect(section).toMatch(/overflow-y:\s*auto/);
+});
+
+test('the cart checkbox keeps a 24px box inside a 44px hit area', () => {
+  const label = ruleFor('.cart-sheet__check');
+  expect(label).toMatch(/min-width:\s*44px/);
+  expect(label).toMatch(/min-height:\s*44px/);
+  const box = ruleFor('input[type="checkbox"]');
+  expect(box).toMatch(/width:\s*24px/);
+  expect(box).toMatch(/height:\s*24px/);
+  expect(box).toMatch(/accent-color:\s*var\(--action-bg\)/);
+});
+
+test('the scanner dialog carries a gutter and the same 480px frame', () => {
+  const section = ruleFor('.scanner-overlay > section');
+  expect(section).toMatch(/padding:\s*var\(--space-lg\)/);
+  expect(section).toMatch(/gap:\s*var\(--space-md\)/);
+  expect(section).toMatch(/max-width:\s*480px/);
+  expect(section).toMatch(/margin-block:\s*auto/);
+});
+
+test('short phones shrink the photo and the hero price, never the answer content', () => {
+  const short = blockFor('@media (max-height: 640px)');
+  expect(short).toMatch(/\.answer-card \.product-photo\s*\{[^}]*max-height:\s*112px/);
+  expect(short).toMatch(/\.price-line\s*\{[^}]*font-size:\s*1\.5rem/);
+});
+
+test('200% scale stacks the search row instead of overflowing sideways', () => {
+  const narrow = blockFor('@media (max-width: 300px)');
+  expect(narrow).toMatch(/\.search-bar\s*\{[^}]*flex-wrap:\s*wrap/);
+  expect(narrow).toMatch(/\.search-field\s*\{[^}]*flex-basis:\s*100%/);
 });

@@ -74,6 +74,20 @@ test('search-bar demotion and status color utility classes exist', () => {
   }
 });
 
+// Layout hardening (2026-11-08): the UA defaults these rules reset were measurably
+// participating in layout — content-box turned a 44px input into 66px, UA p margins
+// added a second 16px rhythm, and Korean broke mid-word. Each assertion pins the
+// reset itself, because deleting one silently restores the old geometry.
+test('the layout reset makes declared sizes and Korean line breaks real', () => {
+  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  expect(withoutComments).toMatch(/\*,\s*\*::before,\s*\*::after\s*\{\s*box-sizing:\s*border-box;/);
+  expect(withoutComments).toMatch(/body,\s*h1,\s*h2,\s*h3,\s*p,\s*ul,\s*ol\s*\{\s*margin:\s*0;/);
+
+  const bodyRule = css.slice(css.indexOf('body {'));
+  expect(bodyRule).toMatch(/word-break:\s*keep-all/);
+  expect(bodyRule).toMatch(/overflow-wrap:\s*break-word/);
+});
+
 // LOAD-BEARING FOR ACCESSIBILITY, and pinned by nothing until now. layout.css deliberately ships no
 // local prefers-reduced-motion block for the scanner's breathing brackets because this global rule
 // already turns every animation off with `!important`. That makes deleting this block a silent

@@ -24,6 +24,9 @@ main {
   flex-direction: column;
   flex: 1;
   gap: var(--space-md); /* vertical beat (UI polish) */
+  /* Scopes the store bar's z-index below (layout hardening): without an isolated
+     container the sticky bar would also paint above the fixed scrim and sheets. */
+  isolation: isolate;
 }
 
 /* The answer-card region grows so the bottom bar stays docked in answer states.
@@ -31,6 +34,8 @@ main {
    Enter motion (redesign, Bible §3 150–300ms): opacity + rise only. */
 .answer-card {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   padding: 20px;
   overflow-wrap: break-word;
   animation: card-enter 220ms ease-out;
@@ -63,10 +68,15 @@ main {
   margin-bottom: var(--space-sm);
 }
 
-/* Store-context line anchored at the top (Interface §2: always present, always correctable). */
+/* Store-context line anchored at the top (Interface §2: always present, always correctable).
+   The ONE z-index in this stylesheet: the answer card is a glass surface, and glass.css's
+   transform/backdrop-filter makes it a stacking context that paints above the earlier-in-DOM
+   sticky bar while scrolling (measured 2026-11-08). The bar is contained by
+   .surface-content's `isolation: isolate`, so scrims and sheets still paint above it. */
 .store-context-surface {
   position: sticky;
   top: 0;
+  z-index: 1;
 }
 
 /* Bottom-sheet placement, above the scrim (later in DOM order); scrolling stays inside the
@@ -76,6 +86,10 @@ main {
   inset-inline: 0;
   bottom: 0;
   max-height: 85dvh;
+  /* Same 480px app frame as main, centred on desktop. Without the cap a fixed
+     inset-inline:0 sheet spans the whole 1280px viewport (measured 2026-11-08). */
+  max-width: 480px;
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0; /* sheet chrome (UI polish) */
@@ -96,6 +110,7 @@ main {
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  gap: var(--space-sm); /* caption + list were spaced by the UA p margin before the reset */
 }
 
 .store-selection-sheet__results,
@@ -134,6 +149,23 @@ input:focus-visible {
   outline-offset: 2px;
 }
 
+/* Checkboxes are not text controls: the shared 44px/padded/bordered paint above would
+   render a 44×44 UA checkbox (measured 2026-11-08). The 44px hit area moves to the
+   wrapping label; the box itself stays a normal 24px native control with brand accent. */
+input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 4px;
+  accent-color: var(--action-bg);
+  flex: none;
+}
+
 .store-selection-sheet li + li {
   margin-top: 8px;
 }
@@ -150,13 +182,16 @@ input:focus-visible {
 .search-bar {
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: stretch; /* input and 스캔 share the row's height (46px) */
 }
 
 .search-bar input {
   flex: 1 1 auto;
   min-width: 0;
   width: 100%;
+  /* The placeholder is fixed Bible copy; at narrow widths it must end in an ellipsis,
+     not be sliced mid-syllable by the input's paint box (measured 2026-11-08). */
+  text-overflow: ellipsis;
 }
 
 /* iOS search field (iOS pass): magnifier lives inside the input, label/placeholder
@@ -183,6 +218,12 @@ input:focus-visible {
 
 /* Literal-result and recall lists render without UA bullets. Candidate rows keep the
    sheet lists' 8px+ rhythm (Interface §6 minimum); recall runs as a snap row. */
+.recent-searches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm); /* label + snap row: the reset removed the UA p margin */
+}
+
 .recent-searches ul {
   list-style: none;
   margin: 0;
@@ -225,6 +266,9 @@ input:focus-visible {
   inset-inline: 0;
   bottom: 0;
   max-height: 85dvh;
+  /* Same 480px app frame as main (desktop measurement, 2026-11-08). */
+  max-width: 480px;
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -235,6 +279,20 @@ input:focus-visible {
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  /* The sheet had no gutter: its title started at x=0 and the import block fell below
+     the sheet's clipped bottom edge (measured 2026-11-08). */
+  padding: var(--space-lg);
+  gap: var(--space-sm);
+  overflow-y: auto;
+}
+
+.cart-sheet__check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .cart-sheet__list {
@@ -360,8 +418,15 @@ input:focus-visible {
 
 .answer-card .product-photo {
   display: block;
+  width: 100%;
+  height: auto;
   max-width: 100%;
-  max-height: 260px;
+  /* Above-the-fold contract: the photo yields to the viewport. 260px kept the price
+     line and CTA behind the dock at 375×667; 30vh fits, 260 stays the ceiling on tall
+     phones (390×844 → 253). The short-phone override below shrinks it once more.
+     width:100% makes the box independent of the vendor bitmap's intrinsic size, so the
+     card does not reflow when the photo arrives. */
+  max-height: clamp(120px, 30vh, 260px);
   border-radius: var(--radius-md);
   object-fit: contain;
 }
@@ -412,22 +477,36 @@ main h1 {
   /* Tight headline (Refactoring UI — capped at -0.02em so Hangul jamo never clump). */
   letter-spacing: -0.02em;
   margin: var(--space-2xl) 0 var(--space-md);
+  text-wrap: balance;
 }
 
 .store-context-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
   padding: var(--space-sm) 0;
 }
 
+/* The name owns the first row and may shrink; the action cluster wraps to its own row
+   when 390px-worth of controls cannot share the line (measured overlapping at 320px). */
+.store-context-line > span:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* Utility cluster: locale toggle + store change share the right end. */
 .store-context-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-sm);
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-inline-start: auto;
 }
 
 /* Segmented language control (iOS idiom at 44px — the 32pt idiom would break the
@@ -441,6 +520,7 @@ main h1 {
   margin: 0;
   padding: 2px;
   border-radius: var(--radius-pill);
+  min-inline-size: 0;
 }
 
 .locale-segmented button {
@@ -463,13 +543,17 @@ main h1 {
 }
 
 /* The grown card's content centres in its void (user-centered layout): the peak answer
-   sits at the visual centre instead of stranding whitespace below the CTA. Above-fold
-   rule unaffected — nothing scrolls that did not before. */
+   sits at the visual centre instead of stranding whitespace below the CTA. `margin-block:
+   auto` in the flex column, NOT justify-content:center — auto margins collapse to 0 when
+   the content is taller than the card, so a short viewport never clips the card's top. */
 .answer-card > div {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  height: 100%;
+  margin-block: auto;
+}
+
+/* Korean wrapping: balance only ever applies to short guidance lines (the product name,
+   status, price), so it fixes orphan syllables without reflowing body copy. */
+.answer-card > div > p {
+  text-wrap: balance;
 }
 
 /* Recent chips restyle below (redesign): full-width rows become wrap pills. */
@@ -486,6 +570,13 @@ main h1 {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
+}
+
+/* A long store name in the cart title must yield to the 닫기 button, never widen the sheet. */
+.store-selection-sheet__header h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .store-selection-sheet__results button {
@@ -656,15 +747,31 @@ main h1 {
 }
 
 /* Barcode scanner overlay — minimal layout only; presentation polish is the UI pass (HANDOFF slice 3).
-   No z-index: neither .sheet-scrim nor .store-selection-sheet declares one in this codebase — the
-   existing stacking convention is DOM order (scrim, then sheet, rendered later), matched here rather
-   than inventing a new z-index band. */
+   Sheets, scrims and this overlay still stack by DOM order (rendered last). The one z-index in
+   layout.css is scoped to .store-context-surface inside .surface-content's isolation, so it cannot
+   climb over these modals. */
 .scanner-overlay {
   position: fixed;
   inset: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /* No justify-content:center — the section's auto margins centre it and, unlike flex
+     centring, they collapse to 0 when the dialog is taller than the viewport, so the
+     header/close button can always be scrolled into view. */
+  overflow-y: auto;
+}
+
+/* Phone gutter, desktop 480px frame — the dialog had none and its copy touched the
+   screen edges (measured 2026-11-08). */
+.scanner-overlay > section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+  max-width: 480px;
+  margin-inline: auto;
+  margin-block: auto;
+  padding: var(--space-lg);
 }
 
 .scanner-overlay__header {
@@ -800,6 +907,40 @@ main h1 {
   right: 0;
   border-left: 0;
   border-top: 0;
+}
+
+/* Short phones (320×568, or a landscape 844×390): the answer still has to fit above
+   the dock. The photo and the hero price give way — the status, price, and CTA never do.
+   Measured budgets: 375×667 fits with the 30vh clamp; 320×568 needs this floor. */
+@media (max-height: 640px) {
+  .answer-card {
+    padding: var(--space-md);
+  }
+
+  .answer-card .product-photo {
+    max-height: 112px;
+  }
+
+  .price-line {
+    font-size: 1.5rem;
+  }
+}
+
+/* 200% text scale on a phone leaves ~195 CSS px. One row cannot hold the input and the
+   scan button there (25px horizontal overflow measured 2026-11-08); stack them instead. */
+@media (max-width: 300px) {
+  .search-bar {
+    flex-wrap: wrap;
+  }
+
+  .search-field {
+    flex-basis: 100%;
+  }
+
+  .scan-button--primary {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* Visually hidden, still announced. Clip-based on purpose: display:none and visibility:hidden remove

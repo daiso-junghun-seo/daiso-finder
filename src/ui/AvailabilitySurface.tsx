@@ -586,8 +586,8 @@ export function AvailabilitySurface() {
   // The viewfinder is a modal sibling of the sheet, NOT a child of .surface-content, for two reasons:
   // (a) .surface-content carries `inert` while a modal is open (see backgroundInert below), so an
   // overlay nested inside it would make ITSELF inert — unreachable by keyboard and hidden from AT;
-  // (b) stacking in this codebase is pure DOM order (there is no z-index anywhere in src/styles/**),
-  // so the overlay must be rendered LAST in every branch to sit above the rest of the surface.
+  // (b) stacking is DOM order for modals (scrim first, dialog last). The store bar's single scoped
+  // z-index lives inside .surface-content's isolation, so it cannot rise above this overlay.
   const scannerModal = scannerOpen && (
     <>
       <div className="sheet-scrim" aria-hidden="true" />
@@ -602,7 +602,8 @@ export function AvailabilitySurface() {
 
   // Owner-exception §B47: the cart sheet is a modal sibling like the store sheet and the
   // viewfinder — same scrim, same inert background, same focus-return, rendered LAST so DOM
-  // order keeps it above the rest (no z-index anywhere in src/styles/**).
+  // order keeps it above the rest (the store bar's one z-index is isolation-scoped inside
+  // .surface-content and cannot escape over a modal).
   const cartModal = cartOpen && store && (
     <>
       <div className="sheet-scrim" aria-hidden="true" />
