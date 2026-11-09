@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { mockAnswers } from '../adapters/mock/fixtures';
 import type { ProductSearchPort, ScannerPort } from '../domain/ports';
 import type { ProductCandidate, StoreEvent } from '../domain/types';
+import { AvailabilitySurface } from './AvailabilitySurface';
 import {
-  AvailabilitySurface,
   type QueryOutcomeRunner,
   SLOW_HINT_MS,
   isCurrentRun,
@@ -14,7 +14,7 @@ import {
   runByPdNo,
   runByScan,
   runQuery,
-} from './AvailabilitySurface';
+} from './availability/pipelines';
 import {
   RECENT_SEARCHES_LABEL,
   RECENT_VIEWS_LABEL,
