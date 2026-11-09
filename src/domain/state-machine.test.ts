@@ -12,6 +12,41 @@ test('default + SUBMIT → loading', () =>
   expect(loading).toEqual({ state: 'loading', query: '밀폐용기', slow: false }));
 test('loading + SLOW → loading slow', () =>
   expect(reduce(loading, { type: 'SLOW' })).toMatchObject({ state: 'loading', slow: true }));
+test('SLOW outside loading is a no-op', () => {
+  const success = answer({
+    kind: 'inStock',
+    productName: 'X',
+    price: 2000,
+    locations: [{ floor: '11', zone: '56' }],
+    qtyUpperBound: 50,
+  });
+  expect(reduce(success, { type: 'SLOW' })).toBe(success);
+});
+test('DISMISS_AI is a no-op', () => {
+  const success = answer({ kind: 'franchiseUndeterminable', productName: 'X' });
+  expect(reduce(success, { type: 'DISMISS_AI' })).toBe(success);
+});
+test('RESULT outside loading does not invent a query', () => {
+  const next = reduce(initialState, {
+    type: 'RESULT',
+    answer: { kind: 'temporarilyOut', productName: 'X', price: 2000, restockOfferable: true },
+    freshness: live,
+  });
+  expect(next).toMatchObject({ state: 'success', query: '' });
+});
+test('NO_MATCH outside loading does not inherit provenance', () => {
+  const success = answer({
+    kind: 'inStock',
+    productName: 'X',
+    price: 2000,
+    locations: [{ floor: '11', zone: '56' }],
+    qtyUpperBound: 50,
+  });
+  expect(reduce(success, { type: 'NO_MATCH', query: 'X', suggestions: [] })).toMatchObject({
+    state: 'empty',
+    origin: undefined,
+  });
+});
 test('in stock with location → success', () =>
   expect(
     answer({

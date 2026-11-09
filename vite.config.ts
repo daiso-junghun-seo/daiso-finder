@@ -43,5 +43,23 @@ export default defineConfig({
     // `import css from './x.css?raw'` specs would otherwise always see ''. Opt only the
     // `?raw` query back into real processing — plain CSS side-effect imports stay stubbed.
     css: { include: [/\.css\?raw$/] },
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}', 'functions/**/*.ts'],
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/test-setup.ts', 'functions/**/*.test.ts'],
+      reporter: ['text-summary', 'json-summary'],
+      // Baseline measured 2026-11-09: src lines 100 / branches ~90 / functions ~92.
+      // These floors sit just under that baseline and are not to be lowered.
+      thresholds: {
+        lines: 94,
+        branches: 85,
+        functions: 85,
+        statements: 94,
+        'src/domain/**': { lines: 98, branches: 90, functions: 90, statements: 98 },
+        'src/adapters/**': { lines: 95, branches: 85, functions: 90, statements: 95 },
+        'src/ui/**': { lines: 95, branches: 85, functions: 90, statements: 95 },
+        'functions/**': { lines: 90, branches: 75, functions: 95, statements: 90 },
+      },
+    },
   },
 });
