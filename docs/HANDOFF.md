@@ -2,11 +2,18 @@
 
 > 이 저장소에서 새 세션을 시작하면 **여기부터** 읽는다. 결정·실행 원장은 [`docs/notes/open-questions.md`](notes/open-questions.md). `.superpowers/`는 `.gitignore` 대상이라 새 클론에는 존재하지 않는다 — 정본으로 링크하지 않는다.
 
-## 현재 상태 (2026-11-08 실측, `main`)
+## 현재 상태 (2026-11-09 실측, `main`)
 
-**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **공개 원격·CI·`main` 보호는 2026-11-08 적용됐고(공개 저장소), 공개 배포는 아직 없다.**
+**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **공개 원격·CI·`main` 보호는 2026-11-08 적용됐고(공개 저장소), 공개 배포는 아직 없다.** **P1 구조 정리는 2026-11-09 완료** — 다음은 P2 Flow 2다.
 
-**게이트(2026-11-08 실측)**: vitest **743/743**(59 files), tsc clean, biome clean(140 files), Playwright **36/36**(dev 33 + preview 3), build 성공(엔트리 **211.30 kB** / gzip 68.50 kB, CSS 14.14 kB, precache **21 entries / 346.28 KiB**).
+**게이트(2026-11-09 실측)**: vitest **747/747**(59 files), tsc clean, biome clean(150 files), Playwright **48/48**(dev 45 + preview 3), coverage **95.26% lines / 88.88% branches / 91.59% functions**(계층 임계값 CI 강제), build 성공(엔트리 **212.69 kB** / gzip 69.14 kB, CSS 14.19 kB, precache **21 entries / 347.69 KiB**).
+
+### P1 구조 정리 (2026-11-09)
+
+- **`AvailabilitySurface` 824 → 286줄**: `availability/pipelines.ts`(쿼리 3종·토큰·가드·retention), `useCart.ts`(§B47 컨트롤러), `SurfaceModals.tsx`(시트·스캐너·카트), `SearchBar`·`DefaultBody`·`CandidatesBody`·`AnswerBody`·`StoreContextBar`. 동작·카피·6상태·포커스 순서·모달 DOM 순서 불변, 표면 단위 테스트 50/50 유지.
+- **커버리지 게이트**: `@vitest/coverage-v8` + `npm run test:coverage`, CI 단위 단계 교체. 임계값은 측정 기준선 바로 아래에 고정(내리지 않음).
+- **axe E2E 12건**: 6상태 × 라이트/다크, serious/critical 0. `.search-bar--demoted`의 그룹 opacity가 스캔 버튼 대비를 4.09:1로 떨어뜨린 실제 위반 1건을 입력 필드 강등 방식으로 교체.
+- **PWA precache(§B31-7)**: `globIgnores` 없이 수용. 패널 청크는 파싱·실행되지 않는 ~2 kB gzip이고, 제외하면 오프라인 `?debug=1`이 빈 패널이 된다. `main.tsx`의 lazy 실패 무해화는 기존대로.
 
 ### 이번 웨이브에서 닫은 것 (2026-11-07 ~ 08)
 
@@ -22,9 +29,9 @@
 ### 지금 남은 것 (우선순위)
 
 1. **프로덕션 런타임 미배포** — ToS/robots 게이트는 2026-10-12 해제됐다(owner verdict). 남은 것은 호스트명·포트 결정과 [`docs/deploy/gpu01-node-proxy.md`](deploy/gpu01-node-proxy.md) §1–7 실행. CF workerd는 벤더 핑거프린트 403이라 Node 프록시가 유일 경로다.
-2. **§B47 나머지 커버리지** — 교차 매장 import는 E2E 1건으로 고정됐다. 공유 취소·최근 본·수량 상한은 아직 단위 테스트만 있다.
-3. **`AvailabilitySurface.tsx` 821줄** — 3개 파이프라인과 3개 렌더 분기가 중복된다. 다음 기능 전에 분해한다(P1).
-4. **PWA precache 결정 미종결** — 진단 패널·zxing 청크 포함 여부(§B31-7). P1에서 측정 후 확정한다.
+2. **P2 Flow 2(D077)** — data-in-hand 렌더, refresh 트리거 4종, 비블로킹, stale→Partial, stock-gone exit. Flow 3 similar 분기와 한 릴리스로 묶는다(단독 출시는 stock-gone 데드엔드).
+3. **§B47 나머지 커버리지** — 교차 매장 import는 E2E 1건으로 고정됐다. 공유 취소·최근 본·수량 상한은 아직 단위 테스트만 있다.
+4. **툴체인 업그레이드** — vite 5→8, vitest 3→5. CI green을 유지한 별도 브랜치에서 단계적으로(D7).
 
 ### 최근 완료 (§B47, 상세는 원장)
 
