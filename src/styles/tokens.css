@@ -153,7 +153,10 @@ body {
   color: var(--color-error);
 }
 
-/* Search bar demoted to L4 in every answer state (Interface §2 IA table). */
-.search-bar--demoted {
-  opacity: 0.7;
+/* Search bar demoted to L4 in every answer state (Interface §2 IA table).
+   A muted field surface, never opacity: a group opacity faded the scan button's
+   white-on-ink text to 4.09:1 (axe serious, 2026-11-09). The input keeps full-contrast text. */
+.search-bar--demoted input {
+  background: var(--tint-neutral);
+  border-color: transparent;
 }
