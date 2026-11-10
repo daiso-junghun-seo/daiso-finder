@@ -29,3 +29,22 @@ test('a URL that fails to load unmounts instead of painting a broken glyph', () 
   fireEvent.error(img);
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
 });
+
+test('the fallback slot replaces the photo when there is no URL (Flow 2 identity note)', () => {
+  render(<ProductPhoto name="리빙 밀폐용기 1.2L" fallback={<p>상품 사진이 없어요</p>} />);
+  expect(screen.getByText('상품 사진이 없어요')).toBeInTheDocument();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
+
+test('the fallback slot also replaces a URL that fails to load', () => {
+  render(
+    <ProductPhoto
+      imageUrl="https://cdn.daisomall.co.kr/file/PD/missing.jpg"
+      name="리빙 밀폐용기 1.2L"
+      fallback={<p>상품 사진이 없어요</p>}
+    />,
+  );
+  fireEvent.error(screen.getByRole('img', { name: '리빙 밀폐용기 1.2L' }));
+  expect(screen.getByText('상품 사진이 없어요')).toBeInTheDocument();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
