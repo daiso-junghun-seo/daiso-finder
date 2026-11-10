@@ -2,11 +2,19 @@
 
 > 이 저장소에서 새 세션을 시작하면 **여기부터** 읽는다. 결정·실행 원장은 [`docs/notes/open-questions.md`](notes/open-questions.md). `.superpowers/`는 `.gitignore` 대상이라 새 클론에는 존재하지 않는다 — 정본으로 링크하지 않는다.
 
-## 현재 상태 (2026-11-09 실측, `main`)
+## 현재 상태 (2026-11-10 실측)
 
-**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **공개 원격·CI·`main` 보호는 2026-11-08 적용됐고(공개 저장소), 공개 배포는 아직 없다.** **P1 구조 정리는 2026-11-09 완료** — 다음은 P2 Flow 2다.
+**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **공개 원격·CI·`main` 보호는 2026-11-08 적용됐고(공개 저장소), 공개 배포는 아직 없다.** **P1 구조 정리(2026-11-09)에 이어 P2 Flow 2 In-Store Navigation 구현·검증 완료(2026-11-10)** — 다음은 P3 Flow 3다.
 
-**게이트(2026-11-09 실측)**: vitest **747/747**(59 files), tsc clean, biome clean(150 files), Playwright **48/48**(dev 45 + preview 3), coverage **95.26% lines / 88.88% branches / 91.59% functions**(계층 임계값 CI 강제), build 성공(엔트리 **212.69 kB** / gzip 69.14 kB, CSS 14.19 kB, precache **21 entries / 347.69 KiB**).
+**게이트(2026-11-10 실측)**: vitest **807/807**(63 files), tsc clean, biome clean(159 files), Playwright **68/68**(dev 65 + preview 3), coverage **96.13% lines / 89.4% branches / 91.96% functions**(계층 임계값 CI 강제), build 성공(엔트리 **224.68 kB** / gzip 72.58 kB, CSS 15.69 kB, precache **21 entries / 361.13 KiB**).
+
+### P2 Flow 2 In-Store Navigation (2026-11-10)
+
+- **데이터 인-핸드 진입**: Flow 1 Success의 답(상품·가격·층/구역·스탬프)을 그대로 넘겨받아 요청 없이 즉시 안내를 렌더한다. handoff는 `navigationEntryOf`(candidate/scan → pdNo, typed → 키워드, 미보유 시 표시 쿼리 → 상품명 폴백) — 새 캐시 단위를 만들지 않는다.
+- **배경 새로고침**: `navigation-refresh.ts` 2s 타임아웃·비블로킹·주기 타이머 없음. 트리거 = 진입·resume·pull·`못 찾겠어요` 1회·stale `다시 확인`. outcome 4종(`unchanged`·`changed`·`soldOut`·`unapplied`) 중 `temporarilyOut`만 sold-out exit.
+- **D4 보류**: mid-walk 위치 이동·판매종료·franchise flip은 Bible Experience 결정이 없어 `unapplied`로 안내를 유지한다(앱이 종료 카피를 발명하지 않는다).
+- **표면**: `NavigationSurface` 6상태 — 다중 위치 선택 → 단일 안내(L3 다른 위치 disclosure) → `못 찾겠어요` recovery(다른 위치 / 직원 문의 + `대안 보기`) → 품절 → stale(시스템 오류 본문 + `다시 확인`). Flow 2에서는 검색바·카트 링크를 숨기고, back은 `위치 보기` CTA로 포커스를 되돌린다.
+- **검증**: 단위 60건 신규(navigation-refresh 16·entry 8·dev-refresh 5·표면 16·handoff 5 등), E2E `navigation.spec.ts` 12건, axe Flow 2 4상태×2테마 8건. dev 하네스 `?navRefresh=`·`?navAge=`는 `import.meta.env.DEV` 게이트이며 entry 호출은 unchanged로 유지한다(쇼퍼가 먼저 안내를 본다). 결정 = [`notes/open-questions.md`](notes/open-questions.md) §B49.
 
 ### P1 구조 정리 (2026-11-09)
 
@@ -29,9 +37,11 @@
 ### 지금 남은 것 (우선순위)
 
 1. **프로덕션 런타임 미배포** — ToS/robots 게이트는 2026-10-12 해제됐다(owner verdict). 남은 것은 호스트명·포트 결정과 [`docs/deploy/gpu01-node-proxy.md`](deploy/gpu01-node-proxy.md) §1–7 실행. CF workerd는 벤더 핑거프린트 403이라 Node 프록시가 유일 경로다.
-2. **P2 Flow 2(D077)** — data-in-hand 렌더, refresh 트리거 4종, 비블로킹, stale→Partial, stock-gone exit. Flow 3 similar 분기와 한 릴리스로 묶는다(단독 출시는 stock-gone 데드엔드).
-3. **§B47 나머지 커버리지** — 교차 매장 import는 E2E 1건으로 고정됐다. 공유 취소·최근 본·수량 상한은 아직 단위 테스트만 있다.
-4. **툴체인 업그레이드** — vite 5→8, vitest 3→5. CI green을 유지한 별도 브랜치에서 단계적으로(D7).
+2. **P3 Flow 3 Alternative Discovery(D076)** — P2의 sold-out/recovery `대안 보기` CTA는 현재 inert다(Flow 1 stub과 동일). similar 분기·entry matrix·3행 바운드·단일 스탬프·통짜 캐시로 P2와 한 릴리스에 묶는다(단독 출시는 stock-gone 데드엔드).
+3. **D4 Bible 결정** — 통로 중 위치 이동·품절 외 부정 상태의 종료/재안내 카피. P2는 관측·보류까지만 구현했다.
+4. **§B47 나머지 커버리지** — 교차 매장 import는 E2E 1건으로 고정됐다. 공유 취소·최근 본·수량 상한은 아직 단위 테스트만 있다.
+5. **엔트리 번들 예산 초과** — 224.68 kB / gzip 72.58 kB로 상한(220/72)을 넘었다. cold tap에 청크 요청을 만들지 않는 분할 지점을 찾거나 상한을 근거와 함께 재결정한다(P3 착수 전).
+6. **툴체인 업그레이드** — vite 5→8, vitest 3→5. CI green을 유지한 별도 브랜치에서 단계적으로(D7).
 
 ### 최근 완료 (§B47, 상세는 원장)
 

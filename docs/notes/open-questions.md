@@ -198,6 +198,20 @@ B30-4는 **Bible 비준 대기** — 앱이 정직 초안으로 5종 카피(권�
 | B48-6 | 줄바꿈·오버플로 | `body { word-break: keep-all; overflow-wrap: break-word }`; 매장 줄/액션 wrap; 인풋 ellipsis; `@media (max-width:300px)` 검색바 세로 스택 | 320px에서 매장명과 액션이 30px 겹쳤고, 200% 확대(195 CSS px)에서 한 줄 검색바가 25px 가로 오버플로를 냈다. 확대 시 가격이 도킹 바 아래로 가는 것은 의도적 수용 — WCAG reflow 기준(320px)은 통과하고 가로 스크롤은 0 |
 | B48-7 | 검증 계약 | CSS 텍스트 가드(`layout.test.ts`·`tokens.test.ts`) + 렌더 기하 E2E 7건(`interactive.spec.ts`) | E2E는 3개 폰에서 가격·CTA가 도킹 바 위인지, 320px 매장 줄 비겹침, 스크롤 스태킹, 데스크톱 시트 480px·스크림 최상위, 카트 거터·체크박스 히트 영역을 실측한다. 게이트(2026-11-08): vitest **743/743**, tsc clean, biome clean(140), Playwright **36/36**, build 성공 |
 
+> **✅ Flow 2 In-Store Navigation(2026-11-10, D077·D078 비준 계약 구현 — 설계 [`2026-11-09-flow2-in-store-navigation-design.md`](../superpowers/specs/2026-11-09-flow2-in-store-navigation-design.md))**: Flow 1 Success의 답을 그대로 들고 들어가 안내를 즉시 렌더하고, 새로고침은 배경에서만 돈다. Bible이 열어 둔 두 경로(§11 / D4)는 앱에서 메우지 않고 `unapplied`로 보류했다.
+
+| # | 결정 | 확정 | 근거/검증 |
+|---|---|---|---|
+| B49-1 | 내비게이션은 UI-shell 상태 | `sheetOpen`·`scannerOpen`과 같은 표면 상태. 7번째 `UiState`도, reducer 변경도 아니다 | 6상태 계약(Interface §4)·`ui` 리듀서·`?scenario=` 스윕이 그대로다. 새 상태는 답 카드 위에 얹히는 표현 계층이며, cold entry에는 내비게이션 상태가 없어 Flow 1로 돌아간다(안내를 재구성하지 않는다) |
+| B49-2 | 새로고침 계약 | 2s 타임아웃·비블로킹·주기 타이머 없음. 트리거 = 진입·resume(visibilitychange)·pull·`못 찾겠어요` 1회·stale `다시 확인`. stale 임계값은 Flow 1과 공유하는 provisional 6h(`defaultPolicy.stalenessThresholdMs`) | Engineering §4 계약 그대로. 30s 표시 시계는 네트워크 갱신이 아니라 경과 표시다. stale `다시 확인`은 `retry` purpose로 in-flight 배경 요청을 취소·대체한다(두 응답이 경합해 낡은 결과가 이기지 않게) |
+| B49-3 | outcome 4종, 그리고 D4 | `unchanged`·`changed`·`soldOut`·`unapplied`. `temporarilyOut`만 sold-out exit. guidance가 바뀐 positive/기타 negative는 `unapplied`로 두고 안내·스탬프를 유지 | Bible Experience에 mid-walk 위치 이동·판매종료·franchise flip의 종료 카피가 없다 — Flow 2가 새 카피를 발명하지 않는다. D4로 Bible 에스컬레이션(아래 열린 질문) |
+| B49-4 | handoff term | `candidate`/`scan`은 pdNo(정확 동일성), `typed`는 키워드, 미보유 시 표시 쿼리. 표시 쿼리가 비면 **상품명**으로 폴백 | StrictMode가 `?scenario=` 효과를 두 번 실행해 두 번째 RESULT가 `query`를 비운다. 빈 키워드 네트워크 호출은 금지 — 상품명은 답이 이미 매칭된 리터럴이다(회귀 테스트 고정) |
+| B49-5 | back·포커스·L4 | back은 `StoreContextBar`/`StoreContextLine`의 optional `onBack`(표면 자체는 back prop 없음). 복귀 시 `위치 보기` CTA로 포커스를 되돌린다. 비-success·매장 변경 시 내비게이션 상태 clear | L1–L4·포커스 순서 계약 유지. 매장 변경은 새 매장에서 Default로 착지(이전 매장 안내를 새 매장에 재사용하지 않는다). Flow 2에서는 검색바·카트 링크를 숨긴다 — 통로 안의 주 행동은 안내 하나 |
+| B49-6 | dev 하네스 | `?navRefresh=` 6모드(failed·soldOut·other·still·recoverStale·unapplied)·`?navAge=`(분). 둘 다 `import.meta.env.DEV` 게이트 | 하네스는 **첫 호출(entry)을 unchanged로 유지**하고 두 번째 호출이 요청 결과를 낸다 — 쇼퍼가 먼저 안내를 봐야 한다는 계약을 하네스가 뒤집지 않는다. E2E는 resume 이벤트로 2번째 새로고침을 유발한다 |
+| B49-7 | 게이트(2026-11-10 실측) | vitest **807/807**(63 files), tsc clean, biome clean(159), Playwright **68/68**(dev 65 + preview 3), coverage **96.13% lines / 89.4% branches / 91.96% functions**, build 성공(엔트리 **224.68 kB** / gzip 72.58 kB, CSS 15.69 kB, precache 21 entries / 361.13 KiB) | Flow 2 신규: 단위 60건(refresh 16·entry 8·dev 5·표면 16·handoff 5 + 카피 5·strings 1·AnswerCard 1·ProductPhoto 2·CSS 가드 1), E2E 12건, axe 4상태×2테마 8건. Flow 1 기준선 747/48을 유지한 채 추가됐다 |
+
+> **B49-D4 (열린 질문, Bible)**: 통로에서 위치가 바뀌거나(재고가 다른 층/존으로 이동) 품절 외 부정 상태(판매종료·franchise flip)가 관측될 때 쇼퍼에게 무엇을 말할 것인가. 현재 앱은 `unapplied`로 안내를 유지하고 스탬프만 늙힌다 — 종료 카피·재안내 여부·대안 CTA 노출은 Experience 결정이 필요하다.
+
 > **⚠️ Owner 명시 예외 — 쇼핑리스트 일괄(2026-10-15, `AGENTS.md` 질문정책 예외 명시)**: 최근 본 상품·쇼핑리스트·공유 기능은 Bible Interface L-표·단일-CTA·Final 카피에 근거가 없는 스펙 갭이다. Owner가 명시적으로 예외를 두고 처음부터 끝까지 구현을 지시, 전권 위임. 위반이 아니라 **기록된 예외**로 진행한다. 앱 소유 결정은 아래 §B47. 되돌림은 슬라이스별 머지 커밋 revert.
 
 | # | 결정 | 확정 | 근거/검증 |
