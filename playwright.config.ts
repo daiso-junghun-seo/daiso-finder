@@ -17,7 +17,7 @@ export default defineConfig({
   projects: [
     {
       name: 'dev',
-      testMatch: /(states|interactive|a11y)\.spec\.ts$/,
+      testMatch: /(states|interactive|a11y|navigation)\.spec\.ts$/,
       use: { baseURL: 'http://localhost:5173', locale: 'ko-KR' },
     },
     {
