@@ -35,7 +35,7 @@ test('English facts mirror the ko structure per answer kind', () => {
   expect(STR.en.SCAN_AIM_GUIDE_TOKEN).toBe(STR.ko.SCAN_AIM_GUIDE_TOKEN);
 });
 
-test('English announcements order like ko and drop the removed inStock CTA too', () => {
+test('English announcements order like ko and include the restored inStock CTA', () => {
   const ui = {
     state: 'success' as const,
     query: 'container',
@@ -45,9 +45,23 @@ test('English announcements order like ko and drop the removed inStock CTA too',
   const en = announcementForEn(ui, defaultPolicy, 0);
   const ko = announcementForKo(ui, defaultPolicy, 0);
   expect(en).toHaveLength(ko.length);
-  expect(en).not.toContain(STR.en.SUCCESS_IN_STOCK_CTA);
+  expect(en).toContain(STR.en.SUCCESS_IN_STOCK_CTA);
   expect(STR.en.RETRY_BUTTON).toBe('Retry');
   // EN price line: translated unit, identical digits, English floor/zone grammar (D069:
   // digits match, signage risk recorded in §B46).
   expect(en).toContain('₩2,000 · 11F · No. 56');
+});
+
+test('English Flow 2 copy mirrors ko guidance and translates grammar only', () => {
+  expect(STR.en.NAV_BACK_LABEL).toBe('Back');
+  expect(STR.en.navigationMultiHeading(2)).toBe('It is in two places');
+  expect(STR.en.navigationRecoveryOther({ floor: '11', zone: '56' })).toBe(
+    'It is also at 11F · No. 56.',
+  );
+  const now = new Date(2026, 6, 15, 9, 0).getTime();
+  expect(STR.en.navigationFreshnessCaption(now - 3 * 60_000, now)).toBe('Checked 3 min ago');
+  // Match tokens stay Korean (D069).
+  expect(STR.en.navigationRecoveryOther({ floor: '-1', zone: '3' })).toBe(
+    'It is also at B1 · No. 3.',
+  );
 });

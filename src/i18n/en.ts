@@ -5,7 +5,7 @@
 // Bible ratification may reword through the same verbatim-replace path as the ko drafts. Completeness against
 // copy.ts is compiler-checked (CopyTable in ./strings) plus a runtime key test.
 import type { DataOwnerPolicy } from '../domain/policy';
-import type { AvailabilityAnswer, UiState } from '../domain/types';
+import type { AvailabilityAnswer, StoreLocation, UiState } from '../domain/types';
 import { formatLocation, formatPrice, formatRelativeTimeEn } from '../ui/format';
 
 export const DEFAULT_HEADLINE = 'Check if this store has it';
@@ -185,6 +185,35 @@ export function scanEmptyBody(value: string): string {
   return `No product registered for barcode '${value}'. Please search by product name.`;
 }
 
+// ── Flow 2 In-Store Navigation ──────────────────────────────────────────────────────────────
+// English twins of the ko drafts in copy.ts (D068/D069). Match tokens stay Korean.
+export const NAV_BACK_LABEL = 'Back';
+export const NAV_LOCATION_LABEL = 'Location';
+export const NAV_MISSING_LINK = 'Can’t find it';
+export const NAV_PHOTO_MISSING_NOTE = 'No product photo. Please confirm by name and price.';
+export const NAV_RECOVERY_STILL_BODY =
+  'Our data says it is still in stock. If it is not on the shelf, please ask staff.';
+export const NAV_SOLD_OUT_BODY = 'Just checked again — it is now out of stock.';
+
+export function navigationMultiHeading(count: number): string {
+  return count === 2 ? 'It is in two places' : `It is in ${count} places`;
+}
+
+export function navigationRecoveryOther(location: StoreLocation): string {
+  return `It is also at ${formatLocation(location, 'en')}.`;
+}
+
+export function navigationStaleBody(relativeTime: string): string {
+  return `Could not check today’s stock — it was in stock ${relativeTime}.`;
+}
+
+export function navigationFreshnessCaption(observedAtMs: number, nowMs: number): string {
+  const minutes = Math.max(0, Math.floor((nowMs - observedAtMs) / 60_000));
+  if (minutes < 1) return 'Just checked';
+  if (minutes < 60) return `Checked ${minutes} min ago`;
+  return `Checked ${formatRelativeTimeEn(observedAtMs, nowMs)}`;
+}
+
 type NonDefaultUiState = Exclude<UiState, { state: 'default' }>;
 
 // Mirrors copy.announcementFor's structure with English pieces (same order contract:
@@ -217,9 +246,8 @@ export function announcementForEn(
         answer.kind === 'inStock' && answer.qtyUpperBound <= policy.lowQtyCutoff
           ? lowQtyCaption(answer.qtyUpperBound)
           : LIVE_FRESHNESS_CAPTION;
-      // Same §B40 rule as ko: inStock announces no CTA (its button was removed as a dead stub).
-      const cta = answer.kind === 'inStock' ? [] : [facts.cta];
-      return [facts.status, ...(line ? [line] : []), freshnessCap, ...cta];
+      // Flow 2 restored 위치 보기 as a wired control, so its CTA is announced again (§B40).
+      return [facts.status, ...(line ? [line] : []), freshnessCap, facts.cta];
     }
     case 'partial': {
       const { answer, freshness, trigger } = ui;

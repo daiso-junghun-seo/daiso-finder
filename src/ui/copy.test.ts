@@ -7,6 +7,12 @@ import {
   LIVE_FRESHNESS_CAPTION,
   LOADING_CARD_COPY,
   LOADING_DELAY_LINE,
+  NAV_BACK_LABEL,
+  NAV_LOCATION_LABEL,
+  NAV_MISSING_LINK,
+  NAV_PHOTO_MISSING_NOTE,
+  NAV_RECOVERY_STILL_BODY,
+  NAV_SOLD_OUT_BODY,
   PARTIAL_FRANCHISE_BODY,
   PARTIAL_FRANCHISE_CTA,
   PARTIAL_NO_LOCATION_CTA,
@@ -43,6 +49,10 @@ import {
   extraPositionsLabel,
   factsFor,
   lowQtyCaption,
+  navigationFreshnessCaption,
+  navigationMultiHeading,
+  navigationRecoveryOther,
+  navigationStaleBody,
   nearbyStoreRowLabel,
   partialLocationMissingConfirmed,
   partialStaleCacheBody,
@@ -163,7 +173,7 @@ test('priceLocationLine renders only for inStock answers that carry a location',
   expect(priceLocationLine(mockAnswers.temporarilyOut)).toBeUndefined();
 });
 
-test('announcementFor orders a success announcement as status -> price/location -> freshness (no CTA: 위치 보기 removed as a dead stub, §B40)', () => {
+test('announcementFor orders a success announcement as status -> price/location -> freshness -> wired CTA', () => {
   const ui = {
     state: 'success' as const,
     query: '밀폐용기',
@@ -174,6 +184,7 @@ test('announcementFor orders a success announcement as status -> price/location 
     SUCCESS_IN_STOCK_STATUS,
     '2,000원 · 11층 56번',
     LIVE_FRESHNESS_CAPTION,
+    SUCCESS_IN_STOCK_CTA,
   ]);
 });
 
@@ -299,4 +310,41 @@ test('a scan-origin empty announces the scan copy, not the typed copy', () => {
     0,
   );
   expect(announced).toEqual([scanEmptyBody('19987')]);
+});
+
+// ── Flow 2 In-Store Navigation (Interface/in-store-navigation.md §4) ─────────────────────────
+test('Flow 2 copy reproduces the Bible table and the app-owned a11y labels', () => {
+  expect(NAV_BACK_LABEL).toBe('뒤로');
+  expect(NAV_LOCATION_LABEL).toBe('위치');
+  expect(NAV_MISSING_LINK).toBe('못 찾겠어요');
+  expect(NAV_RECOVERY_STILL_BODY).toBe(
+    '재고는 아직 있다고 나오는데, 선반에 없다면 직원에게 문의해 주세요.',
+  );
+  expect(NAV_SOLD_OUT_BODY).toBe('방금 다시 확인해 보니 품절됐어요.');
+  expect(NAV_PHOTO_MISSING_NOTE).toBe('상품 사진이 없어요. 이름과 가격으로 확인해 주세요.');
+});
+
+test('navigationMultiHeading is Bible-verbatim for two and mechanical beyond it (§B13)', () => {
+  expect(navigationMultiHeading(2)).toBe('두 곳에 있어요');
+  expect(navigationMultiHeading(3)).toBe('3곳에 있어요');
+});
+
+test('navigationRecoveryOther names the other position with the shared ko grammar', () => {
+  expect(navigationRecoveryOther({ floor: '11', zone: '56' })).toBe('11층 56번에도 있어요.');
+  expect(navigationRecoveryOther({ floor: '-1', zone: '3' })).toBe('지하 1층 3번에도 있어요.');
+});
+
+test('navigationStaleBody keeps the observation time and claims nothing about today', () => {
+  expect(navigationStaleBody('어제 오후 6시')).toBe(
+    '오늘 재고는 확인하지 못했어요 — 어제 오후 6시에는 있었어요.',
+  );
+});
+
+test('navigationFreshnessCaption reads minutes under an hour, then the calendar clock', () => {
+  const now = new Date(2026, 6, 15, 9, 0).getTime();
+  const early = new Date(2026, 6, 15, 8, 0).getTime();
+  expect(navigationFreshnessCaption(now, now)).toBe('방금 확인한 재고예요');
+  expect(navigationFreshnessCaption(now - 59_000, now)).toBe('방금 확인한 재고예요');
+  expect(navigationFreshnessCaption(now - 3 * 60_000, now)).toBe('3분 전에 확인한 재고예요');
+  expect(navigationFreshnessCaption(early, now)).toBe('오늘 오전 8시에 확인한 재고예요');
 });

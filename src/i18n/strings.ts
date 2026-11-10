@@ -2,7 +2,7 @@
 // (ui/copy.ts, untouched); en is the first-draft mirror (./en). Locale-free helpers
 // (priceLocationLine, splitAimGuide, formatters) are shared, never mirrored — only
 // TEXT-bearing exports belong here, enforced by the key-parity test (strings.test.ts).
-import type { AvailabilityAnswer } from '../domain/types';
+import type { AvailabilityAnswer, StoreLocation } from '../domain/types';
 import * as ko from '../ui/copy';
 import * as en from './en';
 import type { Locale } from './locale';
@@ -77,6 +77,16 @@ export interface CopyTable {
   readonly SCAN_UNSUPPORTED: string;
   readonly SCAN_FAILED: string;
   readonly SCAN_HINT: string;
+  readonly NAV_BACK_LABEL: string;
+  readonly NAV_LOCATION_LABEL: string;
+  readonly NAV_MISSING_LINK: string;
+  readonly NAV_PHOTO_MISSING_NOTE: string;
+  readonly NAV_RECOVERY_STILL_BODY: string;
+  readonly NAV_SOLD_OUT_BODY: string;
+  navigationMultiHeading(count: number): string;
+  navigationRecoveryOther(location: StoreLocation): string;
+  navigationStaleBody(relativeTime: string): string;
+  navigationFreshnessCaption(observedAtMs: number, nowMs: number): string;
   nearbyStoreRowLabel(strNm: string, distanceM: number): string;
   storeLine(storeName: string): string;
   emptyBody(query: string): string;

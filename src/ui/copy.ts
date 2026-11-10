@@ -1,6 +1,6 @@
 // src/ui/copy.ts — Bible-verbatim copy (Interface/availability-check.md §4). Transcribe exactly; do not paraphrase.
 import type { DataOwnerPolicy } from '../domain/policy';
-import type { AvailabilityAnswer, UiState } from '../domain/types';
+import type { AvailabilityAnswer, StoreLocation, UiState } from '../domain/types';
 import { announcementForEn, factsFor as factsForEn } from '../i18n/en';
 import type { Locale } from '../i18n/locale';
 import { formatLocation, formatPrice, formatRelativeTimeKo } from './format';
@@ -181,11 +181,8 @@ export function announcementFor(
         answer.kind === 'inStock' && answer.qtyUpperBound <= policy.lowQtyCutoff
           ? lowQtyCaption(answer.qtyUpperBound)
           : LIVE_FRESHNESS_CAPTION;
-      // No CTA announced for inStock success: its button (위치 보기) was removed as a dead
-      // stub 2026-10-12 (owner, §B40) — announcing an action with no control would strand
-      // screen-reader shoppers. facts.cta still exists for Flow 2's restoration.
-      const cta = answer.kind === 'inStock' ? [] : [facts.cta];
-      return [facts.status, ...(line ? [line] : []), freshnessCap, ...cta];
+      // Flow 2 restored 위치 보기 as a wired control, so its CTA is announced again (§B40).
+      return [facts.status, ...(line ? [line] : []), freshnessCap, facts.cta];
     }
     case 'partial': {
       if (ui.trigger === 'franchise') return [PARTIAL_FRANCHISE_BODY, PARTIAL_FRANCHISE_CTA];
@@ -299,4 +296,40 @@ export const SCAN_HINT = '바코드가 잘 안 읽히면 상품명으로 검색�
 
 export function scanEmptyBody(value: string): string {
   return `'${value}' 바코드로 등록된 상품을 찾지 못했어요. 상품명으로 검색해 보세요.`;
+}
+
+// ── Flow 2 In-Store Navigation (Interface/in-store-navigation.md §4) ─────────────────────────
+// The copy table is final. The only app-owned additions are the two a11y labels (visible copy
+// does not change), the N>2 multi heading fallback, and the minute-to-hour caption boundary —
+// drafted in both languages and flagged for Bible ratification like §B30-4/§B47.
+export const NAV_BACK_LABEL = '뒤로';
+export const NAV_LOCATION_LABEL = '위치';
+export const NAV_MISSING_LINK = '못 찾겠어요';
+export const NAV_PHOTO_MISSING_NOTE = '상품 사진이 없어요. 이름과 가격으로 확인해 주세요.';
+export const NAV_RECOVERY_STILL_BODY =
+  '재고는 아직 있다고 나오는데, 선반에 없다면 직원에게 문의해 주세요.';
+export const NAV_SOLD_OUT_BODY = '방금 다시 확인해 보니 품절됐어요.';
+
+// The two-position case is Bible-verbatim; N>2 has no defined copy, so the count is the
+// mechanical parameter (same class as extraPositionsLabel, §B13).
+export function navigationMultiHeading(count: number): string {
+  return count === 2 ? '두 곳에 있어요' : `${count}곳에 있어요`;
+}
+
+export function navigationRecoveryOther(location: StoreLocation): string {
+  return `${formatLocation(location, 'ko')}에도 있어요.`;
+}
+
+export function navigationStaleBody(relativeTime: string): string {
+  return `오늘 재고는 확인하지 못했어요 — ${relativeTime}에는 있었어요.`;
+}
+
+// The Bible fixes "방금 확인한 재고예요" and the example "3분 전에 확인한 재고예요", not the
+// boundary algorithm (§B12 precedent). Under an hour reads in minutes; older observations fall
+// back to the same calendar clock Flow 1 already uses.
+export function navigationFreshnessCaption(observedAtMs: number, nowMs: number): string {
+  const minutes = Math.max(0, Math.floor((nowMs - observedAtMs) / 60_000));
+  if (minutes < 1) return '방금 확인한 재고예요';
+  if (minutes < 60) return `${minutes}분 전에 확인한 재고예요`;
+  return `${formatRelativeTimeKo(observedAtMs, nowMs)}에 확인한 재고예요`;
 }
