@@ -6,7 +6,7 @@
 
 **Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **공개 원격·CI·`main` 보호는 2026-11-08 적용됐고(공개 저장소), 공개 배포는 아직 없다.** **P1 구조 정리(2026-11-09)에 이어 P2 Flow 2 In-Store Navigation 구현·검증 완료(2026-11-10)** — 다음은 P3 Flow 3다.
 
-**게이트(2026-11-10 실측)**: vitest **807/807**(63 files), tsc clean, biome clean(159 files), Playwright **68/68**(dev 65 + preview 3), coverage **96.13% lines / 89.4% branches / 91.96% functions**(계층 임계값 CI 강제), build 성공(엔트리 **224.68 kB** / gzip 72.58 kB, CSS 15.69 kB, precache **21 entries / 361.13 KiB**).
+**게이트(2026-11-10 실측)**: vitest **807/807**(63 files), tsc clean, biome clean(159 files), Playwright **69/69**(dev 66 + preview 3), coverage **임계값 green**(V8 샘플 3회 lines 95.5–97.8% / branches 89.37–90.08% / functions 88.22–92.0% — 총계가 실행마다 달라 단일 퍼센트를 계약으로 쓰지 않는다), build 성공(엔트리 **224.68 kB** / gzip 72.58 kB, CSS 15.69 kB, precache **21 entries / 361.13 KiB**).
 
 ### P2 Flow 2 In-Store Navigation (2026-11-10)
 
@@ -15,6 +15,7 @@
 - **D4 보류**: mid-walk 위치 이동·판매종료·franchise flip은 Bible Experience 결정이 없어 `unapplied`로 안내를 유지한다(앱이 종료 카피를 발명하지 않는다).
 - **표면**: `NavigationSurface` 6상태 — 다중 위치 선택 → 단일 안내(L3 다른 위치 disclosure) → `못 찾겠어요` recovery(다른 위치 / 직원 문의 + `대안 보기`) → 품절 → stale(시스템 오류 본문 + `다시 확인`). Flow 2에서는 검색바·카트 링크를 숨기고, back은 `위치 보기` CTA로 포커스를 되돌린다.
 - **검증**: 단위 60건 신규(navigation-refresh 16·entry 8·dev-refresh 5·표면 16·handoff 5 등), E2E `navigation.spec.ts` 12건, axe Flow 2 4상태×2테마 8건. dev 하네스 `?navRefresh=`·`?navAge=`는 `import.meta.env.DEV` 게이트이며 entry 호출은 unchanged로 유지한다(쇼퍼가 먼저 안내를 본다). 결정 = [`notes/open-questions.md`](notes/open-questions.md) §B49.
+- **짧은 폰 예산**: Flow 2 CTA가 320×568에서 예산을 넘겨 사진 하한을 112→80px로 내렸다. L4 액션 줄이 wrap된 경우(CI Linux 폰트에서 먼저 드러남)를 긴 매장명으로 재현해 E2E 기하 케이스로 고정했다(§B49-8).
 
 ### P1 구조 정리 (2026-11-09)
 

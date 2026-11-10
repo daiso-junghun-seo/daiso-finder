@@ -145,11 +145,11 @@ function overflowPx(inner: Box, outer: Box): number {
 const PHOTO_1PX =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
-async function seedPhone(page: Page, width: number, height: number) {
+async function seedPhone(page: Page, width: number, height: number, storeName = '명동역점') {
   await page.setViewportSize({ width, height });
-  await page.addInitScript(() => {
-    localStorage.setItem('daiso.storeContext', JSON.stringify({ strCd: '001', strNm: '명동역점' }));
-  });
+  await page.addInitScript((name) => {
+    localStorage.setItem('daiso.storeContext', JSON.stringify({ strCd: '001', strNm: name }));
+  }, storeName);
   await page.route('**/cdn.daisomall.co.kr/**', (route) =>
     route.fulfill({ contentType: 'image/png', body: Buffer.from(PHOTO_1PX, 'base64') }),
   );
@@ -322,13 +322,23 @@ test.describe('usability floor (phone 390×844)', () => {
 // written: at 375×667 the sticky dock covered the price line and 담기; at 320×568 the price was
 // completely behind it; at 1280 the fixed sheets spanned the whole viewport. Each test below is
 // the rendered geometry contract, not a CSS-text proxy.
-for (const viewport of [
+// The last case seeds a long store name so the L4 action cluster wraps to its own row (the CI
+// Linux font already does this with the short name at 320px). Flow 2 added a CTA to Success, so
+// the short-phone budget must hold in the wrapped-bar case too — the photo is what yields.
+const phoneCases: Array<{ name: string; width: number; height: number; storeName?: string }> = [
   { name: '390×844', width: 390, height: 844 },
   { name: '375×667', width: 375, height: 667 },
   { name: '320×568', width: 320, height: 568 },
-]) {
+  {
+    name: '320×568·wrapped store bar',
+    width: 320,
+    height: 568,
+    storeName: '다이소 강남역지하쇼핑센터점',
+  },
+];
+for (const viewport of phoneCases) {
   test(`the Success answer stays above the dock (${viewport.name})`, async ({ page }) => {
-    await seedPhone(page, viewport.width, viewport.height);
+    await seedPhone(page, viewport.width, viewport.height, viewport.storeName);
     await openSuccess(page);
 
     const cardBox = await boxOf(page.locator('.answer-card'), 'answer card');

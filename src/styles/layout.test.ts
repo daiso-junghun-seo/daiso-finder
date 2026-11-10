@@ -447,7 +447,7 @@ test('the scanner dialog carries a gutter and the same 480px frame', () => {
 
 test('short phones shrink the photo and the hero price, never the answer content', () => {
   const short = blockFor('@media (max-height: 640px)');
-  expect(short).toMatch(/\.answer-card \.product-photo\s*\{[^}]*max-height:\s*112px/);
+  expect(short).toMatch(/\.answer-card \.product-photo\s*\{[^}]*max-height:\s*80px/);
   expect(short).toMatch(/\.price-line\s*\{[^}]*font-size:\s*1\.5rem/);
 });
 

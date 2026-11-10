@@ -1029,14 +1029,16 @@ main h1 {
 
 /* Short phones (320×568, or a landscape 844×390): the answer still has to fit above
    the dock. The photo and the hero price give way — the status, price, and CTA never do.
-   Measured budgets: 375×667 fits with the 30vh clamp; 320×568 needs this floor. */
+   Measured budgets: 375×667 fits with the 30vh clamp; 320×568 needs this floor. Flow 2's
+   CTA and a wrapped L4 action row cost ~77px together, so the floor drops from 112 to 80 —
+   the photo is the only element that can keep yielding. */
 @media (max-height: 640px) {
   .answer-card {
     padding: var(--space-md);
   }
 
   .answer-card .product-photo {
-    max-height: 112px;
+    max-height: 80px;
   }
 
   .price-line {

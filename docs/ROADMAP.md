@@ -7,7 +7,7 @@
 - Increment 0 + Flow 1 + §B47 쇼핑리스트까지 `main`에 완료, 공개 원격(`daiso-junghun-seo/daiso-finder`)에 push됨.
 - P1 구조 정리 완료: `AvailabilitySurface` 824→286줄, 커버리지 게이트, axe 6상태×2테마, PWA precache 결정.
 - P2 Flow 2 In-Store Navigation 완료: data-in-hand 진입, 2s 배경 새로고침(주기 타이머 없음), stale→시스템 오류 본문, `temporarilyOut`만 sold-out exit, D4 두 경로는 `unapplied` 보류.
-- 게이트: vitest **807/807**(63 files), tsc clean, biome clean(159), Playwright **68/68**(dev 65 + preview 3), coverage **96.13% lines / 89.4% branches / 91.96% functions**, build 성공(224.68 kB / gzip 72.58 kB, CSS 15.69 kB, precache 21 entries / 361.13 KiB).
+- 게이트: vitest **807/807**(63 files), tsc clean, biome clean(159), Playwright **69/69**(dev 66 + preview 3), coverage **임계값 green**(V8 샘플 3회 lines 95.5–97.8% / branches 89.37–90.08% / functions 88.22–92.0%; 총계 변동으로 단일 퍼센트는 계약이 아니다), build 성공(224.68 kB / gzip 72.58 kB, CSS 15.69 kB, precache 21 entries / 361.13 KiB).
 - Flow 2·3는 **D078(2026-07-13)로 계약 비준 완료** — 남은 것은 P3 구현과 아래 "결정 필요" 항목이다.
 - 남은 가장 큰 위험은 기능이 아니라 **배포·필드 검증의 부재**다.
 
@@ -53,6 +53,7 @@
 - [x] `temporarilyOut`만 stock-gone exit, 그 외 부정 상태는 `unapplied`(D4) — 결정 기록 §B49
 - [x] stale 관측 → 시스템 오류 본문 + `다시 확인` 복구, `못 찾겠어요` recovery 2분기
 - [x] 6상태·카피·포커스·L1–L4·바텀독 계약 불변, axe Flow 2 4상태×2테마
+- [x] 짧은 폰 예산: CTA 추가로 320×568에서 사진 하한 80px, L4 wrap 케이스 E2E 고정
 
 ### P3 체크리스트
 
