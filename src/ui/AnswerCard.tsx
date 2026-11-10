@@ -21,6 +21,8 @@ export function AnswerCard({
   onRetry,
   onAdd,
   onScan,
+  onNavigate,
+  navigateButtonRef,
   cardRef,
 }: {
   ui: NonDefaultUiState;
@@ -41,13 +43,18 @@ export function AnswerCard({
   // Wired ONLY to the Empty render (Bible Interface §4: the Empty card carries its own scan CTA).
   // Scan-origin empties reuse it as the scan retry.
   onScan?: () => void;
+  // Flow 2 hand-off (Flow 1 Interface §L2 CTA 위치 보기). Passed only for Success + inStock with at
+  // least one position — the same condition as Flow 2's entry contract.
+  onNavigate?: () => void;
+  // Back-from-Flow-2 focus target: the surface hands focus back to this CTA on return.
+  navigateButtonRef?: Ref<HTMLButtonElement>;
   // Retry-focus target (decision 6): the surface root is focusable (tabIndex -1) so focus never falls
   // to <body> when the retry button unmounts on the Loading swap.
   cardRef?: Ref<HTMLDivElement>;
 }) {
   return (
     <GlassSurface className="answer-card" tabIndex={-1} surfaceRef={cardRef}>
-      {renderBody(ui, policy, nowMs, locale, onRetry, onAdd, onScan)}
+      {renderBody(ui, policy, nowMs, locale, onRetry, onAdd, onScan, onNavigate, navigateButtonRef)}
     </GlassSurface>
   );
 }
@@ -60,6 +67,8 @@ function renderBody(
   onRetry?: () => void,
   onAdd?: () => void,
   onScan?: () => void,
+  onNavigate?: () => void,
+  navigateButtonRef?: Ref<HTMLButtonElement>,
 ) {
   // One destructure instead of 20 imports: every bare copy name below resolves through the
   // active locale table, so no call site changes when a string gains a language. Sub-renders
@@ -115,7 +124,7 @@ function renderBody(
         ? renderErrorCached(ui.answer, ui.freshness.observedAt, nowMs, locale, onRetry, onAdd)
         : renderErrorNoCache(locale, onRetry);
     case 'success':
-      return renderSuccess(ui.answer, policy, locale, onAdd);
+      return renderSuccess(ui.answer, policy, locale, onAdd, onNavigate, navigateButtonRef);
     case 'partial':
       return renderPartial(ui, nowMs, locale, onRetry, onAdd);
   }
@@ -200,6 +209,8 @@ function renderSuccess(
   policy: DataOwnerPolicy,
   locale: Locale,
   onAdd?: () => void,
+  onNavigate?: () => void,
+  navigateButtonRef?: Ref<HTMLButtonElement>,
 ) {
   const {
     ADD_TO_CART_BUTTON,
@@ -228,15 +239,24 @@ function renderSuccess(
         <p className="text-caption">
           {isLowQty ? lowQtyCaption(answer.qtyUpperBound) : LIVE_FRESHNESS_CAPTION}
         </p>
+        {/* Flow 2 hand-off restored (2026-11-09): the CTA is wired only when the surface has a
+            navigation entry, which is the same inStock + has-location condition as the flow's
+            entry contract. No handler → no dead button (§B40). */}
+        {onNavigate && (
+          <button
+            ref={navigateButtonRef}
+            type="button"
+            className="text-label cta--primary"
+            onClick={onNavigate}
+          >
+            {facts.cta}
+          </button>
+        )}
         {rest.length > 0 && (
           <button type="button" className="text-caption">
             {extraPositionsLabel(rest.length)}
           </button>
         )}
-        {/* No CTA: 위치 보기 was removed 2026-10-12 (owner: dead stub promising an
-            unwired flow — a prominent dead button violates I4 feedback worse than its
-            absence. facts.cta still carries the string for Flow 2, which restores this
-            button wired. Siblings (대안 보기 etc.) stay until their flows land — §B40. */}
         {addButton(ADD_TO_CART_BUTTON, onAdd)}
       </div>
     );

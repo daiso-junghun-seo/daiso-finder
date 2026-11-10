@@ -19,6 +19,8 @@ export function AnswerBody({
   onScan,
   onAdd,
   onRetry,
+  onNavigate,
+  navigateButtonRef,
 }: {
   ui: AnswerUiState;
   announcement: string;
@@ -28,6 +30,8 @@ export function AnswerBody({
   onScan: () => void;
   onAdd?: () => void;
   onRetry: () => void;
+  onNavigate?: () => void;
+  navigateButtonRef?: Ref<HTMLButtonElement>;
 }) {
   return (
     <>
@@ -41,6 +45,8 @@ export function AnswerBody({
         onScan={onScan}
         onAdd={onAdd}
         onRetry={onRetry}
+        onNavigate={onNavigate}
+        navigateButtonRef={navigateButtonRef}
       />
     </>
   );

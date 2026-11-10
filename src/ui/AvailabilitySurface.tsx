@@ -25,6 +25,9 @@ import { runScenario } from './availability/scenario';
 import { useCartController } from './availability/useCart';
 import { StoreSelectionSheet } from './components/StoreSelectionSheet';
 import { announcementFor } from './copy';
+import { NavigationSurface } from './navigation/NavigationSurface';
+import { navigationEntryOf, parseDevAgeMinutes } from './navigation/navigation-entry';
+import type { NavigationEntry } from './navigation/navigation-refresh';
 import { useAvailabilityStore } from './store';
 
 // Store directory + geolocation for the D082 sheet: the composition root selects the live /api adapters
@@ -58,6 +61,11 @@ export function AvailabilitySurface() {
   const cartButtonRef = useRef<HTMLButtonElement>(null);
   const answerCardRef = useRef<HTMLDivElement>(null);
   const scanButtonRef = useRef<HTMLButtonElement>(null);
+  // Flow 2 is UI-shell state over the answer (not a seventh UiState): the guidance card is built
+  // from data in hand at tap time, so a store switch or any new lookup simply drops it.
+  const [navigation, setNavigation] = useState<NavigationEntry | null>(null);
+  const navigateButtonRef = useRef<HTMLButtonElement>(null);
+  const wasNavigating = useRef(false);
   // Last submitted lookup (UI-shell memory, not domain): kept across store switches so the
   // product survives them. Overwritten by every new submit/tap/decode; never cleared (a switch
   // with no prior lookup simply finds nothing to keep — see planStoreSwitch).
@@ -96,6 +104,19 @@ export function AvailabilitySurface() {
     if (wasCartOpen.current && !cart.cartOpen) cartButtonRef.current?.focus();
     wasCartOpen.current = cart.cartOpen;
   }, [cart.cartOpen]);
+
+  // Any state change away from Success invalidates the Flow 2 handoff: a new lookup, a store change
+  // (CHANGE_STORE lands Default), or an error drops the card instead of showing guidance for a
+  // question the shopper has already left.
+  useEffect(() => {
+    if (ui.state !== 'success') setNavigation(null);
+  }, [ui.state]);
+
+  // Back returns focus to the 위치 보기 CTA that opened the flow — never <body>.
+  useEffect(() => {
+    if (wasNavigating.current && navigation === null) navigateButtonRef.current?.focus();
+    wasNavigating.current = navigation !== null;
+  }, [navigation]);
 
   // Memoised on purpose: ScannerOverlay's scan effect has deps [scanner, onDecoded], so a fresh inline
   // arrow on every parent render would abort the in-flight scan and restart the camera each time the
@@ -176,6 +197,23 @@ export function AvailabilitySurface() {
     answerCardRef.current?.focus();
   };
 
+  // Flow 2 entry: build the handoff from the answer already on screen. No request is awaited; the
+  // dev-only ?navAge= harness can age the observation stamp for the stale-caption sweep.
+  const handleNavigate = () => {
+    const entry = navigationEntryOf({
+      ui,
+      store,
+      last: lastSubmit.current,
+      nowMs: Date.now(),
+      devAgeMinutes: import.meta.env.DEV ? parseDevAgeMinutes(window.location.search) : null,
+    });
+    if (entry) setNavigation(entry);
+  };
+
+  // 위치 보기 is offered only under the flow's entry contract (Success + inStock + ≥1 position).
+  const navigable =
+    ui.state === 'success' && ui.answer.kind === 'inStock' && ui.answer.locations.length > 0;
+
   const sheet = (
     <StoreSelectionSheet
       current={store}
@@ -234,7 +272,9 @@ export function AvailabilitySurface() {
   const backgroundInert = sheetOpen || scannerOpen || cart.cartOpen ? '' : undefined;
 
   let body: ReactNode;
-  if (ui.state === 'default') {
+  if (navigation) {
+    body = <NavigationSurface entry={navigation} locale={locale} />;
+  } else if (ui.state === 'default') {
     body = (
       <DefaultBody
         locale={locale}
@@ -266,6 +306,8 @@ export function AvailabilitySurface() {
         onScan={openScanner}
         onAdd={priced ? cart.addToCart : undefined}
         onRetry={() => handleRetry(ui.query)}
+        onNavigate={navigable ? handleNavigate : undefined}
+        navigateButtonRef={navigateButtonRef}
       />
     );
   }
@@ -279,11 +321,12 @@ export function AvailabilitySurface() {
           onSelectLocale={setLocale}
           onChangeStore={openSheet}
           changeButtonRef={changeStoreRef}
+          onBack={navigation ? () => setNavigation(null) : undefined}
         />
         {body}
-        {ui.state !== 'candidates' && cartLink}
-        {ui.state !== 'candidates' && cartNoticeRegion}
-        {searchBar}
+        {!navigation && ui.state !== 'candidates' && cartLink}
+        {!navigation && ui.state !== 'candidates' && cartNoticeRegion}
+        {!navigation && searchBar}
       </div>
       <SurfaceModals
         sheetOpen={sheetOpen}

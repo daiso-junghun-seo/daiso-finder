@@ -383,10 +383,22 @@ test('the search row aligns both controls and ellipsises the fixed placeholder',
 test('the store line wraps its action cluster instead of overlapping the store name', () => {
   const line = ruleFor('.store-context-line');
   expect(line).toMatch(/flex-wrap:\s*wrap/);
-  expect(ruleFor('.store-context-line > span:first-child')).toMatch(/min-width:\s*0/);
+  // first-of-type, not first-child: Flow 2 prefixes a back button, and the store name must still be
+  // the flexible, ellipsis-safe element in that row.
+  expect(ruleFor('.store-context-line > span:first-of-type')).toMatch(/min-width:\s*0/);
   const actions = ruleFor('.store-context-actions');
   expect(actions).toMatch(/flex-wrap:\s*wrap/);
   expect(actions).toMatch(/min-width:\s*0/);
+});
+
+test('the Flow 2 back control keeps a 44px target and the location line stays dominant', () => {
+  const back = ruleFor('.store-context-line .store-context-back');
+  expect(back).toMatch(/min-width:\s*44px/);
+  expect(back).toMatch(/text-decoration:\s*none/);
+  const location = ruleFor('.navigation-location');
+  expect(location).toMatch(/font-variant-numeric:\s*tabular-nums/);
+  // The recovery rows are full-width 44px buttons, never a cramped inline list.
+  expect(ruleFor('.navigation-position,\n.navigation-recovery-row')).toMatch(/width:\s*100%/);
 });
 
 test('the answer card centres with auto margins, never justify-content (overflow-safe)', () => {

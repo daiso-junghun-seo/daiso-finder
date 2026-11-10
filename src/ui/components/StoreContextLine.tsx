@@ -16,16 +16,30 @@ export function StoreContextLine({
   onSelectLocale,
   onChangeStore,
   changeButtonRef,
+  onBack,
 }: {
   store: StoreContext;
   locale: Locale;
   onSelectLocale: (locale: Locale) => void;
   onChangeStore?: () => void;
   changeButtonRef?: Ref<HTMLButtonElement>;
+  // Flow 2 back control (Interface/in-store-navigation.md §2 L4). Optional: Flow 1 surfaces never
+  // show it. The glyph is decorative; the accessible name comes from the locale table.
+  onBack?: () => void;
 }) {
   const S = strings(locale);
   return (
     <div className="store-context-line text-caption" id="store-line">
+      {onBack && (
+        <button
+          type="button"
+          className="text-label store-context-back"
+          aria-label={S.NAV_BACK_LABEL}
+          onClick={onBack}
+        >
+          <span aria-hidden="true">←</span>
+        </button>
+      )}
       <span>{S.storeLine(store.strNm)}</span>
       <span className="store-context-actions">
         {/* Segmented language control (iOS idiom at 44px): the pressed segment shows the

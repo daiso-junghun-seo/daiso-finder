@@ -224,7 +224,35 @@ test('error/noCache body carries the same Error color role as error/cached (Inte
   expect(screen.getByText(ERROR_NO_CACHE_BODY)).toHaveClass('error-banner');
 });
 
-test('success inStock (ample qty) shows live freshness, price/location, and the CTA', () => {
+test('success inStock (ample qty) shows live freshness, price/location, and the wired 위치 보기 CTA', async () => {
+  const user = userEvent.setup();
+  const onNavigate = vi.fn();
+  render(
+    <AnswerCard
+      ui={{
+        state: 'success',
+        query: '밀폐용기',
+        answer: mockAnswers.inStock,
+        freshness: { class: 'live', observedAt: NOW },
+      }}
+      policy={defaultPolicy}
+      nowMs={NOW}
+      onNavigate={onNavigate}
+    />,
+  );
+  expect(screen.getByText(SUCCESS_IN_STOCK_STATUS)).toBeInTheDocument();
+  expect(screen.getByText('2,000원 · 11층 56번')).toBeInTheDocument();
+  expect(screen.getByText(LIVE_FRESHNESS_CAPTION)).toBeInTheDocument();
+  // Flow 2 restored 위치 보기 as a wired L2 CTA (§B40): it is the single primary action.
+  const cta = screen.getByRole('button', { name: SUCCESS_IN_STOCK_CTA });
+  expect(cta).toHaveClass('cta--primary');
+  await user.click(cta);
+  expect(onNavigate).toHaveBeenCalledTimes(1);
+  // No onAdd passed — priceless or not, without the handler there is no button at all.
+  expect(screen.queryByRole('button', { name: ADD_TO_CART_BUTTON })).not.toBeInTheDocument();
+});
+
+test('without onNavigate the inStock card renders no dead 위치 보기 button (§B40)', () => {
   render(
     <AnswerCard
       ui={{
@@ -237,14 +265,7 @@ test('success inStock (ample qty) shows live freshness, price/location, and the 
       nowMs={NOW}
     />,
   );
-  expect(screen.getByText(SUCCESS_IN_STOCK_STATUS)).toBeInTheDocument();
-  expect(screen.getByText('2,000원 · 11층 56번')).toBeInTheDocument();
-  expect(screen.getByText(LIVE_FRESHNESS_CAPTION)).toBeInTheDocument();
-  // 위치 보기 removed 2026-10-12 (owner: dead stub — §B40). Its string still lives in
-  // factsFor for Flow 2's restoration, but no control may promise it meanwhile.
   expect(screen.queryByRole('button', { name: SUCCESS_IN_STOCK_CTA })).not.toBeInTheDocument();
-  // No onAdd passed — priceless or not, without the handler there is no button at all.
-  expect(screen.queryByRole('button', { name: ADD_TO_CART_BUTTON })).not.toBeInTheDocument();
 });
 
 test('담기 (§B47) renders only with onAdd, as a non-primary L3 action', async () => {

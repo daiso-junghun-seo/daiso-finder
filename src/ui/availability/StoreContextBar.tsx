@@ -13,12 +13,14 @@ export function StoreContextBar({
   onSelectLocale,
   onChangeStore,
   changeButtonRef,
+  onBack,
 }: {
   store: StoreContext;
   locale: Locale;
   onSelectLocale: (locale: Locale) => void;
   onChangeStore: () => void;
   changeButtonRef: Ref<HTMLButtonElement>;
+  onBack?: () => void;
 }) {
   return (
     <GlassSurface className="store-context-surface">
@@ -28,6 +30,7 @@ export function StoreContextBar({
         onSelectLocale={onSelectLocale}
         onChangeStore={onChangeStore}
         changeButtonRef={changeButtonRef}
+        onBack={onBack}
       />
     </GlassSurface>
   );

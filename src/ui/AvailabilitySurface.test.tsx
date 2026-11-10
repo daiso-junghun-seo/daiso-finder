@@ -16,10 +16,12 @@ import {
   runQuery,
 } from './availability/pipelines';
 import {
+  NAV_BACK_LABEL,
   RECENT_SEARCHES_LABEL,
   RECENT_VIEWS_LABEL,
   RESULTS_NOTICE,
   SCAN_BUTTON_LABEL,
+  SUCCESS_IN_STOCK_CTA,
   emptyBody,
 } from './copy';
 import { useAvailabilityStore } from './store';
@@ -436,6 +438,77 @@ describe('staleness guard (F2)', () => {
       state: 'success',
       query: '밀폐용기',
     });
+  });
+});
+
+describe('Flow 2 handoff (in-store navigation)', () => {
+  function landOnSuccess() {
+    act(() => {
+      useAvailabilityStore.getState().dispatch({
+        type: 'RESULT',
+        answer: mockAnswers.inStock,
+        freshness: { class: 'live', observedAt: Date.now() },
+      });
+    });
+  }
+
+  test('위치 보기 opens the guidance card from data in hand and hides the Flow 1 dock', async () => {
+    const user = userEvent.setup();
+    render(<AvailabilitySurface />);
+    landOnSuccess();
+    await user.click(screen.getByRole('button', { name: SUCCESS_IN_STOCK_CTA }));
+    expect(screen.getByText(/11층 56번/, { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: NAV_BACK_LABEL })).toBeInTheDocument();
+    expect(screen.queryByLabelText('상품 검색')).not.toBeInTheDocument();
+    // Store context stays present and correctable at L4.
+    expect(screen.getByRole('button', { name: '매장 변경' })).toBeInTheDocument();
+  });
+
+  test('back returns focus to the CTA that opened the flow', async () => {
+    const user = userEvent.setup();
+    render(<AvailabilitySurface />);
+    landOnSuccess();
+    await user.click(screen.getByRole('button', { name: SUCCESS_IN_STOCK_CTA }));
+    await user.click(screen.getByRole('button', { name: NAV_BACK_LABEL }));
+    expect(screen.getByRole('button', { name: SUCCESS_IN_STOCK_CTA })).toHaveFocus();
+  });
+
+  test('the locale control keeps working on the guidance card', async () => {
+    const user = userEvent.setup();
+    render(<AvailabilitySurface />);
+    landOnSuccess();
+    await user.click(screen.getByRole('button', { name: SUCCESS_IN_STOCK_CTA }));
+    await user.click(screen.getByRole('button', { name: 'EN' }));
+    expect(screen.getByText(/11F · No\. 56/, { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+  });
+
+  test('a store change drops the handoff back to Flow 1', async () => {
+    const user = userEvent.setup();
+    render(<AvailabilitySurface />);
+    landOnSuccess();
+    await user.click(screen.getByRole('button', { name: SUCCESS_IN_STOCK_CTA }));
+    act(() => {
+      useAvailabilityStore.getState().selectStore({ strCd: '002', strNm: '강남점' });
+    });
+    expect(screen.getByText('이 매장에 있는지 바로 확인해 보세요')).toBeInTheDocument();
+    expect(screen.queryByText(/11층 56번/)).not.toBeInTheDocument();
+    expect(screen.getByText('다이소 강남점')).toBeInTheDocument();
+  });
+
+  test('a location-missing Partial never offers 위치 보기 (no guidance to hand over)', () => {
+    render(<AvailabilitySurface />);
+    act(() => {
+      useAvailabilityStore.getState().dispatch({
+        type: 'RESULT',
+        answer: mockAnswers.noLocation,
+        freshness: { class: 'live', observedAt: Date.now() },
+      });
+    });
+    expect(
+      screen.getByText('위치 정보가 없어요. 직원에게 위치를 문의해 주세요.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: SUCCESS_IN_STOCK_CTA })).not.toBeInTheDocument();
   });
 });
 

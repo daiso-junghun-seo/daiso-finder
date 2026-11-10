@@ -491,10 +491,21 @@ main h1 {
 
 /* The name owns the first row and may shrink; the action cluster wraps to its own row
    when 390px-worth of controls cannot share the line (measured overlapping at 320px). */
-.store-context-line > span:first-child {
+.store-context-line > span:first-of-type {
   flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* Flow 2 back control (Interface/in-store-navigation.md §2 L4). The arrow is decorative;
+   the accessible name is NAV_BACK_LABEL. Same 44px target, quiet ink, no underline. */
+.store-context-line .store-context-back {
+  flex: none;
+  padding: 0;
+  min-width: 44px;
+  font-size: 1.25rem;
+  line-height: 1;
+  text-decoration: none;
 }
 
 /* Utility cluster: locale toggle + store change share the right end. */
@@ -610,6 +621,113 @@ main h1 {
   font-size: 1.75rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* ── Flow 2 In-Store Navigation (Interface/in-store-navigation.md §5) ───────────────────────
+   The location line is the one dominant element; identity and recovery stay subordinate.
+   The card chrome, 20px card padding, and the answer-card rhythm are inherited on purpose:
+   this is the same glass surface in a guidance state, not a seventh UiState. */
+
+.navigation-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* Display role, tabular numerals, highest contrast — legible at arm's length (D067). */
+.navigation-location {
+  margin: 0;
+  font-size: clamp(2rem, 11vw, 3rem);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Identity is confirmation, not the answer: a bounded thumbnail beside name + price. */
+.navigation-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.navigation-identity > div {
+  min-width: 0;
+}
+
+.navigation-identity .product-photo {
+  width: 72px;
+  height: 72px;
+  max-height: 72px;
+  flex: none;
+  object-fit: contain;
+  margin: 0;
+}
+
+.navigation-identity .text-heading,
+.navigation-price {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.navigation-price {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Position choices: full-width 44px rows (Interface §6), never a cramped inline list. */
+.navigation-positions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.navigation-position,
+.navigation-recovery-row {
+  width: 100%;
+  text-align: start;
+}
+
+.navigation-recovery-row {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* 못 찾겠어요 + other-positions disclosure: subordinate text links, never a competing CTA. */
+.navigation-missing,
+.navigation-disclosure {
+  align-self: flex-start;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 10px 0;
+}
+
+.navigation-disclosure {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pull-to-refresh feedback: a thin progress sliver, no spinner (Engineering §3 — the card is
+   never blocked). aria-hidden in the DOM; the live region carries any spoken outcome. */
+.navigation-pull {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--action-bg);
+  transform-origin: left center;
+  transition: opacity 120ms ease-out;
+}
+
+.navigation-pull[data-visible="false"] {
+  opacity: 0;
+}
+
+.navigation-pull[data-visible="true"] {
+  opacity: 1;
 }
 
 /* Loading skeleton (Bible Interface §3): decorative blocks, opacity pulse only.
