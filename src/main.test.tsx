@@ -31,4 +31,6 @@ test('a diagnostics chunk that fails to load renders no panel and leaves the app
   // The rejection resolves to a component that renders nothing — no panel, and no torn-down root.
   expect(document.querySelector('.diagnostics-bar')).toBeNull();
   expect(screen.getByRole('dialog', { name: '매장 선택' })).toBeInTheDocument();
-});
+  // Mounting the real app measures ~2.2 s solo; the default 5 s budget is not enough when the full
+  // coverage sweep runs eight files in parallel on a loaded machine. Headroom, not a relaxed assertion.
+}, 20_000);
