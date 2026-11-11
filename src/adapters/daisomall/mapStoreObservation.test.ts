@@ -31,6 +31,7 @@ test('imageUrl threads from the observation into the mapped inStock answer', () 
 test('restockArriving formats lchDay from ISO to "M월 D일"', () => {
   expect(mapStoreObservation(observationFixtures.restockArriving)).toEqual({
     kind: 'restockArriving',
+    pdNo: '19987',
     productName: '리빙 밀폐용기 1.2L',
     price: 2000,
     lchDay: '7월 15일',
@@ -41,6 +42,7 @@ test('a restock observation with no arrival date maps to an empty-lchDay answer 
   const noDate: RawStoreObservation = { ...observationFixtures.restockArriving, lchDay: null };
   expect(mapStoreObservation(noDate)).toEqual({
     kind: 'restockArriving',
+    pdNo: '19987',
     productName: '리빙 밀폐용기 1.2L',
     price: 2000,
     lchDay: '',

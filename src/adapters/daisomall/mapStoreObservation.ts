@@ -19,12 +19,18 @@ export function mapStoreObservation(o: RawStoreObservation): AvailabilityAnswer 
 
   // 1. Franchise AND no location → stock undeterminable BY DESIGN (orchestrator did not fetch it).
   if (directYn !== 'Y' && locations.length === 0) {
-    return { kind: 'franchiseUndeterminable', productName, imageUrl: imageUrl ?? undefined };
+    return {
+      kind: 'franchiseUndeterminable',
+      pdNo: o.pdNo,
+      productName,
+      imageUrl: imageUrl ?? undefined,
+    };
   }
   // 2. In stock — qty is an UPPER BOUND (data-contract §4); carry it, never present as an exact count.
   if (stck > 0) {
     return {
       kind: 'inStock',
+      pdNo: o.pdNo,
       productName,
       price,
       locations,
@@ -34,12 +40,19 @@ export function mapStoreObservation(o: RawStoreObservation): AvailabilityAnswer 
   }
   // 3. Discontinued — store sleStsCd '9' outranks temporarily-out.
   if (sleStsCd === '9') {
-    return { kind: 'discontinued', productName, price, imageUrl: imageUrl ?? undefined };
+    return {
+      kind: 'discontinued',
+      pdNo: o.pdNo,
+      productName,
+      price,
+      imageUrl: imageUrl ?? undefined,
+    };
   }
   // 4. Restock arriving — incoming-goods flag; lchDay 'YYYY-MM-DD' → 'M월 D일'.
   if (mrkGdsYn === 'Y') {
     return {
       kind: 'restockArriving',
+      pdNo: o.pdNo,
       productName,
       price,
       lchDay: formatLchDay(o.lchDay ?? ''),
@@ -48,12 +61,13 @@ export function mapStoreObservation(o: RawStoreObservation): AvailabilityAnswer 
   }
   // 5. Not carried — a direct store with a null store status does not carry it.
   if (sleStsCd === null && directYn === 'Y') {
-    return { kind: 'notCarried', productName, imageUrl: imageUrl ?? undefined };
+    return { kind: 'notCarried', pdNo: o.pdNo, productName, imageUrl: imageUrl ?? undefined };
   }
   // 6. Temporarily out — carried (status present) but zero on hand; a restock offer stands.
   if (stck === 0 && sleStsCd !== null) {
     return {
       kind: 'temporarilyOut',
+      pdNo: o.pdNo,
       productName,
       price,
       restockOfferable: true,

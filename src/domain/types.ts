@@ -11,8 +11,11 @@ export type AvailabilityAnswer =
   // The domain always carries it; whether to surface "재고 N개 이하" is a PRESENTATION gate on policy.lowQtyCutoff
   // (Increment 1) — the provisional A3 cutoff stays out of the domain mapping and fixtures.
   // imageUrl is optional: pure product identity, present on every kind when the vendor supplied one.
+  // pdNo is optional exact identity (§B50-10): Flow 3's nearby query is "the same pdNo" and the
+  // whole-answer cache keys on it; absent when the vendor doc did not resolve one.
   | {
       kind: 'inStock';
+      pdNo?: string;
       productName: string;
       price: Money;
       locations: StoreLocation[];
@@ -21,21 +24,52 @@ export type AvailabilityAnswer =
     }
   | {
       kind: 'temporarilyOut';
+      pdNo?: string;
       productName: string;
       price: Money;
       restockOfferable: boolean;
       imageUrl?: string;
     }
-  | { kind: 'discontinued'; productName: string; price: Money; imageUrl?: string }
-  | { kind: 'notCarried'; productName: string; imageUrl?: string }
+  | { kind: 'discontinued'; pdNo?: string; productName: string; price: Money; imageUrl?: string }
+  | { kind: 'notCarried'; pdNo?: string; productName: string; imageUrl?: string }
   | {
       kind: 'restockArriving';
+      pdNo?: string;
       productName: string;
       price: Money;
       lchDay: string;
       imageUrl?: string;
     }
-  | { kind: 'franchiseUndeterminable'; productName: string; imageUrl?: string };
+  | { kind: 'franchiseUndeterminable'; pdNo?: string; productName: string; imageUrl?: string };
+
+// Flow 3 (Alternative Discovery). Group A is a similar in-stock item at the SAME store; Group B is
+// the SAME pdNo at a nearby stock-confirmable store. Rows, not answers: every row already carries its
+// whole decision (Interface §3).
+export type AlternativeReason =
+  | 'temporarilyOut'
+  | 'discontinued'
+  | 'notCarried'
+  | 'franchise'
+  | 'flow2';
+
+export interface SimilarAlternative {
+  pdNo: string;
+  productName: string;
+  price: Money;
+  qtyUpperBound: number; // observed upper bound, same contract as AvailabilityAnswer
+  locations: StoreLocation[];
+  imageUrl?: string;
+}
+
+export interface NearbyAlternative {
+  strCd: string;
+  strNm: string;
+  distanceM: number;
+  address: string;
+  closingTime: string; // vendor "22:00"
+  closedToday: boolean; // hldyDt-derived; mock only until the data owner confirms §11
+  qtyUpperBound: number;
+}
 
 // A literal multi-candidate match surfaced before an answer exists (search returned several products for
 // the query). Not an AvailabilityAnswer kind — candidates are pre-answer; picking one re-queries for the

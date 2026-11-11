@@ -1,5 +1,11 @@
 // src/domain/ports.ts
-import type { AvailabilityAnswer, ProductCandidate, StoreContext } from './types';
+import type {
+  AvailabilityAnswer,
+  NearbyAlternative,
+  ProductCandidate,
+  SimilarAlternative,
+  StoreContext,
+} from './types';
 
 export interface StoreStockRepository {
   query(
@@ -22,6 +28,22 @@ export interface SearchAliasResolverPort {
 // adapter is deferred behind this seam (open-questions.md B16/A9) — only the mock exists today.
 export interface StoreDirectoryPort {
   searchStores(query: string): Promise<StoreContext[]>;
+}
+
+// Flow 3 (Alternative Discovery). Two independent queries by contract (Engineering §4): a failure or
+// delay in one never blocks the other's slot. Group B is mock-only in production until the nearby data
+// questions close (§B50-2) — the port exists so the surface is wired the day the data lands.
+export interface AlternativeRepository {
+  querySimilar(
+    store: StoreContext,
+    term: { keyword: string; excludePdNo?: string },
+    signal?: AbortSignal,
+  ): Promise<SimilarAlternative[]>;
+  queryNearby(
+    store: StoreContext,
+    pdNo: string,
+    signal?: AbortSignal,
+  ): Promise<NearbyAlternative[]>;
 }
 
 // Literal product search for the pre-answer candidate list (fallback-first; no AI confidence model).
