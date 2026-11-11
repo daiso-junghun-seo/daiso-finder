@@ -6,9 +6,10 @@ import fs from 'node:fs';
 // `wrangler pages dev` (and prod CF Pages Functions) can serve /api/stores but NOT /api/availability.
 // Node's fetch IS accepted. This server runs the REAL `functions/api/*` handlers (bundled via esbuild —
 // no reimplementation) in the Node runtime, so the full browser → /api/* → live daisomall → 6-state
-// pipeline works both locally and in production. It serves all three routes — /api/availability,
-// /api/search, /api/stores (see buildHandlers() below) — regardless of which ones strictly need the
-// Node workaround, so this process is a single, consistent origin for the whole /api/* surface.
+// pipeline works both locally and in production. It serves every route — /api/alternatives,
+// /api/availability, /api/search, /api/stores (see buildHandlers() below) — regardless of which ones
+// strictly need the Node workaround, so this process is a single, consistent origin for the whole
+// /api/* surface.
 //
 // Architecture (docs/superpowers/specs/2026-07-23-runtime-resolution.md, Option C): this process always
 // serves BOTH dist/ static assets AND /api/* (same-origin — matches today's composition.ts, which fetches
@@ -123,6 +124,7 @@ async function loadHandler(entry) {
 
 async function buildHandlers() {
   return {
+    '/api/alternatives': await loadHandler('functions/api/alternatives.ts'),
     '/api/availability': await loadHandler('functions/api/availability.ts'),
     '/api/search': await loadHandler('functions/api/search.ts'),
     '/api/stores': await loadHandler('functions/api/stores.ts'),

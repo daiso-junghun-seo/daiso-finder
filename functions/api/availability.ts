@@ -2,7 +2,8 @@
 // Flow-1 fan-out orchestrator: SearchGoods (product) · selStr (directYn) · auth, then conditional
 // selIntPdStDispInfo (location) + selStrPkupStck (stock) → a normalized, whitelisted RawStoreObservation.
 // The client mapStoreObservation does 6-state classification. Read-only, no-store, server-only secrets.
-import { type DaisoAuth, requestAuth } from '../_lib/daisoAuth';
+import { type AuthedCall, makeAuthedCall } from '../_lib/authedCall';
+import { requestAuth } from '../_lib/daisoAuth';
 import {
   PATHS,
   type UpstreamConfig,
@@ -123,29 +124,6 @@ async function fetchDirectYn(fapiBase: string, strCd: string): Promise<string> {
   });
   if (!res.ok) throw new Error(`selStr ${res.status}`);
   return extractDirectYn(await res.json());
-}
-
-type AuthedCall = (url: string, body: string) => Promise<Response>;
-function authHeaders(auth: DaisoAuth): Record<string, string> {
-  return {
-    'content-type': 'application/json',
-    authorization: `Bearer ${auth.bearer}`,
-    'x-dm-uid': auth.uid,
-  };
-}
-function makeAuthedCall(cfg: UpstreamConfig, initial: DaisoAuth): AuthedCall {
-  let auth = initial;
-  let reissue: Promise<DaisoAuth> | null = null;
-  return async (url, body) => {
-    let res = await fetch(url, { method: 'POST', headers: authHeaders(auth), body });
-    if (res.status === 401 || res.status === 403) {
-      if (!reissue)
-        reissue = requestAuth({ fapiBase: cfg.fapiBase, encKey: cfg.encKey, force: true });
-      auth = await reissue;
-      res = await fetch(url, { method: 'POST', headers: authHeaders(auth), body });
-    }
-    return res;
-  };
 }
 
 interface DispRow {
