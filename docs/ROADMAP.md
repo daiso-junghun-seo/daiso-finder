@@ -24,7 +24,7 @@
 | **P0 안전망** | 1–2일 | 공개 원격, CI(tsc·biome·vitest·build·Playwright), fresh-clone drill, `main` 보호 | 다른 디렉터리 클론에서 전 게이트 green, CI `main` green | 완료 (2026-11-08) |
 | **P1 구조 정리** | 3–5일 | `AvailabilitySurface` 분해, `AGENTS.md` D078 정정, coverage 기준선, axe E2E, PWA precache 결정(§B31-7) | 동작 불변, 파일 ≤300줄, 번들 +5% 이내 | 완료 (2026-11-09) |
 | **P2 Flow 2** | 5–7일 | D077: data-in-hand 렌더, refresh 트리거(진입·resume·pull·`못 찾겠어요` 1회), 비블로킹, stale→Partial, stock-gone exit | tap→card <100ms(fetch 0회), 주기 타이머 없음 테스트, 6상태 E2E | 완료 (2026-11-10) |
-| **P3 Flow 3** | 7–10일 | D076: similar 분기 + entry matrix + 3행 바운드 + 단일 스탬프 + 통짜 캐시. nearby는 mock/포트까지 | no-dead-end E2E, mall은 Empty에서만, nearby는 데이터 확정 시 | 대기 |
+| **P3 Flow 3** | 7–10일 | D076: similar 분기 + entry matrix + 3행 바운드 + 단일 스탬프 + 통짜 캐시. nearby는 mock/포트까지 | no-dead-end E2E, mall은 Empty에서만, nearby는 데이터 확정 시 | 진행 중 (2026-11-11 설계) |
 | **P4 배포·필드** | 2–3일 + 현장 | gpu01 Node 프록시, HTTPS, health/logs, 필드 체크리스트 | 실제 매장 1곳 이상 end-to-end | 대기 |
 
 ### P0 체크리스트
@@ -57,11 +57,14 @@
 
 ### P3 체크리스트
 
+- [x] 설계 스펙 — 진입 매트릭스·병렬 슬롯·단일 스탬프·통짜 캐시·withheld·store card·Empty 사다리·a11y (`2026-11-11-flow3-alternative-discovery-design.md`)
+- [x] 예산 결정 — 정본 220/72 유지, **P3 예외 240 kB / gzip 78 kB** 기록(§B50-11, P4 전 재결정)
 - [ ] stock-gone exit가 실제 관측 상태를 Flow 3 entry matrix로 넘김
 - [ ] D076 entry matrix(franchise=nearby only, discontinued=similar only) 테스트
 - [ ] similar 3행 바운드·단일 스탬프·통짜 캐시·슬롯 재시도
 - [ ] mall last resort는 Empty ladder에서만 (엔지니어링 보장 + 테스트)
 - [ ] P2의 sold-out/recovery `대안 보기` CTA 배선(inert stub 제거)
+- [ ] nearby는 포트·mock·표면·E2E까지, 프로덕션 어댑터는 미등록(`NEARBY_LIVE=false`)
 
 ## 결정 필요 (코드 아님)
 
@@ -79,7 +82,7 @@
 
 - **게이트**: 전 단계 100% green, skip 0.
 - **커버리지**: CI가 `test:coverage`로 강제한다. 전역 lines/statements 94·branches/functions 85, `src/domain/**` 98/90/90/98, `src/adapters/**` 95/85/90/95, `src/ui/**` 95/85/90/95, `functions/**` 90/75/95/90. **내리지 않는다.**
-- **성능**: Flow 2 tap→card <100ms, Flow 1 submit→first result ≤2s, 엔트리 ≤220 kB(gzip ≤72 kB). **P2에서 엔트리 224.68 kB / gzip 72.58 kB로 상한을 넘었다** — 숫자를 올리지 않고 초과 상태로 기록한다. 분할은 cold tap에서 청크 요청을 만들 수 있어 `<100ms`와 상충하므로 P3 착수 전에 예산 재결정 또는 분할 지점을 명시적으로 고른다.
+- **성능**: Flow 2 tap→card <100ms, Flow 1 submit→first result ≤2s, 엔트리 ≤220 kB(gzip ≤72 kB). **P2 실측 224.68 kB / gzip 72.58 kB**로 초과 — 숫자를 올리지 않고 기록한다. **P3 예외 상한 240 kB / gzip 78 kB**(§B50-11)로 머지하되, P4 배포 전 ①220/72 복귀(카트·최근본·공유 lazy split — cold path 아님) ②필드 증거와 함께 재비준 중 하나를 고른다.
 - **접근성**: axe serious/critical 0 (6상태 × 2테마).
 - **운영**: CI <10분, flake <2%, 배포 후 health/logs 확인.
 

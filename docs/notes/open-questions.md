@@ -213,6 +213,24 @@ B30-4는 **Bible 비준 대기** — 앱이 정직 초안으로 5종 카피(권�
 
 > **B49-D4 (열린 질문, Bible)**: 통로에서 위치가 바뀌거나(재고가 다른 층/존으로 이동) 품절 외 부정 상태(판매종료·franchise flip)가 관측될 때 쇼퍼에게 무엇을 말할 것인가. 현재 앱은 `unapplied`로 안내를 유지하고 스탬프만 늙힌다 — 종료 카피·재안내 여부·대안 CTA 노출은 Experience 결정이 필요하다.
 
+> **✅ Flow 3 Alternative Discovery 설계(2026-11-11 — 설계 [`2026-11-11-flow3-alternative-discovery-design.md`](../superpowers/specs/2026-11-11-flow3-alternative-discovery-design.md))**: 계약(D076·D078)은 비준됐고, P3는 **Group A(similar)만 live**로 발행한다. Group B(nearby)는 포트·mock·표면·E2E까지 만들되 프로덕션 어댑터는 등록하지 않는다(`NEARBY_LIVE = false`). 미취급·가맹점 진입 CTA는 inert stub을 유지하고 Flow 2 exit는 연다 — D5 에스컬레이션.
+
+| # | 결정 | 확정 | 근거/검증 |
+|---|---|---|---|
+| B50-1 | Flow 3는 UI-shell 스택 | `storeCard > navigation > alternative > UiState`. reducer·6상태·`?scenario=` 불변. Group A 행 → Flow 2를 alternative 위에 얹고, back은 목록으로 | Flow 2(D077)와 같은 패턴. cold entry는 Flow 1(캐시 재구성 금지). back 포커스는 `data-alt-row` + useEffect(목록 unmount 대응) |
+| B50-2 | 프로덕션 발행 범위 | 일시품절·판매종료·Flow 2 exit(soldOut·recoveryStill) = A만. 미취급·가맹점 CTA는 inert 유지. nearby live는 `NEARBY_LIVE=false` | nearby는 `hldyDt` 단일 샘플·A7(판매종료 scope)·nearby 임계값 미정으로 withheld. CTA 라벨이 약속한 branch를 발행할 수 없으면 진입을 열지 않는다 |
+| B50-3 | Group A 질의 | SearchGoods 30(store-carryable) → `selStrPkupStck` 배치 1회(qty>0, vendor 순서) → 앞 3개 위치 병렬, 위치 없는 행 omit, **no backfill**. `omitted>0 && rows=[]` → failed | 계약의 3행 바운드·2s 예산. 위치 호출 1건 실패가 슬롯 전체를 죽이지 않게 하되, 3건 전부 실패면 502(없다고 말할 수 없다) |
+| B50-4 | 통짜 캐시 | 키 `${strCd}:${pdNo ?? keyword}`, 값에 `issued` 저장. 성공 답(모든 발행 슬롯 ready\|empty)만 background 저장. **전부 실패**일 때만 서빙, issued 불일치 거부, TTL 없음 | Engineering §5·§6. mixed live/cache 금지. 캐시 답은 항상 Partial, 스탬프=쓰기 시각 |
+| B50-5 | 단일 스탬프 | 가장 오래된 관측(두 완료 시각의 min / 캐시 쓰기 시각). 모든 발행 슬롯 settle 전에는 스탬프 미표시 | Engineering §7. 조기 스탬프는 아직 없는 주장을 덮는다. 임계값은 공유 provisional 6h |
+| B50-6 | 행 0 조합 | failed 포함 → Error. empty+withheld → degraded Empty(empty 슬롯 문장 + 사다리, **mall 제외**). 전부 empty → Empty(양쪽 발행일 때만 mall) | Bible에 없는 조합. 거짓 `이 매장에는 비슷한 상품이 없어요`/`근처 매장에는 재고가 없어요`/mall 조건 위반을 피한다 |
+| B50-7 | 카피 초안 | A failed `비슷한 상품은 확인하지 못했어요. 다시 시도해 주세요.` + slot retry `다시 시도` | B failed 문장의 대칭. **Bible 비준 대기** |
+| B50-8 | 재입고 알림 | P3 Empty 사다리에서 미렌더 | 구독 API 미관측(Engineering §11). 데이터가 "제공할 때"만 나오는 요소이며 Primary 색 예산도 비어 있다 |
+| B50-9 | 지도 handoff | `mapHref(address, platform)`: iOS `https://maps.apple.com/?q=`, Android `geo:0,0?q=`, 그 외 카카오 웹. 실패해도 주소 텍스트 유지 | D066 경계. 실기기 사용성은 필드 관측 |
+| B50-10 | `pdNo` identity | `AvailabilityAnswer` 모든 kind에 optional `pdNo`. `RawStoreObservation.pdNo`를 매핑 | B의 "같은 pdNo" 계약·캐시 exact identity. 없으면 B 미발행. 6상태·카피 불변 |
+| B50-11 | 번들 예산 | 정본 220/72 유지. **P3 예외 상한 240 kB / gzip 78 kB**를 릴리스에 기록 | P2 실측 224.68/72.58 + 표면 1개. P4 전 ①220/72 복귀(카트·최근본·공유 lazy split) ②필드 증거와 함께 재비준 중 택1 |
+
+> **B50-열린 질문(Bible)**: ① **D5** — nearby 부재 시 Flow 2 exit·미취급/가맹점 진입의 임시 형태(현재 exit는 A만, 두 CTA는 inert) ② A 실패 카피 비준 ③ withheld+empty(단일 branch empty) 열화의 정본 형태 ④ 행 0 + failed/empty 혼합의 Error 판정 ⑤ 캐시 both-empty에서 스탬프 위치 ⑥ nearby 임계값·`hldyDt` 의미(A7/A8) ⑦ 지도 handoff 실사용.
+
 > **⚠️ Owner 명시 예외 — 쇼핑리스트 일괄(2026-10-15, `AGENTS.md` 질문정책 예외 명시)**: 최근 본 상품·쇼핑리스트·공유 기능은 Bible Interface L-표·단일-CTA·Final 카피에 근거가 없는 스펙 갭이다. Owner가 명시적으로 예외를 두고 처음부터 끝까지 구현을 지시, 전권 위임. 위반이 아니라 **기록된 예외**로 진행한다. 앱 소유 결정은 아래 §B47. 되돌림은 슬라이스별 머지 커밋 revert.
 
 | # | 결정 | 확정 | 근거/검증 |
