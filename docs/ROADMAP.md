@@ -2,13 +2,14 @@
 
 > 제품 계약의 SSOT는 [`product-bible/06_Product/daiso-companion`](../../product-bible/06_Product/daiso-companion)다. 이 문서는 **앱 저장소의 실행 계획**만 담는다 — 새 제품 스펙을 발명하지 않는다. 결정 원장은 [`notes/open-questions.md`](notes/open-questions.md).
 
-## 현재 위치 (2026-11-10)
+## 현재 위치 (2026-11-12)
 
 - Increment 0 + Flow 1 + §B47 쇼핑리스트까지 `main`에 완료, 공개 원격(`daiso-junghun-seo/daiso-finder`)에 push됨.
 - P1 구조 정리 완료: `AvailabilitySurface` 824→286줄, 커버리지 게이트, axe 6상태×2테마, PWA precache 결정.
 - P2 Flow 2 In-Store Navigation 완료: data-in-hand 진입, 2s 배경 새로고침(주기 타이머 없음), stale→시스템 오류 본문, `temporarilyOut`만 sold-out exit, D4 두 경로는 `unapplied` 보류.
-- 게이트: vitest **807/807**(63 files), tsc clean, biome clean(159), Playwright **69/69**(dev 66 + preview 3), coverage **임계값 green**(V8 샘플 3회 lines 95.5–97.8% / branches 89.37–90.08% / functions 88.22–92.0%; 총계 변동으로 단일 퍼센트는 계약이 아니다), build 성공(224.68 kB / gzip 72.58 kB, CSS 15.69 kB, precache 21 entries / 361.13 KiB).
-- Flow 2·3는 **D078(2026-07-13)로 계약 비준 완료** — 남은 것은 P3 구현과 아래 "결정 필요" 항목이다.
+- P3 Flow 3 Alternative Discovery 완료: Group A live, nearby는 포트·mock·표면·E2E·axe까지(`NEARBY_LIVE=false`), 통짜 캐시·단일 스탬프·no-dead-end 사다리, cold path 지연 청크.
+- 게이트: vitest **915/915**(72 files), tsc clean, biome clean, Playwright **88/88**(dev 85 + preview 3), coverage **CI 임계값 green**(V8 샘플 lines/statements 95.49% / branches 88.1% / functions 91.56%; 총계 변동으로 단일 퍼센트는 계약이 아니다), build 성공(237.87 kB / gzip 76.23 kB, 지연청크 14.70/4.79 kB, CSS 18.11 kB, precache 22 entries / 391.42 KiB).
+- Flow 2·3는 **D078(2026-07-13)로 계약 비준 완료** — 남은 것은 아래 "결정 필요" 항목과 P4다.
 - 남은 가장 큰 위험은 기능이 아니라 **배포·필드 검증의 부재**다.
 
 ## 원칙
@@ -24,7 +25,7 @@
 | **P0 안전망** | 1–2일 | 공개 원격, CI(tsc·biome·vitest·build·Playwright), fresh-clone drill, `main` 보호 | 다른 디렉터리 클론에서 전 게이트 green, CI `main` green | 완료 (2026-11-08) |
 | **P1 구조 정리** | 3–5일 | `AvailabilitySurface` 분해, `AGENTS.md` D078 정정, coverage 기준선, axe E2E, PWA precache 결정(§B31-7) | 동작 불변, 파일 ≤300줄, 번들 +5% 이내 | 완료 (2026-11-09) |
 | **P2 Flow 2** | 5–7일 | D077: data-in-hand 렌더, refresh 트리거(진입·resume·pull·`못 찾겠어요` 1회), 비블로킹, stale→Partial, stock-gone exit | tap→card <100ms(fetch 0회), 주기 타이머 없음 테스트, 6상태 E2E | 완료 (2026-11-10) |
-| **P3 Flow 3** | 7–10일 | D076: similar 분기 + entry matrix + 3행 바운드 + 단일 스탬프 + 통짜 캐시. nearby는 mock/포트까지 | no-dead-end E2E, mall은 Empty에서만, nearby는 데이터 확정 시 | 진행 중 (2026-11-11 설계) |
+| **P3 Flow 3** | 7–10일 | D076: similar 분기 + entry matrix + 3행 바운드 + 단일 스탬프 + 통짜 캐시. nearby는 mock/포트까지 | no-dead-end E2E, mall은 Empty에서만, nearby는 데이터 확정 시 | 완료 (2026-11-12) |
 | **P4 배포·필드** | 2–3일 + 현장 | gpu01 Node 프록시, HTTPS, health/logs, 필드 체크리스트 | 실제 매장 1곳 이상 end-to-end | 대기 |
 
 ### P0 체크리스트
@@ -58,13 +59,14 @@
 ### P3 체크리스트
 
 - [x] 설계 스펙 — 진입 매트릭스·병렬 슬롯·단일 스탬프·통짜 캐시·withheld·store card·Empty 사다리·a11y (`2026-11-11-flow3-alternative-discovery-design.md`)
-- [x] 예산 결정 — 정본 220/72 유지, **P3 예외 240 kB / gzip 78 kB** 기록(§B50-11, P4 전 재결정)
-- [ ] stock-gone exit가 실제 관측 상태를 Flow 3 entry matrix로 넘김
-- [ ] D076 entry matrix(franchise=nearby only, discontinued=similar only) 테스트
-- [ ] similar 3행 바운드·단일 스탬프·통짜 캐시·슬롯 재시도
-- [ ] mall last resort는 Empty ladder에서만 (엔지니어링 보장 + 테스트)
-- [ ] P2의 sold-out/recovery `대안 보기` CTA 배선(inert stub 제거)
-- [ ] nearby는 포트·mock·표면·E2E까지, 프로덕션 어댑터는 미등록(`NEARBY_LIVE=false`)
+- [x] 예산 결정 — 정본 220/72 유지, **P3 예외 240 kB / gzip 78 kB** 기록(§B50-11, P4 전 재결정). 실측 237.87/76.23으로 이내
+- [x] stock-gone exit가 실제 관측 상태를 Flow 3 entry matrix로 넘김
+- [x] D076 entry matrix(franchise=nearby only, discontinued=similar only) 테스트
+- [x] similar 3행 바운드·단일 스탬프·통짜 캐시·슬롯 재시도
+- [x] mall last resort는 Empty ladder에서만 (엔지니어링 보장 + 테스트)
+- [x] P2의 sold-out/recovery `대안 보기` CTA 배선(inert stub 제거)
+- [x] nearby는 포트·mock·표면·E2E까지, 프로덕션 어댑터는 미등록(`NEARBY_LIVE=false`)
+- [x] Flow 3 표면을 cold-path 지연 청크로 분리, 청크 실패는 Error stand-in
 
 ## 결정 필요 (코드 아님)
 
@@ -82,8 +84,8 @@
 
 - **게이트**: 전 단계 100% green, skip 0.
 - **커버리지**: CI가 `test:coverage`로 강제한다. 전역 lines/statements 94·branches/functions 85, `src/domain/**` 98/90/90/98, `src/adapters/**` 95/85/90/95, `src/ui/**` 95/85/90/95, `functions/**` 90/75/95/90. **내리지 않는다.**
-- **성능**: Flow 2 tap→card <100ms, Flow 1 submit→first result ≤2s, 엔트리 ≤220 kB(gzip ≤72 kB). **P2 실측 224.68 kB / gzip 72.58 kB**로 초과 — 숫자를 올리지 않고 기록한다. **P3 예외 상한 240 kB / gzip 78 kB**(§B50-11)로 머지하되, P4 배포 전 ①220/72 복귀(카트·최근본·공유 lazy split — cold path 아님) ②필드 증거와 함께 재비준 중 하나를 고른다.
-- **접근성**: axe serious/critical 0 (6상태 × 2테마).
+- **성능**: Flow 2 tap→card <100ms, Flow 1 submit→first result ≤2s, 엔트리 ≤220 kB(gzip ≤72 kB). **P2 실측 224.68 kB / gzip 72.58 kB**, **P3 실측 237.87 kB / gzip 76.23 kB**(지연청크 14.70/4.79 kB)로 정본을 초과 — 숫자를 올리지 않고 기록한다. **P3 예외 상한 240 kB / gzip 78 kB**(§B50-11)로 머지하되, P4 배포 전 ①220/72 복귀(카트·최근본·공유 lazy split — cold path 아님) ②필드 증거와 함께 재비준 중 하나를 고른다.
+- **접근성**: axe serious/critical 0 (6상태 × 2테마 + Flow 2 4상태 × 2 + Flow 3 5상태 × 2).
 - **운영**: CI <10분, flake <2%, 배포 후 health/logs 확인.
 
 ## 하지 말 것

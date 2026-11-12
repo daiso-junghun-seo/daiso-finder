@@ -46,6 +46,15 @@ Authority: `product-bible/06_Product/daiso-companion/{Experience,Interface,Engin
 - cold entry(새로고침)에는 원본 상품 맥락이 없다 → Flow 1. 캐시로 대안 화면을 재구성하지 않는다
   (Engineering §5).
 - 새 조회·매장 변경은 스택을 전부 버린다. 매장 변경은 새 매장 Default로 착지한다(Flow 2와 동일).
+- **구현 확정(2026-11-12)**: 표면 스택은 `AlternativeSurface`가 소유한다. 부모(`AvailabilitySurface`)는
+  진입 상태(`alternative`)·헤더 back 신호(`backSignal`)·깊이(`onDepthChange`)만 갖고, 목록→store card→
+  Flow 2 overlay 전환은 표면 내부 상태다. Flow 1이 연 Flow 2는 호스트가 소유하므로 Flow 3가 열려 있는
+  동안 `hidden`으로 남아 phase(특히 soldOut exit)를 보존하고, 그동안 resume refresh를 하지 않는다
+  (`hiddenRef`). Flow 3발 Flow 2 overlay의 exit는 `onSeeAlternatives=closeOverlay`로 목록에 돌아온다.
+- **지연 청크**: 표면·질의·캐시·DEV fixture는 `import()`로 분리한다. 진입 CTA가 wired일 때(부정 Success
+  또는 `navigation !== null`) 선로딩하고, 청크 실패는 표면과 같은 문구의 Error stand-in으로 대체한다
+  (위 Suspense에 error boundary가 없다). 실측 엔트리 237.87 kB / gzip 76.23 kB, 청크 14.70 kB /
+  4.79 kB — §B50-11 예외 상한 이내.
 
 ```ts
 interface AlternativeEntry {
@@ -210,6 +219,8 @@ identity. 없으면 B를 발행하지 않는다. Flow 1 판정·카피·6상태�
 - `ready`인데 0행은 존재하지 않는다(empty로 접는다).
 - **Partial a**: empty 슬롯은 한 줄만, 추가 공간을 쓰지 않는다. 이름을 붙이고 조용히 지우지 않는다.
 - **Partial b**: failed 슬롯은 실패 문장 + **슬롯 안 retry 텍스트 액션**. 화면 Primary가 아니다.
+  실패 슬롯은 empty 문장을 절대 빌리지 않는다 — 그 그룹 자리에 실패 문장과 slot retry만 렌더한다.
+  (혼합 답에서 empty 문장과 실패 문장이 동시에 뜨던 구현을 2026-11-12에 수정.)
 - **Partial c**: 캐시 답. 스탬프 자리에 상대 시각, 임계값 초과면 stale 문장.
 - **Partial d**: closed-today 행은 `오늘은 휴무예요`를 영업시간 자리에, open 뒤로 정렬. open이 3행을
   못 채울 때만 등장. closed만 재고가 있으면 branch는 empty가 아니다.

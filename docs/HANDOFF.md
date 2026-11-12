@@ -2,21 +2,22 @@
 
 > 이 저장소에서 새 세션을 시작하면 **여기부터** 읽는다. 결정·실행 원장은 [`docs/notes/open-questions.md`](notes/open-questions.md). `.superpowers/`는 `.gitignore` 대상이라 새 클론에는 존재하지 않는다 — 정본으로 링크하지 않는다.
 
-## 현재 상태 (2026-11-11)
+## 현재 상태 (2026-11-12)
 
-**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **공개 원격·CI·`main` 보호는 2026-11-08 적용됐고(공개 저장소), 공개 배포는 아직 없다.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) 완료. P3 Flow 3는 설계 확정(2026-11-11) 후 구현 착수 단계다.**
+**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **공개 원격·CI·`main` 보호는 2026-11-08 적용됐고(공개 저장소), 공개 배포는 아직 없다.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) · P3 Flow 3 Alternative Discovery(2026-11-12 구현·검증 완료)까지 완료. 다음은 P4 배포·필드 검증이다.**
 
-### P3 Flow 3 Alternative Discovery — 설계 확정 (2026-11-11)
+### P3 Flow 3 Alternative Discovery — 구현 완료 (2026-11-12)
 
 - **발행 범위**: Group A(similar, 이 매장)만 live. Group B(nearby)는 포트·타입·mock·표면·E2E·axe까지 구현하되 프로덕션 어댑터는 등록하지 않는다(`NEARBY_LIVE=false`) — `hldyDt` 단일 샘플·A7(판매종료 scope)·nearby 임계값 미정(D3). withheld 슬롯은 아무 것도 렌더하지 않는다.
-- **진입**: Flow 1 일시품절·판매종료 + Flow 2 soldOut/recoveryStill. 미취급·가맹점 CTA는 선행 branch가 nearby라 inert 유지(D5). Flow 3는 UI-shell 스택(`storeCard > navigation > alternative > UiState`)이고 back은 3단(목록→Flow 2→Flow 1)으로 포커스를 되돌린다.
+- **진입·소유권**: Flow 1 일시품절·판매종료 + Flow 2 soldOut/recoveryStill. 목록→store card→Flow 2 overlay 스택은 `AlternativeSurface`가 소유하고, 부모는 진입 상태·`backSignal`·`onDepthChange`만 갖는다. Flow 1이 연 Flow 2는 `hidden`으로 남겨 soldOut exit phase를 보존하고 hidden 동안 resume refresh를 하지 않는다. back은 3단(목록→Flow 2→Flow 1)으로 포커스를 되돌린다.
 - **데이터**: `POST /api/alternatives` = SearchGoods 30(store-carryable) → `selStrPkupStck` 배치 1회(qty>0, vendor 순서) → 앞 3개 위치 병렬. 위치 없는 행 omit(no backfill), `omitted>0 && rows=[]` → failed.
 - **캐시·신선도**: 통짜 캐시(키 `${strCd}:${pdNo ?? keyword}`, `issued` 포함), 성공 답만 저장, **전부 실패**일 때만 Partial 서빙. 스탬프는 가장 오래된 관측 1회, 모든 발행 슬롯 settle 전 미표시. TTL 없음, 공유 6h 임계값.
-- **상태**: 행 0 + failed = Error, empty+withheld = degraded Empty(mall 제외), 전부 empty만 정상 Empty(양쪽 발행 시 mall 허용). 재입고 알림은 구독 API 미관측으로 P3 미렌더.
-- **예산**: 정본 220/72 유지, **P3 예외 상한 240 kB / gzip 78 kB**(§B50-11). P4 전 분할 복귀 또는 재비준.
+- **상태·렌더**: 행 0 + failed = Error, empty+withheld = degraded Empty(mall 제외), 전부 empty만 정상 Empty(양쪽 발행 시 mall 허용). 혼합 답의 failed 슬롯은 그룹 자리에서 실패 문장 + slot retry만 렌더하고 empty 문장을 빌리지 않는다(spec §5.1 2026-11-12 수정). 재입고 알림은 P3 미렌더.
+- **지연 청크**: 표면·질의·캐시·DEV fixture는 `import()` 분리. wired CTA에서 선로딩하고, 청크 실패는 표면과 같은 문구의 Error stand-in으로 대체한다(Suspense 위 error boundary 없음). 실측 엔트리 **237.87 kB / gzip 76.23 kB**, 청크 **14.70 kB / 4.79 kB** — P3 예외 상한 240/78 이내(§B50-11).
+- **비준 대기 카피**: A-only 진행 문장 `비슷한 상품을 확인하고 있어요…`, A 실패 문장(앱 초안). ko/en 동시.
 - **정본**: 설계 [`superpowers/specs/2026-11-11-flow3-alternative-discovery-design.md`](superpowers/specs/2026-11-11-flow3-alternative-discovery-design.md), 결정 [`notes/open-questions.md`](notes/open-questions.md) §B50.
 
-**게이트(2026-11-10 실측)**: vitest **807/807**(63 files), tsc clean, biome clean(159 files), Playwright **69/69**(dev 66 + preview 3), coverage **임계값 green**(V8 샘플 3회 lines 95.5–97.8% / branches 89.37–90.08% / functions 88.22–92.0% — 총계가 실행마다 달라 단일 퍼센트를 계약으로 쓰지 않는다), build 성공(엔트리 **224.68 kB** / gzip 72.58 kB, CSS 15.69 kB, precache **21 entries / 361.13 KiB**).
+**게이트(2026-11-12 실측)**: vitest **915/915**(72 files), tsc clean, biome clean, Playwright **88/88**(dev 85 + preview 3; Flow 3 E2E 8 + axe 10 포함), coverage **CI 임계값 green**(V8 샘플 lines/statements 95.49% / branches 88.1% / functions 91.56% — 총계가 실행마다 달라 단일 퍼센트를 계약으로 쓰지 않는다), build 성공(엔트리 **237.87 kB** / gzip 76.23 kB, Flow 3 지연청크 14.70 kB, CSS 18.11 kB, precache **22 entries / 391.42 KiB**).
 
 ### P2 Flow 2 In-Store Navigation (2026-11-10)
 
@@ -48,10 +49,10 @@
 ### 지금 남은 것 (우선순위)
 
 1. **프로덕션 런타임 미배포** — ToS/robots 게이트는 2026-10-12 해제됐다(owner verdict). 남은 것은 호스트명·포트 결정과 [`docs/deploy/gpu01-node-proxy.md`](deploy/gpu01-node-proxy.md) §1–7 실행. CF workerd는 벤더 핑거프린트 403이라 Node 프록시가 유일 경로다.
-2. **P3 Flow 3 Alternative Discovery(D076) 구현** — 설계·예산 결정 완료(§B50). 다음: 도메인/포트(`AlternativeRepository`) + mock + live similar 어댑터 + `AlternativeSurface` + Flow 1/2 CTA 배선 + 게이트. nearby는 포트·mock까지만.
+2. **P4 배포·필드 검증** — P3까지 코드·게이트 완료. 남은 것은 프로덕션 런타임 배포(위 1) 뒤 실제 매장에서 Flow 1→2→3을 걷는 필드 검증이다. nearby live 해제 조건은 §B50-2의 데이터 질문(`hldyDt`·A7·임계값)이 닫힐 때다.
 3. **D4 Bible 결정** — 통로 중 위치 이동·품절 외 부정 상태의 종료/재안내 카피. P2는 관측·보류까지만 구현했다.
 4. **§B47 나머지 커버리지** — 교차 매장 import는 E2E 1건으로 고정됐다. 공유 취소·최근 본·수량 상한은 아직 단위 테스트만 있다.
-5. **엔트리 번들 예산** — P2 실측 224.68 kB / gzip 72.58 kB로 정본(220/72) 초과. P3는 예외 상한 **240/78**로 진행하고, P4 배포 전 ①220/72 복귀(카트·최근본·공유 lazy split — cold path 아님) ②필드 증거와 함께 재비준 중 하나를 고른다(§B50-11).
+5. **엔트리 번들 예산** — P3 실측 237.87 kB / gzip 76.23 kB로 P3 예외 상한(240/78) 이내지만 정본(220/72) 초과. P4 배포 전 ①220/72 복귀(카트·최근본·공유 lazy split — cold path 아님) ②필드 증거와 함께 재비준 중 하나를 고른다(§B50-11).
 6. **툴체인 업그레이드** — vite 5→8, vitest 3→5. CI green을 유지한 별도 브랜치에서 단계적으로(D7).
 
 ### 최근 완료 (§B47, 상세는 원장)

@@ -227,7 +227,9 @@ B30-4는 **Bible 비준 대기** — 앱이 정직 초안으로 5종 카피(권�
 | B50-8 | 재입고 알림 | P3 Empty 사다리에서 미렌더 | 구독 API 미관측(Engineering §11). 데이터가 "제공할 때"만 나오는 요소이며 Primary 색 예산도 비어 있다 |
 | B50-9 | 지도 handoff | `mapHref(address, platform)`: iOS `https://maps.apple.com/?q=`, Android `geo:0,0?q=`, 그 외 카카오 웹. 실패해도 주소 텍스트 유지 | D066 경계. 실기기 사용성은 필드 관측 |
 | B50-10 | `pdNo` identity | `AvailabilityAnswer` 모든 kind에 optional `pdNo`. `RawStoreObservation.pdNo`를 매핑 | B의 "같은 pdNo" 계약·캐시 exact identity. 없으면 B 미발행. 6상태·카피 불변 |
-| B50-11 | 번들 예산 | 정본 220/72 유지. **P3 예외 상한 240 kB / gzip 78 kB**를 릴리스에 기록 | P2 실측 224.68/72.58 + 표면 1개. P4 전 ①220/72 복귀(카트·최근본·공유 lazy split) ②필드 증거와 함께 재비준 중 택1 |
+| B50-11 | 번들 예산 | 정본 220/72 유지. **P3 예외 상한 240 kB / gzip 78 kB**를 릴리스에 기록 | P2 실측 224.68/72.58 + 표면 1개. P4 전 ①220/72 복귀(카트·최근본·공유 lazy split) ②필드 증거와 함께 재비준 중 택1. **2026-11-12 실측: 엔트리 237.87 kB / gzip 76.23 kB, Flow 3 지연 청크 14.70 kB / 4.79 kB — 예외 상한 이내** |
+
+> **B50-구현 확정(2026-11-12)**: ① **표면 소유권** — 목록→store card→Flow 2 overlay 스택은 `AlternativeSurface`가 소유한다. 부모(`AvailabilitySurface`)는 진입 상태·헤더 back 신호(`backSignal`)·깊이(`onDepthChange`)만 갖는다(spec §1 개정). Flow 1이 연 Flow 2는 DOM에 `hidden`으로 남겨 phase(특히 soldOut exit)를 보존하고, hidden 동안 resume refresh를 하지 않는다(`hiddenRef`). ② **지연 청크** — 표면·질의·캐시·DEV fixture를 `import()`로 분리하고, wired CTA(부정 Success 또는 `navigation !== null`)에서 선로딩한다. error boundary가 없으므로 청크 실패는 표면과 같은 문구의 Error stand-in으로 대체한다. ③ **혼합 답 렌더 수정** — failed 슬롯이 empty 문장과 실패 문장을 동시에 렌더하던 구현을 spec §5.1대로 고쳤다(실패 문장 + slot retry만, 그룹 자리에서). ④ **비준 대기 카피 추가** — A-only 진행 문장 `비슷한 상품을 확인하고 있어요…`, A 실패 문장은 앱 초안이다(ko/en 동시). ⑤ **게이트** — vitest 915/915(72 files), Playwright 88/88(dev 85 + preview 3), Flow 3 axe 5상태×light/dark, 커버리지 CI 임계값 green, tsc·biome·build green.
 
 > **B50-열린 질문(Bible)**: ① **D5** — nearby 부재 시 Flow 2 exit·미취급/가맹점 진입의 임시 형태(현재 exit는 A만, 두 CTA는 inert) ② A 실패 카피 비준 ③ withheld+empty(단일 branch empty) 열화의 정본 형태 ④ 행 0 + failed/empty 혼합의 Error 판정 ⑤ 캐시 both-empty에서 스탬프 위치 ⑥ nearby 임계값·`hldyDt` 의미(A7/A8) ⑦ 지도 handoff 실사용.
 
