@@ -208,6 +208,7 @@ async function handle(context: Ctx, timer: UpstreamTimer): Promise<Response> {
     let failed = 0;
     settled.forEach((result, i) => {
       const candidate = picked[i];
+      if (candidate === undefined) return; // unreachable: settled mirrors picked
       if (result.status === 'rejected') {
         failed += 1; // this row only — do not backfill from candidate #4
         return;
