@@ -56,6 +56,48 @@ const navigationStates = [
   },
 ];
 
+// Flow 3 states (Interface/alternative-discovery.md §5). ?alt= widens the mock-only nearby branch;
+// production withholds it (§B50-2), so every Flow 1 entry goes through 대안 보기.
+const openAlternatives = async (page: Page) => {
+  await page.getByRole('button', { name: '대안 보기' }).click();
+};
+
+const alternativeStates = [
+  {
+    name: 'alternatives-list',
+    url: '/?scenario=temporarilyOut',
+    signature: '이 매장에 있는 비슷한 상품',
+    open: openAlternatives,
+  },
+  {
+    name: 'alternatives-nearby',
+    url: '/?scenario=temporarilyOut&alt=nearby',
+    signature: '이 상품이 있는 근처 매장',
+    open: openAlternatives,
+  },
+  {
+    name: 'alternatives-store-card',
+    url: '/?scenario=temporarilyOut&alt=nearby',
+    signature: '을지로입구점에 있어요 · 850m',
+    open: async (page: Page) => {
+      await openAlternatives(page);
+      await page.getByRole('button', { name: /을지로입구점/ }).click();
+    },
+  },
+  {
+    name: 'alternatives-empty',
+    url: '/?scenario=temporarilyOut&alt=aEmpty',
+    signature: '이 매장에는 비슷한 상품이 없어요.',
+    open: openAlternatives,
+  },
+  {
+    name: 'alternatives-error',
+    url: '/?scenario=temporarilyOut&alt=aFailed',
+    signature: '대안을 불러오지 못했어요.',
+    open: openAlternatives,
+  },
+];
+
 for (const scheme of schemes) {
   for (const { name, url, signature } of states) {
     test(`state "${name}" has no serious or critical axe violations (${scheme})`, async ({
@@ -90,6 +132,38 @@ for (const scheme of schemes) {
 
   for (const { name, url, signature, open } of navigationStates) {
     test(`flow 2 "${name}" has no serious or critical axe violations (${scheme})`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.addInitScript(() => {
+        localStorage.setItem(
+          'daiso.storeContext',
+          JSON.stringify({ strCd: '001', strNm: '명동역점' }),
+        );
+      });
+      await page.goto(url);
+      await open(page);
+      await expect(page.locator('main')).toContainText(signature);
+
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const blocking = results.violations.filter(
+        (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+      );
+      expect(
+        blocking.map(
+          (violation) =>
+            `${violation.id}: ${violation.help} (${violation.nodes.length} nodes: ${violation.nodes
+              .map((node) => node.target.join(' '))
+              .join(', ')})`,
+        ),
+      ).toEqual([]);
+    });
+  }
+
+  for (const { name, url, signature, open } of alternativeStates) {
+    test(`flow 3 "${name}" has no serious or critical axe violations (${scheme})`, async ({
       page,
     }) => {
       await page.emulateMedia({ colorScheme: scheme });
