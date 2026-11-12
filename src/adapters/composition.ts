@@ -4,6 +4,7 @@ import { publishNetwork } from '../diagnostics/bus';
 import { isDiagnosticsEnabled, resolveZoomOverride } from '../diagnostics/enabled';
 import { readServerTiming } from '../diagnostics/serverTiming';
 import type {
+  AlternativeRepository,
   GeolocationPort,
   ProductSearchPort,
   ScannerPort,
@@ -11,10 +12,13 @@ import type {
   StoreStockRepository,
 } from '../domain/ports';
 import { createBrowserScanner } from './barcode/browserScanner';
+import { createDaisoAlternativeRepository } from './daisomall/alternativeRepository';
 import { createDaisoProductSearch } from './daisomall/productSearchRepository';
 import { createDaisoNearbyFetch, createDaisoStoreDirectory } from './daisomall/storeDirectory';
 import { createDaisoStoreStockRepository } from './daisomall/storeStockRepository';
 import { createBrowserGeolocation } from './geolocation/browserGeolocation';
+import { type AltScenario, parseAltScenario } from './mock/alternativeFixtures';
+import { createMockAlternativeRepository } from './mock/alternativeRepository';
 import { createKeywordMockRepository } from './mock/mockRepository';
 import { createMockProductSearch } from './mock/productSearch';
 import { createMockScanner } from './mock/scanner';
@@ -58,6 +62,21 @@ const diagnosticFetch = createDiagnosticFetch();
 // a timeout from a loser's abort. Wrapping it as well would double-log every attempt.
 export function createStoreStockRepository(): StoreStockRepository {
   return import.meta.env.PROD ? createDaisoStoreStockRepository() : createKeywordMockRepository();
+}
+
+// Flow 3: the live adapter answers Group A only; Group B stays withheld by the entry matrix until the
+// nearby data questions close (§B50-2). DEV selects the ?alt= fixture, read once here so the query and
+// the entry override agree on the same scenario.
+export function createAlternativeRepository(): AlternativeRepository {
+  if (import.meta.env.PROD) {
+    return createDaisoAlternativeRepository({ fetchImpl: diagnosticFetch });
+  }
+  return createMockAlternativeRepository(currentDevAltScenario() ?? 'default');
+}
+
+export function currentDevAltScenario(): AltScenario | null {
+  if (import.meta.env.PROD || typeof window === 'undefined') return null;
+  return parseAltScenario(window.location.search);
 }
 
 export function createStoreDirectory(): StoreDirectoryPort {

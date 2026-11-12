@@ -26,6 +26,15 @@ export function formatLocation(location: StoreLocation, locale: Locale = 'ko'): 
   return `${floor} ${location.zone}번`;
 }
 
+// Flow 3 distance. The Bible fixes the km example ("1.2km") and leaves sub-kilometre display to
+// the app (§B50 drafts): km >= 1 → one decimal, below that → integer metres. Digits are the
+// matchable part, so the unit wording is identical in both guidance languages.
+export function formatDistance(distanceM: number): string {
+  if (!Number.isFinite(distanceM) || distanceM < 0) return '';
+  if (distanceM >= 1000) return `${(distanceM / 1000).toFixed(1)}km`;
+  return `${Math.round(distanceM)}m`;
+}
+
 // Upstream lchDay is 'YYYY-MM-DD'; the Bible copy ("{lchDay} 전후에 들어올 예정") wants "M월 D일"
 // (daiso formatLchDay). The conversion lives in domain/ so adapters never import ui/ — re-exported
 // here because this is where presentation callers (and the original tests) expect it.

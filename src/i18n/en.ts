@@ -5,8 +5,13 @@
 // Bible ratification may reword through the same verbatim-replace path as the ko drafts. Completeness against
 // copy.ts is compiler-checked (CopyTable in ./strings) plus a runtime key test.
 import type { DataOwnerPolicy } from '../domain/policy';
-import type { AvailabilityAnswer, StoreLocation, UiState } from '../domain/types';
-import { formatLocation, formatPrice, formatRelativeTimeEn } from '../ui/format';
+import type {
+  AvailabilityAnswer,
+  SimilarAlternative,
+  StoreLocation,
+  UiState,
+} from '../domain/types';
+import { formatDistance, formatLocation, formatPrice, formatRelativeTimeEn } from '../ui/format';
 
 export const DEFAULT_HEADLINE = 'Check if this store has it';
 export const DEFAULT_SUBHEAD = 'Scan a barcode or type a product name.';
@@ -271,4 +276,78 @@ function priceLocationLine(answer: AvailabilityAnswer): string | undefined {
   const primary = answer.locations[0];
   if (!primary) return undefined;
   return `${formatPrice(answer.price, 'en')} · ${formatLocation(primary, 'en')}`;
+}
+
+// ── Flow 3 Alternative Discovery (Interface/alternative-discovery.md §4, en twins) ─────────────
+export const ALT_BACK_LABEL = 'Back';
+export const ALT_REASON_TEMPORARILY_OUT = 'It is out of stock right now';
+export const ALT_REASON_DISCONTINUED = 'This product has been discontinued';
+export const ALT_REASON_NOT_CARRIED = 'This store does not carry this product';
+export const ALT_REASON_FRANCHISE = 'This is a franchise store, so stock cannot be checked';
+export const ALT_REASON_FLOW2 = 'Not found on the shelf';
+export const ALT_SIMILAR_HEADING = 'Similar items in this store';
+export const ALT_NEARBY_HEADING = 'Nearby stores that have this item';
+export const ALT_LOADING_BOTH = 'Checking similar items and nearby store stock…';
+export const ALT_LOADING_SIMILAR = 'Checking similar items…';
+export const ALT_LOADING_NEARBY = 'Checking nearby store stock…';
+export const ALT_SIMILAR_EMPTY = 'No similar items in this store.';
+export const ALT_NEARBY_EMPTY = 'No nearby store has it in stock.';
+export const ALT_SIMILAR_FAILED = 'Could not check similar items. Please try again.';
+export const ALT_NEARBY_FAILED = 'Could not check nearby store stock. Please try again.';
+export const ALT_SLOT_RETRY = 'Try again';
+export const ALT_EMPTY_BOTH = 'We could not find it in this store or in nearby stores.';
+export const ALT_EMPTY_MALL = 'You can order it from Daisomall.';
+export const ALT_EMPTY_RESEARCH = 'Try searching with a different name.';
+export const ALT_EMPTY_STAFF = 'Please ask a staff member.';
+export const ALT_ERROR_BODY = 'Could not load alternatives.';
+export const ALT_ERROR_RETRY = 'Try again';
+export const ALT_ERROR_STAFF = 'Please ask a staff member.';
+export const ALT_STORE_CARD_IN_STOCK = 'In stock';
+export const ALT_STORE_CARD_CLOSED = 'Closed today';
+
+export function altLoadingLine(issued: { similar: boolean; nearby: boolean }): string {
+  if (issued.similar && issued.nearby) return ALT_LOADING_BOTH;
+  return issued.similar ? ALT_LOADING_SIMILAR : ALT_LOADING_NEARBY;
+}
+
+export function altStaleBody(relativeTime: string): string {
+  return `Today's stock could not be checked — as of ${relativeTime}.`;
+}
+
+export function altSimilarRowLabel(row: SimilarAlternative, policy: DataOwnerPolicy): string {
+  const location = row.locations[0];
+  const base = `${row.productName} · ${formatPrice(row.price, 'en')}${location ? ` · ${formatLocation(location, 'en')}` : ''}`;
+  return row.qtyUpperBound <= policy.lowQtyCutoff
+    ? `${base} · ${lowQtyCaption(row.qtyUpperBound)}`
+    : base;
+}
+
+export function altNearbyRowLabel(
+  strNm: string,
+  distanceM: number,
+  closingTime: string,
+  closedToday: boolean,
+): string {
+  const hours = closedToday ? ALT_STORE_CARD_CLOSED : altClosingLabel(closingTime);
+  return hours
+    ? `${strNm} · ${formatDistance(distanceM)} · ${hours} · ${ALT_STORE_CARD_IN_STOCK}`
+    : `${strNm} · ${formatDistance(distanceM)} · ${ALT_STORE_CARD_IN_STOCK}`;
+}
+
+export function altStoreCardHeading(strNm: string, distanceM: number): string {
+  return `${strNm} has it · ${formatDistance(distanceM)}`;
+}
+
+export function altClosingLabel(closingTime: string): string | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(closingTime.trim());
+  if (!match) return null;
+  const hour = Number(match[1]);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return null;
+  const period = hour < 12 ? 'AM' : 'PM';
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `Open until ${hour12} ${period}`;
+}
+
+export function altMapLinkLabel(address: string): string {
+  return `${address} — open in maps`;
 }

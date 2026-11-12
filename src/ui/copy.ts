@@ -1,9 +1,14 @@
 // src/ui/copy.ts — Bible-verbatim copy (Interface/availability-check.md §4). Transcribe exactly; do not paraphrase.
 import type { DataOwnerPolicy } from '../domain/policy';
-import type { AvailabilityAnswer, StoreLocation, UiState } from '../domain/types';
+import type {
+  AvailabilityAnswer,
+  SimilarAlternative,
+  StoreLocation,
+  UiState,
+} from '../domain/types';
 import { announcementForEn, factsFor as factsForEn } from '../i18n/en';
 import type { Locale } from '../i18n/locale';
-import { formatLocation, formatPrice, formatRelativeTimeKo } from './format';
+import { formatDistance, formatLocation, formatPrice, formatRelativeTimeKo } from './format';
 
 export const DEFAULT_HEADLINE = '이 매장에 있는지 바로 확인해 보세요';
 // App-owned helper (not a Bible table line — draft pending ratification like the scan
@@ -332,4 +337,92 @@ export function navigationFreshnessCaption(observedAtMs: number, nowMs: number):
   if (minutes < 1) return '방금 확인한 재고예요';
   if (minutes < 60) return `${minutes}분 전에 확인한 재고예요`;
   return `${formatRelativeTimeKo(observedAtMs, nowMs)}에 확인한 재고예요`;
+}
+
+// ── Flow 3 Alternative Discovery (Interface/alternative-discovery.md §4) ────────────────────────
+// Bible-verbatim lines are transcribed exactly. APP-OWNED DRAFTS pending Bible ratification, marked
+// individually, cover the states the Interface does not define: single-slot loading and Group A
+// failure. Recorded in docs/notes/open-questions.md §B50.
+export const ALT_BACK_LABEL = '뒤로';
+export const ALT_REASON_TEMPORARILY_OUT = '지금은 품절이에요';
+export const ALT_REASON_DISCONTINUED = '판매가 끝난 상품이에요';
+export const ALT_REASON_NOT_CARRIED = '이 매장에서는 팔지 않는 상품이에요';
+export const ALT_REASON_FRANCHISE = '가맹점이라 재고를 확인할 수 없어요';
+export const ALT_REASON_FLOW2 = '선반에서 찾지 못했어요';
+
+export const ALT_SIMILAR_HEADING = '이 매장에 있는 비슷한 상품';
+export const ALT_NEARBY_HEADING = '이 상품이 있는 근처 매장';
+
+export const ALT_LOADING_BOTH = '비슷한 상품과 근처 매장 재고를 확인하고 있어요…';
+// App-owned drafts: the Bible's progress line names both branches, and production withholds Group B.
+// Saying "nearby store stock" while not querying it would be the same false promise the CTA gating
+// avoids (§B50-2).
+export const ALT_LOADING_SIMILAR = '비슷한 상품을 확인하고 있어요…';
+export const ALT_LOADING_NEARBY = '근처 매장 재고를 확인하고 있어요…';
+
+export const ALT_SIMILAR_EMPTY = '이 매장에는 비슷한 상품이 없어요.';
+export const ALT_NEARBY_EMPTY = '근처 매장에는 재고가 없어요.';
+// App-owned draft: the Interface defines Group B's failure sentence but not Group A's (§B50-7).
+export const ALT_SIMILAR_FAILED = '비슷한 상품은 확인하지 못했어요. 다시 시도해 주세요.';
+export const ALT_NEARBY_FAILED = '근처 매장 재고는 확인하지 못했어요. 다시 시도해 주세요.';
+export const ALT_SLOT_RETRY = '다시 시도';
+
+export const ALT_EMPTY_BOTH = '이 매장과 근처 매장 모두에서 찾지 못했어요.';
+export const ALT_EMPTY_MALL = '다이소몰에서 주문할 수 있어요.';
+export const ALT_EMPTY_RESEARCH = '다른 이름으로 다시 검색해 보세요.';
+export const ALT_EMPTY_STAFF = '직원에게 문의해 주세요.';
+
+export const ALT_ERROR_BODY = '대안을 불러오지 못했어요.';
+export const ALT_ERROR_RETRY = '다시 시도';
+export const ALT_ERROR_STAFF = '직원에게 문의해 주세요.';
+
+export const ALT_STORE_CARD_IN_STOCK = '재고 있어요';
+export const ALT_STORE_CARD_CLOSED = '오늘은 휴무예요';
+
+export function altLoadingLine(issued: { similar: boolean; nearby: boolean }): string {
+  if (issued.similar && issued.nearby) return ALT_LOADING_BOTH;
+  return issued.similar ? ALT_LOADING_SIMILAR : ALT_LOADING_NEARBY;
+}
+
+export function altStaleBody(relativeTime: string): string {
+  return `오늘 재고는 확인하지 못했어요 — ${relativeTime} 기준이에요.`;
+}
+
+export function altSimilarRowLabel(row: SimilarAlternative, policy: DataOwnerPolicy): string {
+  const location = row.locations[0];
+  const base = `${row.productName} · ${formatPrice(row.price)}${location ? ` · ${formatLocation(location)}` : ''}`;
+  return row.qtyUpperBound <= policy.lowQtyCutoff
+    ? `${base} · ${lowQtyCaption(row.qtyUpperBound)}`
+    : base;
+}
+
+export function altNearbyRowLabel(
+  strNm: string,
+  distanceM: number,
+  closingTime: string,
+  closedToday: boolean,
+): string {
+  const hours = closedToday ? ALT_STORE_CARD_CLOSED : altClosingLabel(closingTime);
+  return hours
+    ? `${strNm} · ${formatDistance(distanceM)} · ${hours} · ${ALT_STORE_CARD_IN_STOCK}`
+    : `${strNm} · ${formatDistance(distanceM)} · ${ALT_STORE_CARD_IN_STOCK}`;
+}
+
+export function altStoreCardHeading(strNm: string, distanceM: number): string {
+  return `${strNm}에 있어요 · ${formatDistance(distanceM)}`;
+}
+
+// "22:00" → "오후 10시까지 영업"; an unparseable vendor value yields null rather than an invented hour.
+export function altClosingLabel(closingTime: string): string | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(closingTime.trim());
+  if (!match) return null;
+  const hour = Number(match[1]);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return null;
+  const period = hour < 12 ? '오전' : '오후';
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${period} ${hour12}시까지 영업`;
+}
+
+export function altMapLinkLabel(address: string): string {
+  return `${address} — 지도 앱에서 열기`;
 }

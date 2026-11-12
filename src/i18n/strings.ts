@@ -2,7 +2,8 @@
 // (ui/copy.ts, untouched); en is the first-draft mirror (./en). Locale-free helpers
 // (priceLocationLine, splitAimGuide, formatters) are shared, never mirrored — only
 // TEXT-bearing exports belong here, enforced by the key-parity test (strings.test.ts).
-import type { AvailabilityAnswer, StoreLocation } from '../domain/types';
+import type { DataOwnerPolicy } from '../domain/policy';
+import type { AvailabilityAnswer, SimilarAlternative, StoreLocation } from '../domain/types';
 import * as ko from '../ui/copy';
 import * as en from './en';
 import type { Locale } from './locale';
@@ -101,6 +102,43 @@ export interface CopyTable {
     locale?: Locale,
   ): { status: string; cta: string; secondaryCta?: string };
   scanEmptyBody(value: string): string;
+  readonly ALT_BACK_LABEL: string;
+  readonly ALT_REASON_TEMPORARILY_OUT: string;
+  readonly ALT_REASON_DISCONTINUED: string;
+  readonly ALT_REASON_NOT_CARRIED: string;
+  readonly ALT_REASON_FRANCHISE: string;
+  readonly ALT_REASON_FLOW2: string;
+  readonly ALT_SIMILAR_HEADING: string;
+  readonly ALT_NEARBY_HEADING: string;
+  readonly ALT_LOADING_BOTH: string;
+  readonly ALT_LOADING_SIMILAR: string;
+  readonly ALT_LOADING_NEARBY: string;
+  readonly ALT_SIMILAR_EMPTY: string;
+  readonly ALT_NEARBY_EMPTY: string;
+  readonly ALT_SIMILAR_FAILED: string;
+  readonly ALT_NEARBY_FAILED: string;
+  readonly ALT_SLOT_RETRY: string;
+  readonly ALT_EMPTY_BOTH: string;
+  readonly ALT_EMPTY_MALL: string;
+  readonly ALT_EMPTY_RESEARCH: string;
+  readonly ALT_EMPTY_STAFF: string;
+  readonly ALT_ERROR_BODY: string;
+  readonly ALT_ERROR_RETRY: string;
+  readonly ALT_ERROR_STAFF: string;
+  readonly ALT_STORE_CARD_IN_STOCK: string;
+  readonly ALT_STORE_CARD_CLOSED: string;
+  altLoadingLine(issued: { similar: boolean; nearby: boolean }): string;
+  altStaleBody(relativeTime: string): string;
+  altSimilarRowLabel(row: SimilarAlternative, policy: DataOwnerPolicy): string;
+  altNearbyRowLabel(
+    strNm: string,
+    distanceM: number,
+    closingTime: string,
+    closedToday: boolean,
+  ): string;
+  altStoreCardHeading(strNm: string, distanceM: number): string;
+  altClosingLabel(closingTime: string): string | null;
+  altMapLinkLabel(address: string): string;
 }
 
 export const STR: Record<Locale, CopyTable> = { ko, en };
