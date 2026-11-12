@@ -23,6 +23,8 @@ export function AnswerCard({
   onScan,
   onNavigate,
   navigateButtonRef,
+  onSeeAlternatives,
+  alternativesButtonRef,
   cardRef,
 }: {
   ui: NonDefaultUiState;
@@ -48,13 +50,30 @@ export function AnswerCard({
   onNavigate?: () => void;
   // Back-from-Flow-2 focus target: the surface hands focus back to this CTA on return.
   navigateButtonRef?: Ref<HTMLButtonElement>;
+  // Flow 3 hand-off (D076). Wired only to 대안 보기 (temporarilyOut, discontinued); the other negative
+  // CTAs stay inert until their branch can be answered (§B50-2, D5).
+  onSeeAlternatives?: () => void;
+  // Back-from-Flow-3 focus target: the 대안 보기 CTA that opened the flow.
+  alternativesButtonRef?: Ref<HTMLButtonElement>;
   // Retry-focus target (decision 6): the surface root is focusable (tabIndex -1) so focus never falls
   // to <body> when the retry button unmounts on the Loading swap.
   cardRef?: Ref<HTMLDivElement>;
 }) {
   return (
     <GlassSurface className="answer-card" tabIndex={-1} surfaceRef={cardRef}>
-      {renderBody(ui, policy, nowMs, locale, onRetry, onAdd, onScan, onNavigate, navigateButtonRef)}
+      {renderBody(
+        ui,
+        policy,
+        nowMs,
+        locale,
+        onRetry,
+        onAdd,
+        onScan,
+        onNavigate,
+        navigateButtonRef,
+        onSeeAlternatives,
+        alternativesButtonRef,
+      )}
     </GlassSurface>
   );
 }
@@ -69,6 +88,8 @@ function renderBody(
   onScan?: () => void,
   onNavigate?: () => void,
   navigateButtonRef?: Ref<HTMLButtonElement>,
+  onSeeAlternatives?: () => void,
+  alternativesButtonRef?: Ref<HTMLButtonElement>,
 ) {
   // One destructure instead of 20 imports: every bare copy name below resolves through the
   // active locale table, so no call site changes when a string gains a language. Sub-renders
@@ -124,7 +145,16 @@ function renderBody(
         ? renderErrorCached(ui.answer, ui.freshness.observedAt, nowMs, locale, onRetry, onAdd)
         : renderErrorNoCache(locale, onRetry);
     case 'success':
-      return renderSuccess(ui.answer, policy, locale, onAdd, onNavigate, navigateButtonRef);
+      return renderSuccess(
+        ui.answer,
+        policy,
+        locale,
+        onAdd,
+        onNavigate,
+        navigateButtonRef,
+        onSeeAlternatives,
+        alternativesButtonRef,
+      );
     case 'partial':
       return renderPartial(ui, nowMs, locale, onRetry, onAdd);
   }
@@ -211,6 +241,8 @@ function renderSuccess(
   onAdd?: () => void,
   onNavigate?: () => void,
   navigateButtonRef?: Ref<HTMLButtonElement>,
+  onSeeAlternatives?: () => void,
+  alternativesButtonRef?: Ref<HTMLButtonElement>,
 ) {
   const {
     ADD_TO_CART_BUTTON,
@@ -270,9 +302,22 @@ function renderSuccess(
           visible: without this line the surface LiveRegion was its only visual source,
           which forbids hiding that region (LiveRegion's own rule + UI polish dedup). */}
       <p className="text-caption">{LIVE_FRESHNESS_CAPTION}</p>
-      <button type="button" className="text-label">
-        {facts.cta}
-      </button>
+      {/* Flow 3 hand-off (D076): 대안 보기 is the state's single next action for temporarilyOut and
+          discontinued. The other negative kinds keep their inert stub until their branch exists. */}
+      {(answer.kind === 'temporarilyOut' || answer.kind === 'discontinued') && onSeeAlternatives ? (
+        <button
+          ref={alternativesButtonRef}
+          type="button"
+          className="text-label cta--primary"
+          onClick={onSeeAlternatives}
+        >
+          {facts.cta}
+        </button>
+      ) : (
+        <button type="button" className="text-label">
+          {facts.cta}
+        </button>
+      )}
       {facts.secondaryCta && (
         <button type="button" className="text-label">
           {facts.secondaryCta}

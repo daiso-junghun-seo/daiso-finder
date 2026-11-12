@@ -21,6 +21,8 @@ export function AnswerBody({
   onRetry,
   onNavigate,
   navigateButtonRef,
+  onSeeAlternatives,
+  alternativesButtonRef,
 }: {
   ui: AnswerUiState;
   announcement: string;
@@ -32,6 +34,8 @@ export function AnswerBody({
   onRetry: () => void;
   onNavigate?: () => void;
   navigateButtonRef?: Ref<HTMLButtonElement>;
+  onSeeAlternatives?: () => void;
+  alternativesButtonRef?: Ref<HTMLButtonElement>;
 }) {
   return (
     <>
@@ -47,6 +51,8 @@ export function AnswerBody({
         onRetry={onRetry}
         onNavigate={onNavigate}
         navigateButtonRef={navigateButtonRef}
+        onSeeAlternatives={onSeeAlternatives}
+        alternativesButtonRef={alternativesButtonRef}
       />
     </>
   );

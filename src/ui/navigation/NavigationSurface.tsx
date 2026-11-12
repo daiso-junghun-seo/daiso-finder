@@ -4,6 +4,7 @@
 // a seventh UiState: the six availability states and their reducer are untouched.
 import {
   type ReactNode,
+  type Ref,
   type TouchEvent,
   useCallback,
   useEffect,
@@ -56,6 +57,9 @@ export function NavigationSurface({
   now = Date.now,
   timeoutMs = NAV_REFRESH_TIMEOUT_MS,
   clockIntervalMs = CLOCK_INTERVAL_MS,
+  hidden,
+  onSeeAlternatives,
+  exitButtonRef,
 }: {
   entry: NavigationEntry;
   locale: Locale;
@@ -64,6 +68,14 @@ export function NavigationSurface({
   now?: () => number;
   timeoutMs?: number;
   clockIntervalMs?: number;
+  // Flow 3 keeps this surface mounted underneath its list so the shopper returns to the same guidance
+  // state (and the same exit CTA) when they go back. Hidden surfaces stay out of the a11y tree.
+  hidden?: boolean;
+  // Flow 3's entry from the two exits (D076). Wired by both call sites; a missing handler keeps the
+  // button inert, exactly like the pre-P3 stub (tests rely on that).
+  onSeeAlternatives?: () => void;
+  // Back-from-Flow-3 focus target: the exit CTA that opened Flow 3.
+  exitButtonRef?: Ref<HTMLButtonElement>;
 }) {
   const S = strings(locale);
   const [answer, setAnswer] = useState(entry.answer);
@@ -243,9 +255,17 @@ export function NavigationSurface({
   useEffect(() => {
     latestRefresh.current = runRefresh;
   });
+  // A hidden Flow 2 (kept underneath Flow 3) must not refresh behind the shopper's back: the surface
+  // is preserved so its phase — and the exit CTA that opened Flow 3 — is exactly where they left it.
+  const hiddenRef = useRef(hidden);
+  useEffect(() => {
+    hiddenRef.current = hidden;
+  });
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') void latestRefresh.current('background');
+      if (document.visibilityState === 'visible' && !hiddenRef.current) {
+        void latestRefresh.current('background');
+      }
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
@@ -333,6 +353,7 @@ export function NavigationSurface({
     <SurfaceShell
       announcement={announcementText}
       pull={pull}
+      hidden={hidden}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -347,7 +368,12 @@ export function NavigationSurface({
         <p className="text-heading" ref={setPrimary} tabIndex={-1}>
           {S.NAV_SOLD_OUT_BODY}
         </p>
-        <button type="button" className="text-label cta--primary">
+        <button
+          ref={exitButtonRef}
+          type="button"
+          className="text-label cta--primary"
+          onClick={onSeeAlternatives}
+        >
           {S.SUCCESS_OUT_CTA}
         </button>
       </>,
@@ -360,7 +386,12 @@ export function NavigationSurface({
         <p className="text-heading" ref={setPrimary} tabIndex={-1}>
           {S.NAV_RECOVERY_STILL_BODY}
         </p>
-        <button type="button" className="text-label cta--primary">
+        <button
+          ref={exitButtonRef}
+          type="button"
+          className="text-label cta--primary"
+          onClick={onSeeAlternatives}
+        >
           {S.SUCCESS_OUT_CTA}
         </button>
       </>,
@@ -468,6 +499,7 @@ export function NavigationSurface({
 function SurfaceShell({
   announcement,
   pull,
+  hidden,
   children,
   onTouchStart,
   onTouchMove,
@@ -475,13 +507,14 @@ function SurfaceShell({
 }: {
   announcement: string;
   pull: number;
+  hidden?: boolean;
   children: ReactNode;
   onTouchStart: (event: TouchEvent) => void;
   onTouchMove: (event: TouchEvent) => void;
   onTouchEnd: () => void;
 }) {
   return (
-    <GlassSurface className="answer-card navigation-surface">
+    <GlassSurface className="answer-card navigation-surface" hidden={hidden}>
       <LiveRegion message={announcement} visuallyHidden />
       <div
         className="navigation-body"

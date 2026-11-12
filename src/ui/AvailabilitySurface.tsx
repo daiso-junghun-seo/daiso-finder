@@ -1,12 +1,27 @@
 // src/ui/AvailabilitySurface.tsx
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
-import { createGeolocation, createScanner, createStoreDirectory } from '../adapters/composition';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import type { ComponentType, ReactNode, Ref } from 'react';
+import {
+  createGeolocation,
+  createScanner,
+  createStoreDirectory,
+  currentDevAltScenario,
+} from '../adapters/composition';
 import { defaultPolicy } from '../domain/policy';
 import type { ProductCandidate, StoreContext } from '../domain/types';
+import type { Locale } from '../i18n/locale';
 import { strings } from '../i18n/strings';
 import type { RecentView } from '../infra/recent-views';
 import { LiveRegion } from './a11y/LiveRegion';
+import type { AlternativeSurfaceProps } from './alternative/AlternativeSurface';
+import { alternativeCache } from './alternative/alternative-cache';
+import {
+  alternativeEntryFromNavigation,
+  alternativeEntryOf,
+  devForceNearby,
+} from './alternative/alternative-entry';
+import type { AlternativeEntry } from './alternative/alternative-types';
+import { altReasonLabel } from './alternative/alternative-types';
 import { AnswerBody } from './availability/AnswerBody';
 import { CandidatesBody } from './availability/CandidatesBody';
 import { DefaultBody } from './availability/DefaultBody';
@@ -23,12 +38,28 @@ import {
 } from './availability/pipelines';
 import { runScenario } from './availability/scenario';
 import { useCartController } from './availability/useCart';
+import { GlassSurface } from './components/GlassSurface';
 import { StoreSelectionSheet } from './components/StoreSelectionSheet';
-import { announcementFor } from './copy';
+import { altLoadingLine, announcementFor } from './copy';
 import { NavigationSurface } from './navigation/NavigationSurface';
 import { navigationEntryOf, parseDevAgeMinutes } from './navigation/navigation-entry';
 import type { NavigationEntry } from './navigation/navigation-refresh';
 import { useAvailabilityStore } from './store';
+
+// Flow 3 is a cold path (spec §1, §B50-11 budget exception): the surface and its query, cache and
+// DEV fixtures travel in a lazily imported chunk so the entry bundle keeps room for the flows every
+// shopper uses. A wired CTA warms the same module graph below, so the tap renders without a network
+// round trip in practice while the entry chunk stays inside budget.
+//
+// The rejection path mirrors main.tsx's diagnostics rule: this Suspense has no error boundary above
+// it, so a rejected chunk import must never throw during render and unmount the root. The catch
+// swaps in a stand-in that says, truthfully, that alternatives could not be loaded.
+const loadAlternativeSurface = () => import('./alternative/AlternativeSurface');
+const AlternativeSurface = lazy<ComponentType<AlternativeSurfaceProps>>(() =>
+  loadAlternativeSurface()
+    .then((module) => ({ default: module.AlternativeSurface }))
+    .catch(() => ({ default: AlternativeUnavailable })),
+);
 
 // Store directory + geolocation for the D082 sheet: the composition root selects the live /api adapters
 // in prod builds and the mocks in dev/test. GPS only recommends nearby stores (A9) — it never sets the store.
@@ -66,6 +97,18 @@ export function AvailabilitySurface() {
   const [navigation, setNavigation] = useState<NavigationEntry | null>(null);
   const navigateButtonRef = useRef<HTMLButtonElement>(null);
   const wasNavigating = useRef(false);
+  // Flow 3 is UI-shell state stacked over Flow 2 / the answer (D076, §B50-1). It owns its own
+  // overlays internally; the parent routes the header back by depth and hides Flow 2 underneath
+  // instead of unmounting it, so back returns to the exact guidance state (and exit CTA) it left.
+  const [alternative, setAlternative] = useState<AlternativeEntry | null>(null);
+  const [altDepth, setAltDepth] = useState<1 | 2>(1);
+  const [altBackSignal, setAltBackSignal] = useState(0);
+  const alternativesButtonRef = useRef<HTMLButtonElement>(null);
+  const exitButtonRef = useRef<HTMLButtonElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const altOrigin = useRef<'flow1' | 'flow2' | null>(null);
+  const wasAlternative = useRef(false);
+  const researchPending = useRef(false);
   // Last submitted lookup (UI-shell memory, not domain): kept across store switches so the
   // product survives them. Overwritten by every new submit/tap/decode; never cleared (a switch
   // with no prior lookup simply finds nothing to keep — see planStoreSwitch).
@@ -107,9 +150,11 @@ export function AvailabilitySurface() {
 
   // Any state change away from Success invalidates the Flow 2 handoff: a new lookup, a store change
   // (CHANGE_STORE lands Default), or an error drops the card instead of showing guidance for a
-  // question the shopper has already left.
+  // question the shopper has already left. Flow 3 has the same rule for every state that cannot
+  // carry it (its entry is built from a negative Success/Partial answer).
   useEffect(() => {
     if (ui.state !== 'success') setNavigation(null);
+    if (ui.state !== 'success' && ui.state !== 'partial') setAlternative(null);
   }, [ui.state]);
 
   // Back returns focus to the 위치 보기 CTA that opened the flow — never <body>.
@@ -117,6 +162,37 @@ export function AvailabilitySurface() {
     if (wasNavigating.current && navigation === null) navigateButtonRef.current?.focus();
     wasNavigating.current = navigation !== null;
   }, [navigation]);
+
+  // Back from the Flow 3 list returns focus to the CTA that opened it: 대안 보기 on the answer card
+  // when Flow 1 sent the shopper, the Flow 2 exit button when Flow 2 did (that surface stays mounted
+  // underneath, so the button is still there).
+  useEffect(() => {
+    if (wasAlternative.current && alternative === null) {
+      if (altOrigin.current === 'flow2') exitButtonRef.current?.focus();
+      else alternativesButtonRef.current?.focus();
+      altOrigin.current = null;
+    }
+    wasAlternative.current = alternative !== null;
+  }, [alternative]);
+
+  // The Empty ladder's re-search handoff: Flow 1 comes back with the term filled and the input
+  // focused — never auto-submitted (the same failure would only repeat).
+  useEffect(() => {
+    if (alternative !== null || !researchPending.current) return;
+    researchPending.current = false;
+    searchInputRef.current?.focus();
+  }, [alternative]);
+
+  // Warm the Flow 3 chunk only where an exit can actually lead there: a negative Success answer that
+  // promises alternatives, or Flow 2 (one resume can turn its guidance into the sold-out exit). A
+  // rejected warm-up stays silent — the tap itself retries the import and owns the visible outcome.
+  const alternativeCtaAvailable =
+    (ui.state === 'success' &&
+      (ui.answer.kind === 'temporarilyOut' || ui.answer.kind === 'discontinued')) ||
+    navigation !== null;
+  useEffect(() => {
+    if (alternativeCtaAvailable) void loadAlternativeSurface().catch(() => {});
+  }, [alternativeCtaAvailable]);
 
   // Memoised on purpose: ScannerOverlay's scan effect has deps [scanner, onDecoded], so a fresh inline
   // arrow on every parent render would abort the in-flight scan and restart the camera each time the
@@ -138,6 +214,11 @@ export function AvailabilitySurface() {
   // The plan reads the PRE-switch ui: selectStore resets to Default first, so planning after
   // it would always find nothing to keep.
   const handleSelectStore = (next: StoreContext) => {
+    // Flow 3's whole-answer cache is store-scoped by key, but the stack is not: drop both explicitly
+    // (§3) so a switch never leaves yesterday's alternatives over today's store.
+    alternativeCache.clear();
+    setAlternative(null);
+    setNavigation(null);
     const keep = planStoreSwitch(ui, lastSubmit.current);
     selectStore(next);
     if (!keep) return;
@@ -214,6 +295,36 @@ export function AvailabilitySurface() {
   const navigable =
     ui.state === 'success' && ui.answer.kind === 'inStock' && ui.answer.locations.length > 0;
 
+  // Flow 3 entry (D076): built from data in hand, never fetched. `?alt=` widens the withheld nearby
+  // branch for the DEV/E2E sweep only — a production build ignores it.
+  const openAlternative = (entry: AlternativeEntry | null, origin: 'flow1' | 'flow2') => {
+    if (!entry) return;
+    altOrigin.current = origin;
+    setAltDepth(1);
+    setAltBackSignal(0);
+    setAlternative(entry);
+  };
+
+  const handleSeeAlternatives = () => {
+    if (!store) return;
+    const built = alternativeEntryOf({ ui, store, last: lastSubmit.current });
+    const scenario = import.meta.env.DEV ? currentDevAltScenario() : null;
+    openAlternative(built ? devForceNearby(built, scenario) : null, 'flow1');
+  };
+
+  const handleSeeAlternativesFromNavigation = () => {
+    if (!navigation) return;
+    openAlternative(alternativeEntryFromNavigation({ navigation }), 'flow2');
+  };
+
+  // Empty ladder → Flow 1 with the original term in the input, focused, not submitted.
+  const handleResearch = (term: string) => {
+    researchPending.current = true;
+    setAlternative(null);
+    setNavigation(null);
+    setInput(term);
+  };
+
   const sheet = (
     <StoreSelectionSheet
       current={store}
@@ -240,6 +351,7 @@ export function AvailabilitySurface() {
       onSubmit={() => submitKeyword(input)}
       onOpenScanner={openScanner}
       scanButtonRef={scanButtonRef}
+      inputRef={searchInputRef}
       inputLabel={S.SEARCH_INPUT_LABEL}
       placeholder={S.SEARCH_PLACEHOLDER}
       scanLabel={S.SCAN_BUTTON_LABEL}
@@ -271,9 +383,37 @@ export function AvailabilitySurface() {
   // exists to mark.
   const backgroundInert = sheetOpen || scannerOpen || cart.cartOpen ? '' : undefined;
 
+  const alternativeSurface = alternative && (
+    <Suspense fallback={<AlternativeLoading entry={alternative} locale={locale} />}>
+      <AlternativeSurface
+        key={`${alternative.store.strCd}:${alternative.pdNo ?? alternative.keyword}:${alternative.origin}`}
+        entry={alternative}
+        locale={locale}
+        backSignal={altBackSignal}
+        onDepthChange={setAltDepth}
+        onResearch={handleResearch}
+      />
+    </Suspense>
+  );
+
   let body: ReactNode;
   if (navigation) {
-    body = <NavigationSurface entry={navigation} locale={locale} />;
+    // Flow 2 stays mounted (hidden) while Flow 3 sits on top: back restores the exact guidance
+    // state and its exit CTA, and neither surface re-queries on the round trip.
+    body = (
+      <>
+        <NavigationSurface
+          entry={navigation}
+          locale={locale}
+          hidden={alternative !== null}
+          onSeeAlternatives={handleSeeAlternativesFromNavigation}
+          exitButtonRef={exitButtonRef}
+        />
+        {alternativeSurface}
+      </>
+    );
+  } else if (alternative) {
+    body = alternativeSurface;
   } else if (ui.state === 'default') {
     body = (
       <DefaultBody
@@ -296,6 +436,13 @@ export function AvailabilitySurface() {
     const announcement = announcementFor(ui, defaultPolicy, nowMs, locale).join('. ');
     // 담기 exists only for priced answers (§B47) — priceless kinds render no button at all.
     const priced = pricedAnswerOf(ui);
+    // 대안 보기 is wired only where the negative answer promises it (temporarilyOut, discontinued);
+    // 미취급·가맹점 keep their inert stub until their nearby branch can be answered (§B50-2, D5).
+    const seeAlternatives =
+      ui.state === 'success' &&
+      (ui.answer.kind === 'temporarilyOut' || ui.answer.kind === 'discontinued')
+        ? handleSeeAlternatives
+        : undefined;
     body = (
       <AnswerBody
         ui={ui}
@@ -308,6 +455,8 @@ export function AvailabilitySurface() {
         onRetry={() => handleRetry(ui.query)}
         onNavigate={navigable ? handleNavigate : undefined}
         navigateButtonRef={navigateButtonRef}
+        onSeeAlternatives={seeAlternatives}
+        alternativesButtonRef={alternativesButtonRef}
       />
     );
   }
@@ -321,12 +470,20 @@ export function AvailabilitySurface() {
           onSelectLocale={setLocale}
           onChangeStore={openSheet}
           changeButtonRef={changeStoreRef}
-          onBack={navigation ? () => setNavigation(null) : undefined}
+          onBack={
+            alternative
+              ? altDepth === 2
+                ? () => setAltBackSignal((signal) => signal + 1)
+                : () => setAlternative(null)
+              : navigation
+                ? () => setNavigation(null)
+                : undefined
+          }
         />
         {body}
-        {!navigation && ui.state !== 'candidates' && cartLink}
-        {!navigation && ui.state !== 'candidates' && cartNoticeRegion}
-        {!navigation && searchBar}
+        {!navigation && !alternative && ui.state !== 'candidates' && cartLink}
+        {!navigation && !alternative && ui.state !== 'candidates' && cartNoticeRegion}
+        {!navigation && !alternative && searchBar}
       </div>
       <SurfaceModals
         sheetOpen={sheetOpen}
@@ -347,5 +504,105 @@ export function AvailabilitySurface() {
         onImportJson={cart.importJson}
       />
     </main>
+  );
+}
+
+// ── Flow 3's lazy-load stand-ins ─────────────────────────────────────────────────────────────────
+// The chunk is warm in practice (the CTA preloads it), but a cold or failed import still has to
+// leave a whole card. Both stand-ins reuse the surface's context header and skeleton classes, take
+// focus where the real surface does, and announce through the same live region.
+
+type AlternativeStandInProps = Pick<AlternativeSurfaceProps, 'entry' | 'locale'>;
+
+function AlternativeContext({
+  entry,
+  locale,
+  contextRef,
+}: {
+  entry: AlternativeEntry;
+  locale: Locale;
+  contextRef: Ref<HTMLElement>;
+}) {
+  const S = strings(locale);
+  return (
+    <header
+      className="alternative-context"
+      ref={contextRef}
+      tabIndex={-1}
+      aria-labelledby="alt-context-name alt-context-reason"
+    >
+      <p id="alt-context-name" className="text-heading alt-context-name">
+        {entry.productName}
+      </p>
+      <p id="alt-context-reason" className="text-body alt-context-reason">
+        {altReasonLabel(entry.reason, S)}
+      </p>
+    </header>
+  );
+}
+
+function LoadingSkeleton({ rows }: { rows: number }) {
+  return (
+    <div className="alt-skeleton" aria-hidden="true">
+      {Array.from({ length: rows }, (_, index) => (
+        // The index is the row's only identity — the block is decorative.
+        // biome-ignore lint/suspicious/noArrayIndexKey: decorative rows have no identity
+        <div key={index} className="alt-skeleton-row">
+          <div className="skeleton-block alt-skeleton-photo" />
+          <div className="alt-skeleton-lines">
+            <div className="skeleton-block skeleton-line" />
+            <div className="skeleton-block skeleton-line skeleton-line--short" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AlternativeLoading({ entry, locale }: AlternativeStandInProps) {
+  const contextRef = useRef<HTMLElement>(null);
+  const line = altLoadingLine(entry.issued);
+  useEffect(() => {
+    contextRef.current?.focus();
+  }, []);
+  return (
+    <GlassSurface className="answer-card alternative-surface">
+      <LiveRegion message={line} visuallyHidden />
+      <div className="alternative-body">
+        <AlternativeContext entry={entry} locale={locale} contextRef={contextRef} />
+        <p className="text-body alt-loading">{line}</p>
+        <LoadingSkeleton rows={3} />
+      </div>
+    </GlassSurface>
+  );
+}
+
+function AlternativeUnavailable({ entry, locale }: AlternativeStandInProps) {
+  const S = strings(locale);
+  const contextRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    contextRef.current?.focus();
+  }, []);
+  return (
+    <GlassSurface className="answer-card alternative-surface">
+      <LiveRegion message={S.ALT_ERROR_BODY} visuallyHidden />
+      <div className="alternative-body">
+        <AlternativeContext entry={entry} locale={locale} contextRef={contextRef} />
+        <div className="alt-state">
+          <p className="text-body error-banner">
+            <span aria-hidden="true">⚠ </span>
+            {S.ALT_ERROR_BODY}
+          </p>
+          <button
+            type="button"
+            className="text-label cta--primary"
+            onClick={() => window.location.reload()}
+          >
+            {S.ALT_ERROR_RETRY}
+          </button>
+          <p className="text-body alt-state-note">{S.ALT_ERROR_STAFF}</p>
+        </div>
+      </div>
+    </GlassSurface>
   );
 }

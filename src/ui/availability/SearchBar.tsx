@@ -11,6 +11,7 @@ export function SearchBar({
   onSubmit,
   onOpenScanner,
   scanButtonRef,
+  inputRef,
   inputLabel,
   placeholder,
   scanLabel,
@@ -21,6 +22,8 @@ export function SearchBar({
   onSubmit: () => void;
   onOpenScanner: () => void;
   scanButtonRef: Ref<HTMLButtonElement>;
+  // Flow 3's re-search handoff fills the input and focuses it here (never auto-submits).
+  inputRef?: Ref<HTMLInputElement>;
   inputLabel: string;
   placeholder: string;
   scanLabel: string;
@@ -51,6 +54,7 @@ export function SearchBar({
             <path d="M12.5 12.5 16.5 16.5" />
           </svg>
           <input
+            ref={inputRef}
             aria-label={inputLabel}
             placeholder={placeholder}
             value={value}

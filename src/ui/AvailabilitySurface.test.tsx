@@ -16,12 +16,14 @@ import {
   runQuery,
 } from './availability/pipelines';
 import {
+  ALT_SIMILAR_HEADING,
   NAV_BACK_LABEL,
   RECENT_SEARCHES_LABEL,
   RECENT_VIEWS_LABEL,
   RESULTS_NOTICE,
   SCAN_BUTTON_LABEL,
   SUCCESS_IN_STOCK_CTA,
+  SUCCESS_OUT_CTA,
   emptyBody,
 } from './copy';
 import { useAvailabilityStore } from './store';
@@ -509,6 +511,31 @@ describe('Flow 2 handoff (in-store navigation)', () => {
       screen.getByText('위치 정보가 없어요. 직원에게 위치를 문의해 주세요.'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: SUCCESS_IN_STOCK_CTA })).not.toBeInTheDocument();
+  });
+});
+
+describe('Flow 3 entry (alternative discovery)', () => {
+  // The surface is a lazily imported chunk (spec §1): this test is the net that the entry stays
+  // wired while the module lives off the entry bundle.
+  test('대안 보기 loads the cold surface, renders Group A, and back returns to the CTA', async () => {
+    const user = userEvent.setup();
+    render(<AvailabilitySurface />);
+    act(() => {
+      useAvailabilityStore.getState().dispatch({
+        type: 'RESULT',
+        answer: mockAnswers.temporarilyOut,
+        freshness: { class: 'live', observedAt: Date.now() },
+      });
+    });
+
+    await user.click(screen.getByRole('button', { name: SUCCESS_OUT_CTA }));
+    expect(await screen.findByRole('heading', { name: ALT_SIMILAR_HEADING })).toBeInTheDocument();
+    // One primary action: the Flow 1 dock does not follow the shopper into the alternatives.
+    expect(screen.queryByLabelText('상품 검색')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: NAV_BACK_LABEL })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: NAV_BACK_LABEL }));
+    expect(screen.getByRole('button', { name: SUCCESS_OUT_CTA })).toHaveFocus();
   });
 });
 

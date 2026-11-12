@@ -401,6 +401,37 @@ test('the Flow 2 back control keeps a 44px target and the location line stays do
   expect(ruleFor('.navigation-position,\n.navigation-recovery-row')).toMatch(/width:\s*100%/);
 });
 
+// Flow 3 keeps the same floor as Flow 2: readable rows, one action per state, no cramped taps.
+// The hidden rule is load-bearing on its own — Flow 2 stays mounted beneath Flow 3, and without
+// it the card's display:flex would keep painting under the new surface.
+test('a hidden answer card actually leaves the page (Flow 2 under Flow 3)', () => {
+  expect(ruleFor('.answer-card[hidden]')).toMatch(/display:\s*none/);
+});
+
+test('alternative rows are full-width 44px targets with an 8px beat and a 48px thumbnail', () => {
+  const row = ruleFor('.alt-row');
+  expect(row).toMatch(/min-height:\s*44px/);
+  expect(row).toMatch(/gap:\s*var\(--space-sm\)/);
+  expect(row).toMatch(/width:\s*100%/);
+  const rows = ruleFor('.alt-rows');
+  expect(rows).toMatch(/gap:\s*var\(--space-sm\)/);
+  const photo = ruleFor('.alt-row .product-photo');
+  expect(photo).toMatch(/width:\s*48px/);
+  expect(photo).toMatch(/height:\s*48px/);
+  // contain, never cover: cropping would hide the shelf-matchable detail (same rule as Flow 1).
+  expect(photo).toMatch(/object-fit:\s*contain/);
+});
+
+test('Flow 3’s subordinate actions keep 44px targets, never a competing filled CTA', () => {
+  const action = ruleFor('.alt-slot-retry,\n.alt-ladder-link,\n.alt-stamp-retry');
+  expect(action).toMatch(/min-height:\s*44px/);
+  expect(action).toMatch(/background:\s*transparent/);
+  const address = ruleFor('.alt-card-address');
+  expect(address).toMatch(/min-height:\s*44px/);
+  const ladder = ruleFor('.alt-ladder');
+  expect(ladder).toMatch(/gap:\s*var\(--space-sm\)/);
+});
+
 test('the answer card centres with auto margins, never justify-content (overflow-safe)', () => {
   expect(ruleFor('.answer-card')).toMatch(/display:\s*flex/);
   expect(ruleFor('.answer-card')).toMatch(/flex-direction:\s*column/);
