@@ -3,8 +3,8 @@ import type { ReactNode } from 'react';
 import type { ScannerPort } from '../../domain/ports';
 import type { Locale } from '../../i18n/locale';
 import type { CartItem, StoreCart } from '../../infra/cart';
-import { CartSheet } from '../components/CartSheet';
-import { ScannerOverlay } from '../components/ScannerOverlay';
+import { CartSheetLoader } from '../components/CartSheetLoader';
+import { ScannerOverlayLoader } from '../components/ScannerOverlayLoader';
 
 // Modal siblings of .surface-content, in one place so the DOM order (and therefore stacking) cannot
 // drift: store sheet, viewfinder, cart sheet. Scrim first, dialog last; the cart sheet is last because
@@ -55,7 +55,7 @@ export function SurfaceModals({
       {scannerOpen && (
         <>
           <div className="sheet-scrim" aria-hidden="true" />
-          <ScannerOverlay
+          <ScannerOverlayLoader
             scanner={scanner}
             locale={locale}
             onDecoded={onDecoded}
@@ -66,7 +66,7 @@ export function SurfaceModals({
       {cartOpen && (
         <>
           <div className="sheet-scrim" aria-hidden="true" />
-          <CartSheet
+          <CartSheetLoader
             cart={cart}
             otherStoreCount={otherStoreCount}
             locale={locale}

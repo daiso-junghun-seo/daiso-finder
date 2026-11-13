@@ -6,29 +6,10 @@
 //      phone testing has no clipboard API — the DiagnosticsBar precedent).
 // QR is deliberately NOT here: it needs a generator dependency, and text/JSON already
 // covers the transfer (B47-1: no new dependencies unless necessary).
-import type { Locale } from '../i18n/locale';
-import { strings } from '../i18n/strings';
+//
+// This module is the eager import/merge half: the store's import action runs even while the cart
+// sheet is closed. The memo formatters live in cart-memo.ts with the sheet (both lazy).
 import { type Carts, type StoreCart, addToCart, isValidCart } from '../infra/cart';
-import { formatLocation, formatPrice } from './format';
-
-// Human-readable memo: store + rows (qty × snapshot price · snapshot location) + checked-only
-// total + the honesty footer. Unchecked rows are listed but marked — never silently summed.
-export function buildShareText(cart: StoreCart, locale: Locale): string {
-  const S = strings(locale);
-  const head = `${cart.storeName} ${S.CART_TITLE}`;
-  const rows = cart.items.map((i) => {
-    const loc = i.location ? ` · ${formatLocation(i.location, locale)}` : '';
-    const mark = i.checked ? '' : ` ${S.CART_UNCHECKED_MARK}`;
-    return `${i.name} × ${S.cartQtyText(i.qty)} · ${formatPrice(i.price, locale)}${loc}${mark}`;
-  });
-  const total = cart.items.filter((i) => i.checked).reduce((sum, i) => sum + i.price * i.qty, 0);
-  return [head, ...rows, S.cartTotalLabel(total), S.CART_SNAPSHOT_NOTE].join('\n');
-}
-
-// Machine-readable memo: the StoreCart as JSON (imported back with parseCartImport).
-export function exportCartJson(cart: StoreCart): string {
-  return JSON.stringify(cart);
-}
 
 // An import is untrusted text pasted from anywhere, so the parser caps both the payload
 // (64 KiB — far beyond a real memo) and the row count (the same per-store cap addToCart

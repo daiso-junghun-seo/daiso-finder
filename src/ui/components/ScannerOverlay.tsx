@@ -29,13 +29,9 @@ function noticeFor(outcome: ScanOutcome | null, S: ReturnType<typeof strings>): 
   }
 }
 
-export function ScannerOverlay({
-  scanner,
-  locale,
-  onDecoded,
-  onClose,
-  hintDelayMs = DEFAULT_HINT_DELAY_MS,
-}: {
+// Exported so the lazy wrapper (ScannerOverlayLoader) can type its shell/stand-in against the overlay's
+// own contract rather than a drifting copy of it.
+export type ScannerOverlayProps = {
   scanner: ScannerPort;
   // Guidance language for every line on this surface (D069 — match tokens stay Korean
   // regardless). Defaults to ko so existing callers/tests are unaffected.
@@ -43,7 +39,15 @@ export function ScannerOverlay({
   onDecoded: (value: string) => void;
   onClose: () => void;
   hintDelayMs?: number;
-}) {
+};
+
+export function ScannerOverlay({
+  scanner,
+  locale,
+  onDecoded,
+  onClose,
+  hintDelayMs = DEFAULT_HINT_DELAY_MS,
+}: ScannerOverlayProps) {
   const S = strings(locale ?? 'ko');
   const aimGuideParts = splitAimGuide(S.SCAN_AIM_GUIDE, S.SCAN_AIM_GUIDE_TOKEN);
   const videoRef = useRef<HTMLVideoElement>(null);

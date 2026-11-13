@@ -10,21 +10,13 @@ import type { StoreCart } from '../../infra/cart';
 import { cartTotal } from '../../infra/cart';
 import type { CartItem } from '../../infra/cart';
 import { copyText, nativeShare } from '../../infra/text-share';
-import { buildShareText, exportCartJson } from '../cart-share';
+import { buildShareText, exportCartJson } from '../cart-memo';
 import { formatLocation, formatPrice } from '../format';
 import { GlassSurface } from './GlassSurface';
 
-export function CartSheet({
-  cart,
-  otherStoreCount,
-  locale,
-  onClose,
-  onSetQty,
-  onToggle,
-  onRemove,
-  onRecheck,
-  onImportJson,
-}: {
+// Exported so the lazy wrapper (CartSheetLoader) can type its fallback and stand-in against the
+// sheet's own contract rather than a drifting copy of it.
+export type CartSheetProps = {
   // The ACTIVE store's cart (null = empty for this store — the note renders, not a blank sheet).
   cart: StoreCart | null;
   otherStoreCount: number;
@@ -37,7 +29,19 @@ export function CartSheet({
   // Parses pasted JSON into this store's list; returns what happened for the status line.
   // crossStore = the memo came from another store, so its floor/zone snapshots were dropped.
   onImportJson: (text: string) => { ok: boolean; count: number; crossStore: boolean };
-}) {
+};
+
+export function CartSheet({
+  cart,
+  otherStoreCount,
+  locale,
+  onClose,
+  onSetQty,
+  onToggle,
+  onRemove,
+  onRecheck,
+  onImportJson,
+}: CartSheetProps) {
   const S = strings(locale);
   const closeRef = useRef<HTMLButtonElement>(null);
   // Sheet-local transfer state: the sheet unmounts on close, so feedback resets with it —

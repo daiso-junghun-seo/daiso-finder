@@ -47,6 +47,9 @@
         "src/ui/a11y/LiveRegion.tsx",
         "src/ui/components/StoreSelectionSheet.tsx",
         "src/ui/components/CartSheet.tsx",
+        "src/ui/components/CartSheetLoader.tsx",
+        "src/ui/components/ScannerOverlayLoader.tsx",
+        "src/ui/components/SheetShell.tsx",
         "src/ui/components/ScannerOverlay.tsx"
       ],
       "linter": {

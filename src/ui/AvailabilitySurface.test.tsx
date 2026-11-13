@@ -858,7 +858,8 @@ describe('shopping list (§B47)', () => {
     await userEvent.click(screen.getByRole('button', { name: '담기' }));
     await userEvent.click(screen.getByRole('button', { name: /장바구니 1개/ }));
     expect(screen.getByRole('dialog', { name: '장바구니 · 명동역점' })).toBeInTheDocument();
-    expect(screen.getByText('합계 2,000원')).toBeInTheDocument();
+    // The sheet is a lazy chunk now: the dialog shell paints first, the rows land a tick later.
+    expect(await screen.findByText('합계 2,000원')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '수량 늘리기' }));
     expect(screen.getByText('합계 4,000원')).toBeInTheDocument();
     // Per-item 다시 확인 closes the sheet and lands a fresh answer behind it.
@@ -896,8 +897,9 @@ describe('shopping list (§B47)', () => {
         },
       ],
     });
-    // fireEvent, not userEvent.type: pasted JSON contains braces (see CartSheet.test).
-    fireEvent.change(screen.getByLabelText('가져올 내용 붙여넣기'), {
+    // fireEvent, not userEvent.type: pasted JSON contains braces (see CartSheet.test). The textarea
+    // arrives with the lazy sheet chunk, so wait for it rather than racing the shell.
+    fireEvent.change(await screen.findByLabelText('가져올 내용 붙여넣기'), {
       target: { value: incoming },
     });
     await userEvent.click(screen.getByRole('button', { name: '불러오기' }));

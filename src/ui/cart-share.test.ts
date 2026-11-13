@@ -1,12 +1,9 @@
-// src/ui/cart-share.test.ts — owner-exception §B47 slice 3.
+// src/ui/cart-share.test.ts — owner-exception §B47 slice 3. The memo formatters (share text, JSON
+// export) live in cart-memo.ts with the lazy cart sheet; this file still pins both halves together,
+// because the export→import round trip is the contract the split must not break.
 import type { StoreCart } from '../infra/cart';
-import {
-  buildShareText,
-  exportCartJson,
-  isCrossStoreImport,
-  mergeImportedCart,
-  parseCartImport,
-} from './cart-share';
+import { buildShareText, exportCartJson } from './cart-memo';
+import { isCrossStoreImport, mergeImportedCart, parseCartImport } from './cart-share';
 
 const cart: StoreCart = {
   storeCd: '001',
