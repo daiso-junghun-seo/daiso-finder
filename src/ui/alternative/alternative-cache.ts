@@ -3,6 +3,7 @@
 // and the exact identity, and only ever served when every issued slot failed. A mixed live/cache answer
 // is forbidden, and a half-failed answer is never stored — the cache may not remember a success it did
 // not have. TTL: none; the shared freshness threshold decides what the stamp means.
+import { registerAlternativeCacheClear } from './alternative-cache-signal';
 import type {
   AlternativeEntry,
   AlternativeSnapshot,
@@ -58,3 +59,7 @@ export function createAlternativeCache(now: () => number = Date.now): Alternativ
 }
 
 export const alternativeCache = createAlternativeCache();
+
+// The eager side (AvailabilitySurface's store switch) clears through the signal module, so it does not
+// import this module — or the types/query vocabulary it shares — back into the entry chunk.
+registerAlternativeCacheClear(() => alternativeCache.clear());

@@ -14,14 +14,9 @@ import { strings } from '../i18n/strings';
 import type { RecentView } from '../infra/recent-views';
 import { LiveRegion } from './a11y/LiveRegion';
 import type { AlternativeSurfaceProps } from './alternative/AlternativeSurface';
-import { alternativeCache } from './alternative/alternative-cache';
-import {
-  alternativeEntryFromNavigation,
-  alternativeEntryOf,
-  devForceNearby,
-} from './alternative/alternative-entry';
+import { clearAlternativeCache } from './alternative/alternative-cache-signal';
+import { altReasonLabel } from './alternative/alternative-labels';
 import type { AlternativeEntry } from './alternative/alternative-types';
-import { altReasonLabel } from './alternative/alternative-types';
 import { AnswerBody } from './availability/AnswerBody';
 import { CandidatesBody } from './availability/CandidatesBody';
 import { DefaultBody } from './availability/DefaultBody';
@@ -55,6 +50,10 @@ import { useAvailabilityStore } from './store';
 // it, so a rejected chunk import must never throw during render and unmount the root. The catch
 // swaps in a stand-in that says, truthfully, that alternatives could not be loaded.
 const loadAlternativeSurface = () => import('./alternative/AlternativeSurface');
+// The entry matrix is pure and fetch-free, but it is only needed when the shopper taps an alternative
+// CTA — keep it with the Flow 3 chunk instead of paying for it on every load. The warm-up below runs
+// when that CTA is on screen, so the tap's import normally resolves in a microtask.
+const loadAlternativeEntry = () => import('./alternative/alternative-entry');
 const AlternativeSurface = lazy<ComponentType<AlternativeSurfaceProps>>(() =>
   loadAlternativeSurface()
     .then((module) => ({ default: module.AlternativeSurface }))
@@ -191,7 +190,9 @@ export function AvailabilitySurface() {
       (ui.answer.kind === 'temporarilyOut' || ui.answer.kind === 'discontinued')) ||
     navigation !== null;
   useEffect(() => {
-    if (alternativeCtaAvailable) void loadAlternativeSurface().catch(() => {});
+    if (!alternativeCtaAvailable) return;
+    void loadAlternativeSurface().catch(() => {});
+    void loadAlternativeEntry().catch(() => {});
   }, [alternativeCtaAvailable]);
 
   // Memoised on purpose: ScannerOverlay's scan effect has deps [scanner, onDecoded], so a fresh inline
@@ -216,7 +217,7 @@ export function AvailabilitySurface() {
   const handleSelectStore = (next: StoreContext) => {
     // Flow 3's whole-answer cache is store-scoped by key, but the stack is not: drop both explicitly
     // (§3) so a switch never leaves yesterday's alternatives over today's store.
-    alternativeCache.clear();
+    clearAlternativeCache();
     setAlternative(null);
     setNavigation(null);
     const keep = planStoreSwitch(ui, lastSubmit.current);
@@ -307,14 +308,29 @@ export function AvailabilitySurface() {
 
   const handleSeeAlternatives = () => {
     if (!store) return;
-    const built = alternativeEntryOf({ ui, store, last: lastSubmit.current });
-    const scenario = import.meta.env.DEV ? currentDevAltScenario() : null;
-    openAlternative(built ? devForceNearby(built, scenario) : null, 'flow1');
+    // Capture the answer this CTA was rendered for. The warm-up above normally settles this import in a
+    // microtask; the guard drops a stale open if a new lookup started before it did.
+    const captured = { ui, store, last: lastSubmit.current };
+    void loadAlternativeEntry()
+      .then(({ alternativeEntryOf, devForceNearby }) => {
+        if (lastSubmit.current !== captured.last) return;
+        const built = alternativeEntryOf(captured);
+        const scenario = import.meta.env.DEV ? currentDevAltScenario() : null;
+        openAlternative(built ? devForceNearby(built, scenario) : null, 'flow1');
+      })
+      .catch(() => {
+        // No entry chunk means no Flow 3 surface either — stay on the answer, never a blank stack.
+      });
   };
 
   const handleSeeAlternativesFromNavigation = () => {
     if (!navigation) return;
-    openAlternative(alternativeEntryFromNavigation({ navigation }), 'flow2');
+    const captured = navigation;
+    void loadAlternativeEntry()
+      .then(({ alternativeEntryFromNavigation }) => {
+        openAlternative(alternativeEntryFromNavigation({ navigation: captured }), 'flow2');
+      })
+      .catch(() => {});
   };
 
   // Empty ladder → Flow 1 with the original term in the input, focused, not submitted.

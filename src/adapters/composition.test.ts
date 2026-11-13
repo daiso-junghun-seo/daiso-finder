@@ -206,27 +206,136 @@ test('PROD build wires the browser scanner (camera requested, no mock value)', a
     nav.mediaDevices = original;
     vi.unstubAllEnvs();
   }
-});
+  // The scanner adapter is a dynamic import now, and in a full parallel suite the first one can queue
+  // behind every other file's transforms. 20 s is harness headroom only — the assertions are unchanged.
+}, 20_000);
 
 // THE COMPOSITION SEAM ITSELF, not the adapter. browserScanner.test.ts's zoom-override tests only prove
 // createBrowserScanner honours zoomOverride when handed it directly; nothing there touches createScanner
 // at all. 1.7 is deliberately not null (the default), not 2 (MAX_SCAN_ZOOM, what a hardcoded fallback
 // would produce), and not a value either function could emit by accident — so this fails the moment
 // `zoomOverride:` is deleted from createScanner(), because `deps.zoomOverride ?? null` would then silently
-// read as "no override" and the spy would never see 1.7.
-test('the value resolveZoomOverride returns is what reaches createBrowserScanner', () => {
+// read as "no override" and the spy would never see 1.7. The factory now runs on the first scan (lazy
+// chunk), so the test drives scan() and asserts after it settles.
+test('the value resolveZoomOverride returns is what reaches createBrowserScanner', async () => {
   flag.zoomOverride = 1.7;
   vi.stubEnv('PROD', true);
+  vi.mocked(createBrowserScanner).mockClear();
+  const nav = navigator as unknown as {
+    mediaDevices?: { getUserMedia: () => Promise<MediaStream> };
+  };
+  const original = nav.mediaDevices;
+  nav.mediaDevices = {
+    getUserMedia: async () => {
+      const err = new Error('denied');
+      err.name = 'NotAllowedError';
+      throw err;
+    },
+  };
   try {
-    createScanner();
+    await createScanner().scan({ video: {} as HTMLVideoElement }, new AbortController().signal);
     expect(vi.mocked(createBrowserScanner)).toHaveBeenCalledWith(
       expect.objectContaining({ zoomOverride: 1.7 }),
     );
   } finally {
     flag.zoomOverride = null;
+    nav.mediaDevices = original;
+    vi.unstubAllEnvs();
+  }
+}, 20_000);
+
+// The entry-budget split is only real if createScanner() itself stays cheap: constructing the port must
+// not load the camera adapter. This fails if the dynamic import is accidentally hoisted back to a
+// static import (or eagerly triggered inside createScanner).
+test('createScanner does not load the browser adapter until the first scan', () => {
+  vi.stubEnv('PROD', true);
+  vi.mocked(createBrowserScanner).mockClear();
+  try {
+    createScanner();
+    expect(vi.mocked(createBrowserScanner)).not.toHaveBeenCalled();
+  } finally {
     vi.unstubAllEnvs();
   }
 });
+
+// A chunk that fails to load is not cached: the overlay has already shown failed once, and a second tap
+// must get a fresh attempt rather than a permanent dead scanner for the rest of the session.
+test('a failed adapter load answers failed and the next scan retries the load', async () => {
+  vi.stubEnv('PROD', true);
+  vi.mocked(createBrowserScanner).mockClear();
+  vi.mocked(createBrowserScanner).mockImplementationOnce(() => {
+    throw new Error('chunk down');
+  });
+  const nav = navigator as unknown as {
+    mediaDevices?: { getUserMedia: () => Promise<MediaStream> };
+  };
+  const original = nav.mediaDevices;
+  nav.mediaDevices = {
+    getUserMedia: async () => {
+      const err = new Error('denied');
+      err.name = 'NotAllowedError';
+      throw err;
+    },
+  };
+  try {
+    const scanner = createScanner();
+    const target = { video: {} as HTMLVideoElement };
+    await expect(scanner.scan(target, new AbortController().signal)).resolves.toEqual({
+      kind: 'failed',
+    });
+    await expect(scanner.scan(target, new AbortController().signal)).resolves.toEqual({
+      kind: 'permissionDenied',
+    });
+    expect(vi.mocked(createBrowserScanner)).toHaveBeenCalledTimes(2);
+  } finally {
+    nav.mediaDevices = original;
+    vi.unstubAllEnvs();
+  }
+}, 20_000);
+
+// Closing the overlay while the chunk is still loading must not open the camera afterwards. The port
+// answers cancelled instead of starting a scan whose result nobody will see.
+test('an abort while the adapter chunk is loading answers cancelled and never opens the camera', async () => {
+  vi.stubEnv('PROD', true);
+  let cameraAsked = false;
+  const nav = navigator as unknown as {
+    mediaDevices?: { getUserMedia: () => Promise<MediaStream> };
+  };
+  const original = nav.mediaDevices;
+  nav.mediaDevices = {
+    getUserMedia: async () => {
+      cameraAsked = true;
+      return {} as MediaStream;
+    },
+  };
+  const controller = new AbortController();
+  controller.abort();
+  try {
+    await expect(
+      createScanner().scan({ video: {} as HTMLVideoElement }, controller.signal),
+    ).resolves.toEqual({ kind: 'cancelled' });
+    expect(cameraAsked).toBe(false);
+  } finally {
+    nav.mediaDevices = original;
+    vi.unstubAllEnvs();
+  }
+}, 20_000);
+
+test('an aborted signal during a failed adapter load answers cancelled, not failed', async () => {
+  vi.stubEnv('PROD', true);
+  vi.mocked(createBrowserScanner).mockImplementationOnce(() => {
+    throw new Error('chunk down');
+  });
+  const controller = new AbortController();
+  controller.abort();
+  try {
+    await expect(
+      createScanner().scan({ video: {} as HTMLVideoElement }, controller.signal),
+    ).resolves.toEqual({ kind: 'cancelled' });
+  } finally {
+    vi.unstubAllEnvs();
+  }
+}, 20_000);
 
 // THE GATE ITSELF. The test above proves the RETURN VALUE reaches createBrowserScanner; it says nothing
 // about what createScanner PASSES to resolveZoomOverride — a mock that ignores its arguments cannot

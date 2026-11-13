@@ -26,6 +26,7 @@ import { PULL_TO_REFRESH_PX } from '../navigation/NavigationSurface';
 import type { InStockAnswer, NavigationEntry } from '../navigation/navigation-refresh';
 import { alternativeCache } from './alternative-cache';
 import type { AlternativeCache } from './alternative-cache';
+import { altReasonLabel } from './alternative-labels';
 import {
   ALT_TIMEOUT_MS,
   type AlternativeQueryDeps,
@@ -40,7 +41,6 @@ import {
   type AlternativeSnapshot,
   type SlotKind,
   type SlotResult,
-  altReasonLabel,
   issuedKinds,
 } from './alternative-types';
 import { currentMapPlatform, mapHref } from './map-link';

@@ -8,7 +8,6 @@ import type {
   SimilarAlternative,
   StoreContext,
 } from '../../domain/types';
-import type { CopyTable } from '../../i18n/strings';
 
 export interface IssuedSlots {
   similar: boolean;
@@ -65,21 +64,4 @@ export function initialSlots(issued: IssuedSlots): AlternativeSlots {
     similar: issued.similar ? { status: 'pending' } : { status: 'withheld' },
     nearby: issued.nearby ? { status: 'pending' } : { status: 'withheld' },
   };
-}
-
-// The answer card's negative status, restated as Flow 3's "why we are here" line. Shared so the
-// lazy surface and its Suspense fallback can never drift apart on wording.
-export function altReasonLabel(reason: AlternativeReason, S: CopyTable): string {
-  switch (reason) {
-    case 'temporarilyOut':
-      return S.ALT_REASON_TEMPORARILY_OUT;
-    case 'discontinued':
-      return S.ALT_REASON_DISCONTINUED;
-    case 'notCarried':
-      return S.ALT_REASON_NOT_CARRIED;
-    case 'franchise':
-      return S.ALT_REASON_FRANCHISE;
-    case 'flow2':
-      return S.ALT_REASON_FLOW2;
-  }
 }

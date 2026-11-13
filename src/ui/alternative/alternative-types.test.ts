@@ -1,6 +1,6 @@
 import type { AlternativeReason } from '../../domain/types';
 import { STR } from '../../i18n/strings';
-import { altReasonLabel } from './alternative-types';
+import { altReasonLabel } from './alternative-labels';
 
 const REASONS: AlternativeReason[] = [
   'temporarilyOut',
