@@ -59,7 +59,8 @@
 ### P3 체크리스트
 
 - [x] 설계 스펙 — 진입 매트릭스·병렬 슬롯·단일 스탬프·통짜 캐시·withheld·store card·Empty 사다리·a11y (`2026-11-11-flow3-alternative-discovery-design.md`)
-- [x] 예산 결정 — 정본 220/72 유지, **P3 예외 240 kB / gzip 78 kB** 기록(§B50-11, P4 전 재결정). 실측 237.87/76.23으로 이내
+- [x] 예산 결정 — 정본 220/72 유지, **P3 예외 240 kB / gzip 78 kB** 기록(§B50-11). 실측 237.87/76.23으로 이내
+- [x] **P4 전 예산 복귀(2026-11-13)** — 엔트리 **218.65/70.27**로 정본 이내. 카트 시트·스캐너 오버레이·stock adapter(warm-up)·Flow 3 표면 지연
 - [x] stock-gone exit가 실제 관측 상태를 Flow 3 entry matrix로 넘김
 - [x] D076 entry matrix(franchise=nearby only, discontinued=similar only) 테스트
 - [x] similar 3행 바운드·단일 스탬프·통짜 캐시·슬롯 재시도
@@ -84,7 +85,7 @@
 
 - **게이트**: 전 단계 100% green, skip 0.
 - **커버리지**: CI가 `test:coverage`로 강제한다. 전역 lines/statements 94·branches/functions 85, `src/domain/**` 98/90/90/98, `src/adapters/**` 95/85/90/95, `src/ui/**` 95/85/90/95, `functions/**` 90/75/95/90. **내리지 않는다.**
-- **성능**: Flow 2 tap→card <100ms, Flow 1 submit→first result ≤2s, 엔트리 ≤220 kB(gzip ≤72 kB). **P2 실측 224.68 kB / gzip 72.58 kB**, **P3 실측 237.87 kB / gzip 76.23 kB**(지연청크 14.70/4.79 kB)로 정본을 초과 — 숫자를 올리지 않고 기록한다. **P3 예외 상한 240 kB / gzip 78 kB**(§B50-11)로 머지하되, P4 배포 전 ①220/72 복귀(카트·최근본·공유 lazy split — cold path 아님) ②필드 증거와 함께 재비준 중 하나를 고른다.
+- **성능**: Flow 2 tap→card <100ms, Flow 1 submit→first result ≤2s, 엔트리 ≤220 kB(gzip ≤72 kB). **P2 실측 224.68 kB / gzip 72.58 kB**, **P3 실측 237.87 kB / gzip 76.23 kB**(지연청크 14.70/4.79 kB)로 정본을 초과했고, **P3 예외 상한 240 kB / gzip 78 kB**(§B50-11)로 머지했다. **2026-11-13 복귀 실측: 218.65 kB / gzip 70.27 kB — 정본 이내.** 수단: 카트 시트 4.60·스캐너 오버레이 2.33·stock adapter 3.94(warm-up, 첫 query는 warm chunk await)·Flow 3 표면 15.45. `NavigationSurface`는 tap→card <100ms(fetch 0회) 계약 때문에 분할하지 않았다.
 - **접근성**: axe serious/critical 0 (6상태 × 2테마 + Flow 2 4상태 × 2 + Flow 3 5상태 × 2).
 - **운영**: CI <10분, flake <2%, 배포 후 health/logs 확인.
 

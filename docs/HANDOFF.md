@@ -2,7 +2,7 @@
 
 > 이 저장소에서 새 세션을 시작하면 **여기부터** 읽는다. 결정·실행 원장은 [`docs/notes/open-questions.md`](notes/open-questions.md). `.superpowers/`는 `.gitignore` 대상이라 새 클론에는 존재하지 않는다 — 정본으로 링크하지 않는다.
 
-## 현재 상태 (2026-11-12)
+## 현재 상태 (2026-11-13)
 
 **Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **공개 원격·CI·`main` 보호는 2026-11-08 적용됐고(공개 저장소), 공개 배포는 아직 없다.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) · P3 Flow 3 Alternative Discovery(2026-11-12 구현·검증 완료)까지 완료. 다음은 P4 배포·필드 검증이다.**
 
@@ -13,11 +13,19 @@
 - **데이터**: `POST /api/alternatives` = SearchGoods 30(store-carryable) → `selStrPkupStck` 배치 1회(qty>0, vendor 순서) → 앞 3개 위치 병렬. 위치 없는 행 omit(no backfill), `omitted>0 && rows=[]` → failed.
 - **캐시·신선도**: 통짜 캐시(키 `${strCd}:${pdNo ?? keyword}`, `issued` 포함), 성공 답만 저장, **전부 실패**일 때만 Partial 서빙. 스탬프는 가장 오래된 관측 1회, 모든 발행 슬롯 settle 전 미표시. TTL 없음, 공유 6h 임계값.
 - **상태·렌더**: 행 0 + failed = Error, empty+withheld = degraded Empty(mall 제외), 전부 empty만 정상 Empty(양쪽 발행 시 mall 허용). 혼합 답의 failed 슬롯은 그룹 자리에서 실패 문장 + slot retry만 렌더하고 empty 문장을 빌리지 않는다(spec §5.1 2026-11-12 수정). 재입고 알림은 P3 미렌더.
-- **지연 청크**: 표면·질의·캐시·DEV fixture는 `import()` 분리. wired CTA에서 선로딩하고, 청크 실패는 표면과 같은 문구의 Error stand-in으로 대체한다(Suspense 위 error boundary 없음). 실측 엔트리 **237.87 kB / gzip 76.23 kB**, 청크 **14.70 kB / 4.79 kB** — P3 예외 상한 240/78 이내(§B50-11).
+- **지연 청크**: 표면·질의·캐시·DEV fixture는 `import()` 분리. wired CTA에서 선로딩하고, 청크 실패는 표면과 같은 문구의 Error stand-in으로 대체한다(Suspense 위 error boundary 없음). 실측 엔트리 **237.87 kB / gzip 76.23 kB**, 청크 **14.70 kB / 4.79 kB** — P3 예외 상한 240/78 이내(§B50-11). **2026-11-13 예산 복귀 웨이브 이후: 엔트리 218.65 / 70.27**(아래).
 - **비준 대기 카피**: A-only 진행 문장 `비슷한 상품을 확인하고 있어요…`, A 실패 문장(앱 초안). ko/en 동시.
 - **정본**: 설계 [`superpowers/specs/2026-11-11-flow3-alternative-discovery-design.md`](superpowers/specs/2026-11-11-flow3-alternative-discovery-design.md), 결정 [`notes/open-questions.md`](notes/open-questions.md) §B50.
 
-**게이트(2026-11-12 실측)**: vitest **915/915**(72 files), tsc clean, biome clean, Playwright **88/88**(dev 85 + preview 3; Flow 3 E2E 8 + axe 10 포함), coverage **CI 임계값 green**(V8 샘플 lines/statements 95.49% / branches 88.1% / functions 91.56% — 총계가 실행마다 달라 단일 퍼센트를 계약으로 쓰지 않는다), build 성공(엔트리 **237.87 kB** / gzip 76.23 kB, Flow 3 지연청크 14.70 kB, CSS 18.11 kB, precache **22 entries / 391.42 KiB**).
+**게이트(2026-11-13 실측 — 예산 복귀 웨이브 포함)**: vitest **926/926**(77 files), tsc clean, biome clean, Playwright **88/88**(dev 85 + preview 3; Flow 3 E2E 8 + axe 10 포함), coverage **CI 임계값 green**, build 성공(엔트리 **218.65 kB** / gzip 70.27 kB, CSS 18.11 kB, 지연청크 CartSheet 4.60 · ScannerOverlay 2.33 · storeStock 3.94 · AlternativeSurface 15.45, precache **28 entries / 395.83 KiB**). P3 머지 시점 게이트(915/915 · 237.87/76.23)는 §B50-11에 남는다.
+
+### 예산 복귀 (2026-11-13, P4 전)
+
+- **엔트리 218.65 kB / gzip 70.27 kB** — 정본 220/72 이내. P3 237.87/76.23에서 **−19.22 / −5.96**.
+- **분할**: 카트 시트(`CartSheetLoader`, 4.60/1.78 — 공유·내보내기 포매터는 `cart-memo.ts`로 분리해 시트와 함께 지연) · 스캐너 오버레이(`ScannerOverlayLoader`, 2.33/1.10) · stock adapter(`storeStockRepository`, 3.94/1.79 — **생성 시점 warm-up**, 첫 query는 warm chunk를 await) · Flow 3 표면(15.45/5.04).
+- **로더 계약**: 두 로더는 `SheetShell`을 공유해 같은 다이얼로그 계약(제목·`닫기` 포커스·Escape·inert 배경)을 첫 프레임부터 유지하고, 청크 실패는 같은 문구의 stand-in + reload로 대체한다. 카트 시트의 6상태·카피·포커스 순서는 불변.
+- **분할하지 않은 것**: `NavigationSurface`(Flow 2 tap→card <100ms, fetch 0회 계약) · `en.ts`(영어 첫 페인트·`strings()` 동기 계약).
+- **검증**: 로더 단위 4건(성공·실패 각 2) + stock 지연 계약 2건(생성 시 로드 시작·실패 미캐시) + 스캐너 어댑터 첫 scan 지연 5건.
 
 ### P2 Flow 2 In-Store Navigation (2026-11-10)
 
@@ -52,7 +60,7 @@
 2. **P4 배포·필드 검증** — P3까지 코드·게이트 완료. 남은 것은 프로덕션 런타임 배포(위 1) 뒤 실제 매장에서 Flow 1→2→3을 걷는 필드 검증이다. nearby live 해제 조건은 §B50-2의 데이터 질문(`hldyDt`·A7·임계값)이 닫힐 때다.
 3. **D4 Bible 결정** — 통로 중 위치 이동·품절 외 부정 상태의 종료/재안내 카피. P2는 관측·보류까지만 구현했다.
 4. **§B47 나머지 커버리지** — 교차 매장 import는 E2E 1건으로 고정됐다. 공유 취소·최근 본·수량 상한은 아직 단위 테스트만 있다.
-5. **엔트리 번들 예산** — P3 실측 237.87 kB / gzip 76.23 kB로 P3 예외 상한(240/78) 이내지만 정본(220/72) 초과. P4 배포 전 ①220/72 복귀(카트·최근본·공유 lazy split — cold path 아님) ②필드 증거와 함께 재비준 중 하나를 고른다(§B50-11).
+5. ~~**엔트리 번들 예산**~~ ✅ **복귀 완료(2026-11-13)** — 엔트리 **218.65 kB / gzip 70.27 kB**로 정본 220/72 이내(§B50-11). 수단: 카트 시트·스캐너 오버레이·stock adapter(생성 시 warm-up)·Flow 3 표면 지연. `NavigationSurface`는 tap→card <100ms 계약 때문에 분할하지 않았다.
 6. **툴체인 업그레이드** — vite 5→8, vitest 3→5. CI green을 유지한 별도 브랜치에서 단계적으로(D7).
 
 ### 최근 완료 (§B47, 상세는 원장)
