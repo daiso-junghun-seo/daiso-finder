@@ -1,8 +1,9 @@
 # GCP e2-micro — deploy runbook (P4)
 
-> **STATUS: PREP ONLY — NOT DEPLOYED.** 2026-11-16 작성. 호스트는 **GCP Compute Engine
-> `e2-micro` Always Free**로 결정했다(집 PC quick tunnel 필드 스모크 완료 후). Oracle과 달리
-> 유휴 자원 회수 정책이 없고, 무료 티어에 종료일이 없어 "한 번 세우면 손대지 않는" 운영에 맞는다.
+> **STATUS: DEPLOYED — 2026-11-16.** <https://136-118-220-98.sslip.io> 가 떠 있다(커밋
+> `d5a5c31`). 호스트는 **GCP Compute Engine `e2-micro` Always Free**. Oracle과 달리 유휴 자원
+> 회수 정책이 없고, 무료 티어에 종료일이 없어 "한 번 세우면 손대지 않는" 운영에 맞는다.
+> 배포 실측·검증 기록은 §12.
 >
 > 호스트 조작 스크립트는 Oracle판과 공유한다: [`deploy/node-proxy/`](../../deploy/node-proxy/).
 > 코드는 동일한 [`scripts/dev-proxy.mjs`](../../scripts/dev-proxy.mjs)이며 포크는 없다.
@@ -23,9 +24,84 @@ phone ──HTTPS──▶ Caddy :443 ──HTTP──▶ 127.0.0.1:8790 (node s
 1. <https://console.cloud.google.com/freetrial> 가입. 카드 등록 + $300/90일 체험 크레딧.
 2. **90일 안에 유료 결제 계정으로 업그레이드**한다. 체험 계정은 90일이 지나면 닫히고 그 안의
    리소스가 삭제된다. 업그레이드해도 **Always Free 한도 안에서는 청구가 0**이다.
-3. 결제 → 예산 및 알림 → **예산 $1, 알림 50/90/100%** 를 만든다. 디스크 타입을 잘못 고르는
-   것 같은 실수를 조기에 잡는 용도다.
-4. Always Free 한도는 **결제 계정 단위 월 한도**다.
+3. Always Free 한도는 **결제 계정 단위 월 한도**다(프로젝트를 늘려도 e2-micro가 늘지 않는다).
+
+### 1.1 과금 킬 스위치 (2026-11-16 구성·검증 완료)
+
+GCP에는 Compute Engine을 대상으로 하는 지출 상한(spend cap)이 **없다**. 예산은 알림만 보낸다.
+그래서 **예산 100% 도달 시 결제 계정 연결을 끊는 Cloud Function**을 둔다.
+
+- 프로젝트 `daiso-finder-prod`(번호 `941937888130`), 결제 계정 `01190A-47AC16-CA6D86`(통화 **KRW**).
+- 예산: **2,000 KRW/월**, 프로젝트 스코프, 임계 **100%**, `INCLUDE_ALL_CREDITS`.
+  무료 티어는 크레딧으로 적용되므로 한도 안에서는 순액이 0이고 예산이 발동하지 않는다.
+- 발동하면 프로젝트의 결제가 꺼지고 VM·함수가 멈춘다. **삭제는 없다.** 재개:
+
+```bash
+gcloud billing projects link daiso-finder-prod --billing-account=01190A-47AC16-CA6D86
+```
+
+- 함수 소스: [`deploy/gcp-killswitch/`](../../deploy/gcp-killswitch/). 서비스 계정에는 결제 계정이
+  아니라 **프로젝트에만** `roles/billing.projectManager`를 준다 → 이 프로젝트의 결제만 해제 가능.
+- **2026-11-16 검증**: 합성 예산 메시지 발행 → `billingEnabled=false` 확인 → 재연결. 로그:
+  `kill switch: billing unlinked from daiso-finder-prod (billingEnabled=false)`.
+
+재현 명령:
+
+```bash
+gcloud projects create daiso-finder-prod --name="DAISO Finder"
+gcloud billing projects link daiso-finder-prod --billing-account=<BILLING_ACCOUNT>
+
+gcloud services enable compute.googleapis.com cloudfunctions.googleapis.com pubsub.googleapis.com \
+  billingbudgets.googleapis.com cloudbilling.googleapis.com cloudbuild.googleapis.com \
+  containerregistry.googleapis.com storage.googleapis.com iam.googleapis.com logging.googleapis.com \
+  cloudresourcemanager.googleapis.com run.googleapis.com eventarc.googleapis.com \
+  --project=daiso-finder-prod
+
+gcloud iam service-accounts create budget-killswitch --project=daiso-finder-prod
+gcloud projects add-iam-policy-binding daiso-finder-prod \
+  --member="serviceAccount:budget-killswitch@daiso-finder-prod.iam.gserviceaccount.com" \
+  --role="roles/billing.projectManager"
+gcloud projects add-iam-policy-binding daiso-finder-prod \
+  --member="serviceAccount:budget-killswitch@daiso-finder-prod.iam.gserviceaccount.com" \
+  --role="roles/serviceusage.serviceUsageConsumer"
+gcloud pubsub topics create budget-killswitch --project=daiso-finder-prod
+
+bash deploy/gcp-killswitch/deploy.sh
+
+# Eventarc가 Cloud Run(2nd gen 함수)을 호출할 수 있게. 없으면 401 run.routes.invoke.
+gcloud run services add-iam-policy-binding budget-killswitch \
+  --project=daiso-finder-prod --region=us-west1 \
+  --member="serviceAccount:budget-killswitch@daiso-finder-prod.iam.gserviceaccount.com" \
+  --role="roles/run.invoker"
+```
+
+예산은 **REST로 만든다**(`gcloud billing budgets create`는 이 SDK 590.0.0에서 400이 난다 —
+`--credit-types-treatment`가 `budgetFilter`가 아니라 최상위로 직렬화된다). 본문의 핵심:
+
+```json
+{
+  "displayName": "daiso-finder-prod 2000 KRW monthly",
+  "budgetFilter": {
+    "projects": ["projects/daiso-finder-prod"],
+    "creditTypesTreatment": "INCLUDE_ALL_CREDITS",
+    "calendarPeriod": "MONTH"
+  },
+  "amount": { "specifiedAmount": { "units": "2000" } },
+  "thresholdRules": [{ "thresholdPercent": 1.0 }],
+  "notificationsRule": {
+    "pubsubTopic": "projects/daiso-finder-prod/topics/budget-killswitch",
+    "schemaVersion": "1.0"
+  }
+}
+```
+
+- `amount.specifiedAmount`에 **USD를 넣으면 `INVALID_ARGUMENT`** — 결제 계정 통화(KRW)만 허용된다.
+- 알림 규칙 필드 이름은 `notificationsRule`이다(`allUpdatesRule`은 거부된다).
+- 예산을 만들면 Cloud Billing이 토픽에 `billing-budget-alert@system.gserviceaccount.com` /
+  `roles/pubsub.publisher`를 자동으로 부여한다. 별도 작업 없음.
+
+> 함수는 `budgetDisplayName`이 위 이름과 **정확히 일치**하고 `alertThresholdExceeded >= 1`일 때만
+> 결제를 끊는다. 50% 알림이나 다른 예산 알림으로는 멈추지 않는다.
 
 ## 2. 인스턴스
 
@@ -167,8 +243,51 @@ sudo journalctl -u caddy -n 50 --no-pager
 1 GB egress는 앱 설치 약 2,500회(precache 396 KiB) 분량이다. 필드 테스트는 수십 MB 수준이라
 한도 안에 들어온다. 공개 사용자가 늘면 egress가 첫 과금 지점이 된다.
 
-## 11. 하지 않은 것
+## 11. 남은 것
 
-- 계정 생성, 결제 수단 등록, 예산 알림, 인스턴스 생성은 콘솔/`gcloud`에서 해야 한다(이 세션은
-  GCP 자격증명이 없다).
-- 실제 배포·필드 검증은 VM이 생긴 뒤다.
+- **폰에서의 필드 검증**(Flow 1→2→3). 이 문서는 서버·API까지 확인했고, 매장 안 동작은 아직이다.
+- **2027-01-19경 무료 체험 종료 전 유료 결제 계정으로 업그레이드.** 체험 계정이 닫히면 그 안의
+  리소스가 삭제된다. Always Free 한도 안이면 업그레이드 후에도 청구는 0이다.
+- 공개 사용자가 늘면 `X-Forwarded-For` 인식(§12.3)과 egress 한도(§10)를 먼저 본다.
+
+## 12. 배포 기록 (2026-11-16)
+
+### 12.1 실측
+
+| 항목 | 값 |
+|---|---|
+| URL | <https://136-118-220-98.sslip.io> |
+| VM | `daiso-finder-proxy` · `us-west1-b` · `e2-micro` · 30 GB `pd-standard` |
+| 고정 IP | `136.118.220.98` (`daiso-proxy-ip`) |
+| 배포 커밋 | `d5a5c31` |
+| 부트스트랩 소요 | 약 10분 (`npm ci` 2분 + `tsc -b`/`vite build` 5~6분) |
+| 공개 `/health` | 200, TLS 포함 0.21 s |
+| `POST /api/stores` `{"query":"강남"}` | 200, 10개 매장, **0.149 s** |
+| `POST /api/availability` `{"strCd":"11199","keyword":"밀폐용기"}` | 200, `밀폐용기 2.8 L` / 2,000원 / `stck:"0"` / `locations:[{"floor":"-2","zone":"68"}]`, **0.803 s** |
+| PWA 자산 | `/`·`/manifest.webmanifest`·`/sw.js`·`/icons/icon-192.png`·`/icons/icon-512.png` 모두 200 |
+
+`0.803 s`는 클라이언트 예산 1.8 s 안이다(§9 표의 예상 0.8–1.1 s와 일치). 인증 레그까지 포함한
+수치이므로 daisomall이 느린 날만 강등 위험이 있다.
+
+### 12.2 검증 명령의 함정 — `gcloud compute ssh`가 따옴표를 지운다
+
+Windows에서 `gcloud compute ssh --command="... -d '{\"query\":\"강남\"}'"`로 보내면 plink가 원격
+명령의 `"`를 제거해 본문이 `{query:강남}`이 되고, 핸들러가 `bad_request`를 돌려준다. **앱 버그가
+아니다.** 본문은 파일로 보내고 `--data-binary @file`로 읽는다:
+
+```bash
+# 로컬에서 base64로 만들어 원격에 파일로 떨어뜨린 뒤
+echo '<BASE64>' | base64 -d > /tmp/body.json
+curl -sS -X POST https://136-118-220-98.sslip.io/api/stores \
+  -H 'content-type: application/json' --data-binary @/tmp/body.json
+```
+
+같은 이유로 SSH 채널을 통한 한글 stdout은 깨져 보인다(터미널 인코딩). 응답 본문의 정합성은
+로컬 PC에서 직접 호출해 확인한다.
+
+### 12.3 알려진 한계
+
+- Caddy 뒤에서 `req.socket.remoteAddress`가 `127.0.0.1`이라 레이트리밋 버킷이 **전역
+  120 req/min** 하나로 동작한다. 필드 테스트 규모(1~2명)에는 충분하지만, 공개 전에는
+  `X-Forwarded-For`(Caddy가 덮어쓴 값)를 읽도록 바꿔야 한다.
+- 무료 체험 계정이다. §11의 업그레이드 기한을 넘기면 VM이 사라진다.
