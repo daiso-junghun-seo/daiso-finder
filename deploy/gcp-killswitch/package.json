@@ -1,0 +1,10 @@
+{
+  "name": "daiso-finder-budget-killswitch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloud Billing budget kill switch for daiso-finder-prod",
+  "main": "index.js",
+  "engines": {
+    "node": "24"
+  }
+}
