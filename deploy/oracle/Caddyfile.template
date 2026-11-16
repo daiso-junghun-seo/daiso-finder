@@ -1,0 +1,6 @@
+# Rendered by deploy/oracle/bootstrap.sh — do not edit /etc/caddy/Caddyfile by hand.
+# TLS terminates here (Let's Encrypt HTTP-01). The Node proxy stays on loopback.
+__HOST__ {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:__PORT__
+}

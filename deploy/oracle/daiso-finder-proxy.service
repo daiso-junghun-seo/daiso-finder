@@ -1,0 +1,30 @@
+[Unit]
+Description=DAISO Finder Node proxy (SPA + /api, Node runtime)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__USER__
+WorkingDirectory=__HOME__/apps/daiso-finder-proxy
+EnvironmentFile=__HOME__/apps/daiso-finder-proxy/.env
+ExecStart=__NODE__ scripts/dev-proxy.mjs
+Restart=on-failure
+RestartSec=5
+# scripts/dev-proxy.mjs closes the server on SIGTERM; give it a moment before SIGKILL.
+TimeoutStopSec=15
+
+# The process only reads its own tree and answers HTTP. It never writes to disk
+# (esbuild runs with write:false), so the whole home directory can stay read-only.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
