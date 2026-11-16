@@ -2,15 +2,16 @@
 
 > 제품 계약의 SSOT는 [`product-bible/06_Product/daiso-companion`](../../product-bible/06_Product/daiso-companion)다. 이 문서는 **앱 저장소의 실행 계획**만 담는다 — 새 제품 스펙을 발명하지 않는다. 결정 원장은 [`notes/open-questions.md`](notes/open-questions.md).
 
-## 현재 위치 (2026-11-12)
+## 현재 위치 (2026-11-16)
 
 - Increment 0 + Flow 1 + §B47 쇼핑리스트까지 `main`에 완료, 공개 원격(`daiso-junghun-seo/daiso-finder`)에 push됨.
 - P1 구조 정리 완료: `AvailabilitySurface` 824→286줄, 커버리지 게이트, axe 6상태×2테마, PWA precache 결정.
 - P2 Flow 2 In-Store Navigation 완료: data-in-hand 진입, 2s 배경 새로고침(주기 타이머 없음), stale→시스템 오류 본문, `temporarilyOut`만 sold-out exit, D4 두 경로는 `unapplied` 보류.
 - P3 Flow 3 Alternative Discovery 완료: Group A live, nearby는 포트·mock·표면·E2E·axe까지(`NEARBY_LIVE=false`), 통짜 캐시·단일 스탬프·no-dead-end 사다리, cold path 지연 청크.
+- **P4 서버 배포 완료(2026-11-16)**: <https://136-118-220-98.sslip.io> · GCP `e2-micro` Always Free(`us-west1-b`) · Caddy+sslip.io TLS · 과금 킬 스위치(예산 2,000 KRW/월, 실발동 검증). 실측 `/api/stores` 0.149 s, `/api/availability` **0.803 s**(예산 1.8 s).
 - 게이트: vitest **915/915**(72 files), tsc clean, biome clean, Playwright **88/88**(dev 85 + preview 3), coverage **CI 임계값 green**(V8 샘플 lines/statements 95.49% / branches 88.1% / functions 91.56%; 총계 변동으로 단일 퍼센트는 계약이 아니다), build 성공(237.87 kB / gzip 76.23 kB, 지연청크 14.70/4.79 kB, CSS 18.11 kB, precache 22 entries / 391.42 KiB).
 - Flow 2·3는 **D078(2026-07-13)로 계약 비준 완료** — 남은 것은 아래 "결정 필요" 항목과 P4다.
-- 남은 가장 큰 위험은 기능이 아니라 **배포·필드 검증의 부재**다.
+- 남은 가장 큰 위험은 기능이 아니라 **실제 매장에서의 필드 검증 부재**다.
 
 ## 원칙
 
@@ -26,7 +27,7 @@
 | **P1 구조 정리** | 3–5일 | `AvailabilitySurface` 분해, `AGENTS.md` D078 정정, coverage 기준선, axe E2E, PWA precache 결정(§B31-7) | 동작 불변, 파일 ≤300줄, 번들 +5% 이내 | 완료 (2026-11-09) |
 | **P2 Flow 2** | 5–7일 | D077: data-in-hand 렌더, refresh 트리거(진입·resume·pull·`못 찾겠어요` 1회), 비블로킹, stale→Partial, stock-gone exit | tap→card <100ms(fetch 0회), 주기 타이머 없음 테스트, 6상태 E2E | 완료 (2026-11-10) |
 | **P3 Flow 3** | 7–10일 | D076: similar 분기 + entry matrix + 3행 바운드 + 단일 스탬프 + 통짜 캐시. nearby는 mock/포트까지 | no-dead-end E2E, mall은 Empty에서만, nearby는 데이터 확정 시 | 완료 (2026-11-12) |
-| **P4 배포·필드** | 2–3일 + 현장 | GCP e2-micro Node 프록시(Shape A), Caddy HTTPS, health/logs, 필드 체크리스트 | 실제 매장 1곳 이상 end-to-end | 준비 완료 (2026-11-16) — VM 생성 대기 |
+| **P4 배포·필드** | 2–3일 + 현장 | GCP e2-micro Node 프록시(Shape A), Caddy HTTPS, health/logs, 필드 체크리스트 | 실제 매장 1곳 이상 end-to-end | 서버 완료 (2026-11-16) — 필드 검증 대기 |
 
 ### P0 체크리스트
 
@@ -74,7 +75,7 @@
 | # | 결정 | 막는 것 | 다음 행동 |
 |---|---|---|---|
 | D1 | 원격 공개 범위·호스트 | — | **완료: 공개 GitHub (2026-11-08 전환, `main` 보호 적용)** |
-| D2 | 배포 호스트·호스트명·포트 | P4 | **호스트 확정: GCP e2-micro Always Free(2026-11-16)**. 호스트명은 sslip.io 기본, 도메인 있으면 교체 — [`deploy/gcp-e2-micro.md`](deploy/gcp-e2-micro.md) |
+| D2 | 배포 호스트·호스트명·포트 | P4 | **완료: GCP e2-micro Always Free + `sslip.io`(2026-11-16 배포)** — <https://136-118-220-98.sslip.io>. 재현·운영은 [`deploy/gcp-e2-micro.md`](deploy/gcp-e2-micro.md) |
 | D3 | 매장 좌표·매장 스코프 데이터(A8/A9) | Flow 3 nearby, 매장 디렉터리 실데이터 | data-owner 확인 → data-contract 갱신 |
 | D4 | Flow 2 열린 경험 질문 2개(도보 중 위치 이동, 품절 외 부정 상태 변화) | P3 exit 카피 | P2는 `unapplied`로 보류(§B49-D4) — Bible 에스컬레이션 유지 |
 | D5 | nearby 데이터 부재 시 Flow 2 exit의 임시 형태 | P2/P3 릴리스 순서 | Bible 결정 |

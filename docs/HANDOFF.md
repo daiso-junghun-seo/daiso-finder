@@ -2,9 +2,18 @@
 
 > 이 저장소에서 새 세션을 시작하면 **여기부터** 읽는다. 결정·실행 원장은 [`docs/notes/open-questions.md`](notes/open-questions.md). `.superpowers/`는 `.gitignore` 대상이라 새 클론에는 존재하지 않는다 — 정본으로 링크하지 않는다.
 
-## 현재 상태 (2026-11-13)
+## 현재 상태 (2026-11-16)
 
-**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **공개 원격·CI·`main` 보호는 2026-11-08 적용됐고(공개 저장소), 공개 배포는 아직 없다.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) · P3 Flow 3 Alternative Discovery(2026-11-12 구현·검증 완료)까지 완료. 2026-11-16 배포 호스트를 GCP e2-micro Always Free로 결정하고 런북·스크립트를 준비했다(아직 미배포).**
+**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) · P3 Flow 3 Alternative Discovery(2026-11-12)까지 완료.** **P4 프로덕션 런타임은 2026-11-16 GCP e2-micro에 배포됐다 — <https://136-118-220-98.sslip.io> (커밋 `d5a5c31`). 남은 것은 실제 매장에서의 필드 검증이다.**
+
+### P4 프로덕션 배포 — 서버 완료 (2026-11-16)
+
+- **호스트**: GCP Compute Engine `e2-micro` Always Free · `us-west1-b` · 30 GB `pd-standard` · 고정 IP `136.118.220.98`. 호스트명은 `sslip.io`(도메인 0원), TLS는 Caddy가 Let's Encrypt로 자동 발급. Node는 `127.0.0.1:8790`에만 바인딩되고 Caddy가 443에서 프록시한다(Shape A — 클라이언트 변경 없음).
+- **과금 킬 스위치**: GCP에는 Compute Engine 지출 상한이 없어서, **예산 100% 도달 시 프로젝트 결제를 해제하는 Cloud Function**을 두었다(`deploy/gcp-killswitch/`, 예산 **2,000 KRW/월**, 프로젝트 스코프, `INCLUDE_ALL_CREDITS`). 무료 티어는 크레딧으로 적용되므로 한도 안에서는 순액 0 → 오발동 없음. 서비스 계정 권한은 결제 계정이 아니라 **프로젝트 스코프 `roles/billing.projectManager`** 하나뿐이다. **합성 메시지로 실발동 검증 완료** — `billingEnabled=false` 확인 후 재연결. 삭제는 없고, 재개는 `gcloud billing projects link`.
+- **실측**: 공개 `/health` 200(TLS 포함 0.21 s) · `POST /api/stores {"query":"강남"}` 200/10개 매장 **0.149 s** · `POST /api/availability {"strCd":"11199","keyword":"밀폐용기"}` 200/`밀폐용기 2.8 L`/2,000원/`stck:"0"`/`locations:[{"floor":"-2","zone":"68"}]` **0.803 s**(클라이언트 예산 1.8 s). PWA 자산(`/`, manifest, `sw.js`, 아이콘 2종) 모두 200.
+- **부트스트랩**: `deploy/node-proxy/bootstrap.sh` 1회로 스왑·Node 22·Caddy·systemd·첫 배포까지 약 10분. 이후 갱신은 `deploy.sh`(빌드 → 트리 교체 → health → 실패 시 자동 롤백).
+- **남은 한계**: Caddy 뒤에서 레이트리밋 버킷이 전역 120/min 하나다(`X-Forwarded-For` 미인식) — 필드 규모에는 충분, 공개 전 수정. 무료 체험 계정이라 **2027-01-19경 이전에 유료 결제 계정으로 업그레이드**해야 VM이 유지된다(Always Free 한도 안이면 청구 0). 검증 명령에서 `gcloud compute ssh --command`가 따옴표를 지우는 함정은 런북 §12.2.
+- **정본**: [`docs/deploy/gcp-e2-micro.md`](deploy/gcp-e2-micro.md).
 
 ### P3 Flow 3 Alternative Discovery — 구현 완료 (2026-11-12)
 
@@ -56,12 +65,13 @@
 
 ### 지금 남은 것 (우선순위)
 
-1. **프로덕션 런타임 미배포** — ToS/robots 게이트는 2026-10-12 해제됐다(owner verdict). 2026-11-16 **호스트를 GCP e2-micro Always Free로 결정**(집 PC quick tunnel 필드 스모크 완료). 런북 [`docs/deploy/gcp-e2-micro.md`](deploy/gcp-e2-micro.md) + 공용 스크립트 `deploy/node-proxy/` — VM 생성 뒤 `bootstrap.sh` 1회 + `deploy.sh` 반복. Oracle·gpu01 런북은 같은 절차의 대안 호스트판으로 남는다. CF workerd는 벤더 핑거프린트 403이라 Node 프록시가 유일 경로다.
-2. **P4 배포·필드 검증** — P3까지 코드·게이트 완료. 남은 것은 프로덕션 런타임 배포(위 1) 뒤 실제 매장에서 Flow 1→2→3을 걷는 필드 검증이다. nearby live 해제 조건은 §B50-2의 데이터 질문(`hldyDt`·A7·임계값)이 닫힐 때다.
+1. **P4 필드 검증** — 서버는 떴다(<https://136-118-220-98.sslip.io>). 남은 것은 폰에서 PWA를 설치하고 실제 매장에서 Flow 1→2→3을 걷는 것이다(설치 후 탭을 닫았다 다시 열어 SW를 갱신). nearby live 해제 조건은 §B50-2의 데이터 질문(`hldyDt`·A7·임계값)이 닫힐 때다.
+2. **무료 체험 → 유료 결제 계정 업그레이드** — 2027-01-19경 체험 계정이 닫히면 VM이 삭제된다. Always Free 한도 안이면 업그레이드 후 청구는 0이고, 킬 스위치는 그대로 동작한다.
 3. **D4 Bible 결정** — 통로 중 위치 이동·품절 외 부정 상태의 종료/재안내 카피. P2는 관측·보류까지만 구현했다.
 4. **§B47 나머지 커버리지** — 교차 매장 import는 E2E 1건으로 고정됐다. 공유 취소·최근 본·수량 상한은 아직 단위 테스트만 있다.
 5. ~~**엔트리 번들 예산**~~ ✅ **복귀 완료(2026-11-13)** — 엔트리 **218.65 kB / gzip 70.27 kB**로 정본 220/72 이내(§B50-11). 수단: 카트 시트·스캐너 오버레이·stock adapter(생성 시 warm-up)·Flow 3 표면 지연. `NavigationSurface`는 tap→card <100ms 계약 때문에 분할하지 않았다.
 6. **툴체인 업그레이드** — vite 5→8, vitest 3→5. CI green을 유지한 별도 브랜치에서 단계적으로(D7).
+7. **공개 확대 전 하드닝** — 레이트리밋을 `X-Forwarded-For` 기준으로 바꾸고 egress 한도(월 1 GB)를 본다. 그 전까지는 지인 규모 필드 테스트만.
 
 ### 최근 완료 (§B47, 상세는 원장)
 
