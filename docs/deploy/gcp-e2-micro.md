@@ -213,6 +213,12 @@ sudo journalctl -u caddy -n 50 --no-pager
 
 - 디스크: `df -h /` · `npm cache clean --force` · `sudo journalctl --vacuum-time=14d`
 - 로그에는 비밀번호·토큰이 없다(프록시는 메서드·경로·상태·소요만 남긴다).
+- **자동 업그레이드가 서비스를 재시작한다.** Ubuntu `unattended-upgrades`가 라이브러리(예: `libc6`)를
+  올린 뒤 `needrestart`로 서비스를 재기동한다 — 2026-11-16 06:02 UTC 실측, SIGTERM → 즉시 재기동,
+  다운타임 1초 미만. 놀랄 일은 아니지만 필드 테스트 중 짧은 끊김이 생길 수 있다.
+  `/var/log/unattended-upgrades/unattended-upgrades.log`에서 무엇이 올라갔는지 본다.
+- 커널 업그레이드는 재부팅이 필요하고 **자동 재부팅은 꺼져 있다**(`Automatic-Reboot` 주석 처리 =
+  기본 false). `sudo reboot`는 직접 한다. 재부팅 뒤에도 서비스는 `enabled`라 자동으로 뜬다.
 - 예산 알림 메일이 오면 결제 → 리포트에서 SKU 확인(대개 디스크 타입 또는 egress).
 
 ## 9. 이 호스트의 고유 리스크 — 지연
