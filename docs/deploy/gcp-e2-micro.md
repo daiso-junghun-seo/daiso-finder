@@ -269,11 +269,18 @@ sudo journalctl -u caddy -n 50 --no-pager
 | 부트스트랩 소요 | 약 10분 (`npm ci` 2분 + `tsc -b`/`vite build` 5~6분) |
 | 공개 `/health` | 200, TLS 포함 0.21 s |
 | `POST /api/stores` `{"query":"강남"}` | 200, 10개 매장, **0.149 s** |
-| `POST /api/availability` `{"strCd":"11199","keyword":"밀폐용기"}` | 200, `밀폐용기 2.8 L` / 2,000원 / `stck:"0"` / `locations:[{"floor":"-2","zone":"68"}]`, **0.803 s** |
+| `POST /api/availability` `{"strCd":"11199","keyword":"밀폐용기"}` | 200, `밀폐용기 2.8 L` / 2,000원 / `stck:"0"` / `locations:[{"floor":"-2","zone":"68"}]`, **0.803 s** (웜 0.37 s) |
+| `POST /api/alternatives` `{"strCd":"11199","keyword":"밀폐용기","excludePdNo":"1031166"}` | 200, 3행 전부 위치 있음, 첫 호출 **1.94 s** · 웜 **0.50 s** |
 | PWA 자산 | `/`·`/manifest.webmanifest`·`/sw.js`·`/icons/icon-192.png`·`/icons/icon-512.png` 모두 200 |
 
 `0.803 s`는 클라이언트 예산 1.8 s 안이다(§9 표의 예상 0.8–1.1 s와 일치). 인증 레그까지 포함한
 수치이므로 daisomall이 느린 날만 강등 위험이 있다.
+
+`/api/alternatives`의 첫 호출 1.94 s는 **upstream 인증·TLS가 차가운 상태**의 값이다. 같은 본문을
+다시 보내면 0.50 s다. 클라이언트 예산은 `ALT_TIMEOUT_MS = 2000`이고 Flow 3는 항상 Flow 1/2 뒤에
+열리므로(둘 다 availability를 먼저 호출한다) 실제 경로는 웜 구간을 탄다. 그래도 앱을 새로 켜고
+곧바로 Flow 3로 가는 예외 경로는 예산에 근접하니, 필드에서 Error가 보이면 이 콜드 스타트를 먼저
+의심한다.
 
 ### 12.2 검증 명령의 함정 — `gcloud compute ssh`가 따옴표를 지운다
 
