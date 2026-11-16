@@ -26,7 +26,7 @@
 | **P1 구조 정리** | 3–5일 | `AvailabilitySurface` 분해, `AGENTS.md` D078 정정, coverage 기준선, axe E2E, PWA precache 결정(§B31-7) | 동작 불변, 파일 ≤300줄, 번들 +5% 이내 | 완료 (2026-11-09) |
 | **P2 Flow 2** | 5–7일 | D077: data-in-hand 렌더, refresh 트리거(진입·resume·pull·`못 찾겠어요` 1회), 비블로킹, stale→Partial, stock-gone exit | tap→card <100ms(fetch 0회), 주기 타이머 없음 테스트, 6상태 E2E | 완료 (2026-11-10) |
 | **P3 Flow 3** | 7–10일 | D076: similar 분기 + entry matrix + 3행 바운드 + 단일 스탬프 + 통짜 캐시. nearby는 mock/포트까지 | no-dead-end E2E, mall은 Empty에서만, nearby는 데이터 확정 시 | 완료 (2026-11-12) |
-| **P4 배포·필드** | 2–3일 + 현장 | Oracle Always Free Node 프록시(Shape A), Caddy HTTPS, health/logs, 필드 체크리스트 | 실제 매장 1곳 이상 end-to-end | 준비 완료 (2026-11-16) — VM 생성 대기 |
+| **P4 배포·필드** | 2–3일 + 현장 | GCP e2-micro Node 프록시(Shape A), Caddy HTTPS, health/logs, 필드 체크리스트 | 실제 매장 1곳 이상 end-to-end | 준비 완료 (2026-11-16) — VM 생성 대기 |
 
 ### P0 체크리스트
 
@@ -74,7 +74,7 @@
 | # | 결정 | 막는 것 | 다음 행동 |
 |---|---|---|---|
 | D1 | 원격 공개 범위·호스트 | — | **완료: 공개 GitHub (2026-11-08 전환, `main` 보호 적용)** |
-| D2 | 배포 호스트·호스트명·포트 | P4 | **호스트 확정: Oracle Always Free(2026-11-16)**. 호스트명은 sslip.io 기본, 도메인 있으면 교체 — [`deploy/oracle-always-free.md`](deploy/oracle-always-free.md) |
+| D2 | 배포 호스트·호스트명·포트 | P4 | **호스트 확정: GCP e2-micro Always Free(2026-11-16)**. 호스트명은 sslip.io 기본, 도메인 있으면 교체 — [`deploy/gcp-e2-micro.md`](deploy/gcp-e2-micro.md) |
 | D3 | 매장 좌표·매장 스코프 데이터(A8/A9) | Flow 3 nearby, 매장 디렉터리 실데이터 | data-owner 확인 → data-contract 갱신 |
 | D4 | Flow 2 열린 경험 질문 2개(도보 중 위치 이동, 품절 외 부정 상태 변화) | P3 exit 카피 | P2는 `unapplied`로 보류(§B49-D4) — Bible 에스컬레이션 유지 |
 | D5 | nearby 데이터 부재 시 Flow 2 exit의 임시 형태 | P2/P3 릴리스 순서 | Bible 결정 |

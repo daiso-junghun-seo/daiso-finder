@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Deploy the current origin/main to the Oracle VM. Run as the login user (ubuntu):
+# Deploy the current origin/main to the deployment VM. Run as the login user:
 #
-#   bash ~/apps/daiso-finder-repo/deploy/oracle/deploy.sh
+#   bash ~/apps/daiso-finder-repo/deploy/node-proxy/deploy.sh
 #
 # The test suite is NOT run here — main is protected and CI gates every push. This script only
 # builds, swaps the runtime tree, restarts, health-checks, and rolls back on failure.

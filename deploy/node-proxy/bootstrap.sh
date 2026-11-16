@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# One-time host setup for the DAISO Finder Node proxy on an Oracle Cloud Always Free VM
-# (Ubuntu 24.04). Run as the login user (ubuntu), never as root:
+# One-time host setup for the DAISO Finder Node proxy on a plain Ubuntu 24.04 VM
+# (GCP e2-micro, Oracle Cloud Always Free, or any VPS). Run as the login user, never as root:
 #
-#   bash deploy/oracle/bootstrap.sh                          # hostname = <public-ip>.sslip.io
-#   bash deploy/oracle/bootstrap.sh daiso.example.com        # own domain instead
+#   bash deploy/node-proxy/bootstrap.sh                          # hostname = <public-ip>.sslip.io
+#   bash deploy/node-proxy/bootstrap.sh daiso.example.com        # own domain instead
 #
-# Idempotent: a second run only fills in what is missing. See docs/deploy/oracle-always-free.md.
+# Idempotent: a second run only fills in what is missing.
+# Runbooks: docs/deploy/gcp-e2-micro.md, docs/deploy/oracle-always-free.md.
 set -euo pipefail
 
 HOSTNAME_ARG="${1:-}"
@@ -52,7 +53,8 @@ NODE_BIN="$(command -v node)"
 say "node $(node --version) at ${NODE_BIN}, npm $(npm --version)"
 
 # 4. Host firewall. Oracle's Ubuntu images end the INPUT chain with a REJECT rule, so 80/443
-#    are closed even when the VCN Security List allows them. Both layers must be opened.
+#    are closed even when the VCN Security List allows them. GCP images rely on VPC firewall
+#    rules instead, so this step is a harmless no-op there. Both cloud layers must be opened.
 say "opening 80/443 in the host firewall"
 for port in 80 443; do
   sudo iptables -C INPUT -p tcp --dport "${port}" -j ACCEPT 2>/dev/null \
@@ -106,7 +108,7 @@ fi
 # 9. systemd unit (system scope — root is available on this host, so no lingering needed).
 say "installing ${SERVICE}"
 sed -e "s|__USER__|$(id -un)|g" -e "s|__HOME__|${HOME}|g" -e "s|__NODE__|${NODE_BIN}|g" \
-  "${REPO_DIR}/deploy/oracle/daiso-finder-proxy.service" \
+  "${REPO_DIR}/deploy/node-proxy/daiso-finder-proxy.service" \
   | sudo tee "/etc/systemd/system/${SERVICE}" >/dev/null
 sudo systemctl daemon-reload
 sudo systemctl enable "${SERVICE}"
@@ -114,14 +116,14 @@ sudo systemctl enable "${SERVICE}"
 # 10. Caddy site config.
 say "rendering /etc/caddy/Caddyfile for ${HOSTNAME_ARG}"
 sed -e "s|__HOST__|${HOSTNAME_ARG}|g" -e "s|__PORT__|${PORT}|g" \
-  "${REPO_DIR}/deploy/oracle/Caddyfile.template" \
+  "${REPO_DIR}/deploy/node-proxy/Caddyfile.template" \
   | sudo tee /etc/caddy/Caddyfile >/dev/null
 sudo systemctl enable caddy
 sudo systemctl reload caddy 2>/dev/null || sudo systemctl restart caddy
 
 # 11. First deploy (build + start + local health check).
 say "first deploy"
-bash "${REPO_DIR}/deploy/oracle/deploy.sh"
+bash "${REPO_DIR}/deploy/node-proxy/deploy.sh"
 
 # 12. Public health check. Certificate issuance can take a few seconds on the first request.
 say "public health check — https://${HOSTNAME_ARG}/health"

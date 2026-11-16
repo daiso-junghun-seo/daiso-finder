@@ -1,13 +1,14 @@
 # Oracle Cloud Always Free — deploy runbook (P4)
 
 > **STATUS: PREP ONLY — NOT DEPLOYED.** 2026-11-16 작성. 집 PC + Cloudflare quick tunnel로 필드
-> 스모크를 마친 뒤, 상시 공개용 호스트로 Oracle Always Free를 선택했다. 이 문서는 VM이 생긴 뒤
-> `bootstrap.sh` 한 번 + `deploy.sh` 반복으로 끝나는 것을 목표로 한다.
+> 스모크를 마친 뒤, 상시 공개용 호스트로 Oracle Always Free를 검토했다. **최종 선택은 GCP
+> e2-micro**([`gcp-e2-micro.md`](gcp-e2-micro.md)) — 이 문서는 Oracle 접근이 생겼을 때 쓰는
+> 대안 호스트판으로 남긴다. 절차·스크립트는 동일하다.
 >
-> gpu01 런북([`gpu01-node-proxy.md`](gpu01-node-proxy.md))은 폐기된 것이 아니라 **다른 호스트용
-> 같은 절차**다. 코드는 동일한 [`scripts/dev-proxy.mjs`](../../scripts/dev-proxy.mjs)를 쓰며 포크는
-> 없다. 차이는 세 가지뿐이다: systemd **system** 유닛(root 사용 가능), **Caddy** TLS 종단
-> (cloudflared 대신), 호스트명 **sslip.io**(도메인 0원).
+> gpu01 런북([`gpu01-node-proxy.md`](gpu01-node-proxy.md))도 같은 절차의 다른 호스트판이다. 코드는
+> 동일한 [`scripts/dev-proxy.mjs`](../../scripts/dev-proxy.mjs)를 쓰며 포크는 없다. 차이는 세
+> 가지뿐이다: systemd **system** 유닛(root 사용 가능), **Caddy** TLS 종단(cloudflared 대신),
+> 호스트명 **sslip.io**(도메인 0원).
 
 ## 0. 형태
 
@@ -93,13 +94,13 @@ VM에서:
 ```bash
 # 저장소를 임시로 받아 스크립트만 실행해도 된다.
 git clone https://github.com/daiso-junghun-seo/daiso-finder.git ~/apps/daiso-finder-repo
-bash ~/apps/daiso-finder-repo/deploy/oracle/bootstrap.sh
+bash ~/apps/daiso-finder-repo/deploy/node-proxy/bootstrap.sh
 ```
 
 도메인을 쓸 경우:
 
 ```bash
-bash ~/apps/daiso-finder-repo/deploy/oracle/bootstrap.sh daiso.example.com
+bash ~/apps/daiso-finder-repo/deploy/node-proxy/bootstrap.sh daiso.example.com
 ```
 
 스크립트가 하는 일(멱등):
@@ -119,7 +120,7 @@ bash ~/apps/daiso-finder-repo/deploy/oracle/bootstrap.sh daiso.example.com
 ## 6. 업데이트·롤백
 
 ```bash
-bash ~/apps/daiso-finder-repo/deploy/oracle/deploy.sh
+bash ~/apps/daiso-finder-repo/deploy/node-proxy/deploy.sh
 ```
 
 - `origin/main`을 fetch → checkout → `npm ci` → `npm run build` → 앱 트리로 rsync →
@@ -176,7 +177,7 @@ sudo journalctl -u caddy -n 50 --no-pager    # 인증서 발급 실패는 여기
   journal은 `sudo journalctl --vacuum-time=14d`.
 - **로그에 비밀 없음**: 프록시는 헤더·쿼리·바디를 남기지 않는다(JWT/Bearer/x-dm-uid 미기록).
 - **Caddyfile 변경**: `/etc/caddy/Caddyfile` 직접 수정 대신 `bootstrap.sh`를 다시 실행하거나
-  템플릿(`deploy/oracle/Caddyfile.template`)을 고친 뒤 `sudo systemctl reload caddy`.
+  템플릿(`deploy/node-proxy/Caddyfile.template`)을 고친 뒤 `sudo systemctl reload caddy`.
 
 ## 9. 트러블슈팅
 

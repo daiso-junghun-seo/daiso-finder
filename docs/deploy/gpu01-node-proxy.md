@@ -10,7 +10,7 @@
 > decision + gpu01 access), not legal.
 >
 > **2026-11-16: 배포 호스트는 Oracle Cloud Always Free로 결정됐다.** 같은 절차를 다른 호스트에서
-> 실행하는 판이 [`oracle-always-free.md`](oracle-always-free.md) + `deploy/oracle/`에 있다. 이 문서는
+> 실행하는 판이 [`oracle-always-free.md`](oracle-always-free.md) + `deploy/node-proxy/`에 있다. 이 문서는
 > gpu01 접근이 생겼을 때 쓰는 대체 경로로 남긴다(코드·계약은 동일).
 
 Design source: [`docs/superpowers/specs/2026-07-23-runtime-resolution.md`](../superpowers/specs/2026-07-23-runtime-resolution.md)

@@ -4,7 +4,7 @@
 
 ## 현재 상태 (2026-11-13)
 
-**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **공개 원격·CI·`main` 보호는 2026-11-08 적용됐고(공개 저장소), 공개 배포는 아직 없다.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) · P3 Flow 3 Alternative Discovery(2026-11-12 구현·검증 완료)까지 완료. 2026-11-16 배포 호스트를 Oracle Cloud Always Free로 결정하고 런북·스크립트를 준비했다(아직 미배포).**
+**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** 앱은 로컬에서 실 daisomall 데이터로 전체 플로우가 동작한다(`npm run dev:live`, `scripts/dev-proxy.mjs`). **공개 원격·CI·`main` 보호는 2026-11-08 적용됐고(공개 저장소), 공개 배포는 아직 없다.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) · P3 Flow 3 Alternative Discovery(2026-11-12 구현·검증 완료)까지 완료. 2026-11-16 배포 호스트를 GCP e2-micro Always Free로 결정하고 런북·스크립트를 준비했다(아직 미배포).**
 
 ### P3 Flow 3 Alternative Discovery — 구현 완료 (2026-11-12)
 
@@ -56,7 +56,7 @@
 
 ### 지금 남은 것 (우선순위)
 
-1. **프로덕션 런타임 미배포** — ToS/robots 게이트는 2026-10-12 해제됐다(owner verdict). 2026-11-16 **호스트를 Oracle Cloud Always Free로 결정**(집 PC quick tunnel 필드 스모크 완료). 런북 [`docs/deploy/oracle-always-free.md`](deploy/oracle-always-free.md) + 스크립트 `deploy/oracle/` — VM 생성 뒤 `bootstrap.sh` 1회 + `deploy.sh` 반복. gpu01 런북은 같은 절차의 다른 호스트판으로 남는다. CF workerd는 벤더 핑거프린트 403이라 Node 프록시가 유일 경로다.
+1. **프로덕션 런타임 미배포** — ToS/robots 게이트는 2026-10-12 해제됐다(owner verdict). 2026-11-16 **호스트를 GCP e2-micro Always Free로 결정**(집 PC quick tunnel 필드 스모크 완료). 런북 [`docs/deploy/gcp-e2-micro.md`](deploy/gcp-e2-micro.md) + 공용 스크립트 `deploy/node-proxy/` — VM 생성 뒤 `bootstrap.sh` 1회 + `deploy.sh` 반복. Oracle·gpu01 런북은 같은 절차의 대안 호스트판으로 남는다. CF workerd는 벤더 핑거프린트 403이라 Node 프록시가 유일 경로다.
 2. **P4 배포·필드 검증** — P3까지 코드·게이트 완료. 남은 것은 프로덕션 런타임 배포(위 1) 뒤 실제 매장에서 Flow 1→2→3을 걷는 필드 검증이다. nearby live 해제 조건은 §B50-2의 데이터 질문(`hldyDt`·A7·임계값)이 닫힐 때다.
 3. **D4 Bible 결정** — 통로 중 위치 이동·품절 외 부정 상태의 종료/재안내 카피. P2는 관측·보류까지만 구현했다.
 4. **§B47 나머지 커버리지** — 교차 매장 import는 E2E 1건으로 고정됐다. 공유 취소·최근 본·수량 상한은 아직 단위 테스트만 있다.
