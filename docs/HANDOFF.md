@@ -13,6 +13,8 @@
 - **실측**: 공개 `/health` 200(TLS 포함 0.21 s) · `POST /api/stores {"query":"강남"}` 200/10개 매장 **0.149 s** · `POST /api/availability {"strCd":"11199","keyword":"밀폐용기"}` 200/`밀폐용기 2.8 L`/2,000원/`stck:"0"`/`locations:[{"floor":"-2","zone":"68"}]` **0.803 s**(클라이언트 예산 1.8 s). PWA 자산(`/`, manifest, `sw.js`, 아이콘 2종) 모두 200.
 - **부트스트랩**: `deploy/node-proxy/bootstrap.sh` 1회로 스왑·Node 22·Caddy·systemd·첫 배포까지 약 10분. 이후 갱신은 `deploy.sh`(빌드 → 트리 교체 → health → 실패 시 자동 롤백).
 - **남은 한계**: Caddy 뒤에서 레이트리밋 버킷이 전역 120/min 하나다(`X-Forwarded-For` 미인식) — 필드 규모에는 충분, 공개 전 수정. 무료 체험 계정이라 **2027-01-19경 이전에 유료 결제 계정으로 업그레이드**해야 VM이 유지된다(Always Free 한도 안이면 청구 0). 검증 명령에서 `gcloud compute ssh --command`가 따옴표를 지우는 함정은 런북 §12.2.
+- **데스크톱 브라우저 스모크(2026-11-16, Chromium 390×844)**: 설치 없이도 Flow 1→2→3이 프로덕션에서 돈다. `강남` 매장 선택 → `미니 밀폐용기` 후보 탭 → 답 **1.70 s** → `위치 보기` → **지하 2층 65번**. 품절 상품(`세로형 밀폐용기 2.8 L`)은 `대안 보기` → Flow 3 **1.24 s**. SW `activated`, 콘솔 오류 0.
+- **필드 관측 1건(§B50-12)**: Flow 3 Group A가 **상품명을 그대로 재검색**하기 때문에, 후보 탭 → 품절 → `대안 보기` 경로에서 `이 매장에는 비슷한 상품이 없어요`가 뜬다. 같은 매장에서 키워드 `밀폐용기`로는 3행이 나온다. Bible의 열린 가설("literal keyword similarity … requires field validation")에 대한 첫 증거이며, 앱에서 고치지 않고 05_AI 프로세스로 올린다.
 - **정본**: [`docs/deploy/gcp-e2-micro.md`](deploy/gcp-e2-micro.md).
 
 ### P3 Flow 3 Alternative Discovery — 구현 완료 (2026-11-12)
