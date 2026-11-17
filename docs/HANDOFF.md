@@ -10,10 +10,11 @@
 
 - **설치 진입(§B51, owner 명시 예외)**: Bible에 설치 표면이 없어 Anti-goal 4(설치 벽 금지)와 구분해 owner가 형태를 직접 골랐다 — **Android는 네이티브 프롬프트 버튼, iOS는 공유 시트 안내**. `beforeinstallprompt`는 `main.tsx`가 React 마운트 전에 캡처(`preventDefault` 후 1회 소비), `appinstalled`만 installed를 참으로 만든다. `none`(설치됨·프롬프트 없음)이면 버튼을 렌더하지 않는다.
 - **iOS 안내**: `InstallGuideSheet` — `role=dialog`/`aria-modal`, 열릴 때 닫기 포커스, Escape=닫기, 닫으면 `앱 설치` 버튼으로 복원, 열린 동안 배경 `inert`. 카피는 Safari 한정이 아닌 "공유 버튼" 일반형(ko/en 5종, 키 패리티 테스트).
-- **새 아이콘(§B19 갱신)**: owner 제공 `daiso` 워드마크로 2026-10-11의 "상표 로고 모사 없이" 결정을 owner 예외로 뒤집었다. `scripts/make-icons.py`가 JPEG에 칠해진 체커보드를 flood-fill로 제거하고 192/512 RGBA(모서리 완전 투명)·apple-touch 180 RGB full-bleed·maskable 512(타일 중앙 80%)를 만든다. 사진형 아이콘 때문에 precache가 395.83 → **1014.56 KiB**로 늘었다.
-- **게이트(2026-11-17 실측)**: vitest **946/946**(81 files), tsc clean, biome clean(201), Playwright **89/89**(설치 E2E 1건 추가), build 성공 — 엔트리 **223.13 kB / gzip 71.65 kB**, CSS 18.21 kB, precache 28 entries / 1014.56 KiB. **엔트리 raw가 정본 220 kB를 3.13 kB 초과**(gzip은 72 이내) — §B51-7에 P4 한정 명시 예외로 기록했고, 회수 후보는 가이드 시트 지연 분할이다.
+- **새 아이콘(§B19 갱신)**: owner 제공 `daiso` 워드마크로 2026-10-11의 "상표 로고 모사 없이" 결정을 owner 예외로 뒤집었다. `scripts/make-icons.py`가 JPEG에 칠해진 체커보드를 flood-fill로 제거하고 192/512 RGBA(모서리 완전 투명)·apple-touch 180 RGB full-bleed·maskable 512(타일 중앙 80%)·탭 favicon 48을 만든다. 사진형 아이콘 때문에 precache가 395.83 → **1020.13 KiB**로 늘었다.
+- **게이트(2026-11-17 최종)**: vitest **951/951**(82 files), tsc clean, biome clean(203), Playwright **89/89**(CI green), build 성공 — 엔트리 **223.13 kB / gzip 71.65 kB**, CSS 18.21 kB, precache **26 entries / 1020.13 KiB**. **엔트리 raw가 정본 220 kB를 3.13 kB 초과**(gzip은 72 이내) — §B51-7에 P4 한정 명시 예외로 기록했고, 회수 후보는 가이드 시트 지연 분할이다.
 - **배포·프로덕션 스모크(2026-11-17 00:44 UTC, 커밋 `7cf65f8`)**: VM 갱신 후 `/health` ok, 새 엔트리 `index-EDOdxAXX.js`(226,144 B)·아이콘 4종·manifest·sw 모두 200. Chromium 390×844에서 **프롬프트 전 버튼 0개(죽은 진입 없음) → 합성 `beforeinstallprompt` 후 버튼 표시 → 1회 탭에 `prompt()` 1회·버튼 소멸**. Flow 1 `미니 밀폐용기` 답 **1.37 s**(지하 2층 65번), `위치 보기` → Flow 2 안내 정상, Flow 3은 **0.91 s에 Empty**로 §B50-12 관측이 그대로 재현, 콘솔 오류 0.
-- **필드 주의**: Android의 `beforeinstallprompt`는 Chrome이 설치 가능으로 판정한 뒤에 온다. 첫 방문에 버튼이 없으면 Chrome 메뉴의 `앱 설치`/`홈 화면에 추가`가 경로이고, 설치가 끝나면 앱은 버튼을 숨긴다. iOS는 첫 방문부터 안내 버튼이 보인다.
+- **아이콘 캐시 후속(2026-11-17, 커밋 `1000e85`)**: 정적 핸들러가 비-HTML 전부에 `immutable`(1년)을 보내 `/icons/*`·manifest가 이전 배포에 고정돼 있었다. 해시 자산만 immutable로 좁히고 manifest는 `no-cache`, 아이콘은 5분으로 수정(`scripts/static-cache.mjs`, 테스트 3건). 이미 캐시된 브라우저를 위해 manifest를 `manifest-2026-11-17.webmanifest`로, 아이콘 URL에 `?v=2`를 붙였고, 탭 favicon 48px를 추가했다. VM `1000e85`, precache **26 entries / 1020.13 KiB**, 프로덕션에서 새 링크·manifest·아이콘 200과 캐시 헤더 확인.
+- **필드 주의**: Android의 `beforeinstallprompt`는 Chrome이 설치 가능으로 판정한 뒤에 온다. 첫 방문에 버튼이 없으면 Chrome 메뉴의 `앱 설치`/`홈 화면에 추가`가 경로이고, 설치가 끝나면 앱은 버튼을 숨긴다. iOS는 첫 방문부터 안내 버튼이 보인다. **이미 설치한 PWA의 홈 화면 아이콘은 OS가 설치 시점 값을 유지하므로, 새 아이콘은 삭제 후 재설치해야 보인다.**
 
 
 ### P4 프로덕션 배포 — 서버 완료 (2026-11-16)
