@@ -13,6 +13,7 @@
 - **새 아이콘(§B19 갱신)**: owner 제공 `daiso` 워드마크로 2026-10-11의 "상표 로고 모사 없이" 결정을 owner 예외로 뒤집었다. `scripts/make-icons.py`가 JPEG에 칠해진 체커보드를 flood-fill로 제거하고 192/512 RGBA(모서리 완전 투명)·apple-touch 180 RGB full-bleed·maskable 512(타일 중앙 80%)를 만든다. 사진형 아이콘 때문에 precache가 395.83 → **1014.56 KiB**로 늘었다.
 - **게이트(2026-11-17 실측)**: vitest **946/946**(81 files), tsc clean, biome clean(201), Playwright **89/89**(설치 E2E 1건 추가), build 성공 — 엔트리 **223.13 kB / gzip 71.65 kB**, CSS 18.21 kB, precache 28 entries / 1014.56 KiB. **엔트리 raw가 정본 220 kB를 3.13 kB 초과**(gzip은 72 이내) — §B51-7에 P4 한정 명시 예외로 기록했고, 회수 후보는 가이드 시트 지연 분할이다.
 - **배포·프로덕션 스모크(2026-11-17 00:44 UTC, 커밋 `7cf65f8`)**: VM 갱신 후 `/health` ok, 새 엔트리 `index-EDOdxAXX.js`(226,144 B)·아이콘 4종·manifest·sw 모두 200. Chromium 390×844에서 **프롬프트 전 버튼 0개(죽은 진입 없음) → 합성 `beforeinstallprompt` 후 버튼 표시 → 1회 탭에 `prompt()` 1회·버튼 소멸**. Flow 1 `미니 밀폐용기` 답 **1.37 s**(지하 2층 65번), `위치 보기` → Flow 2 안내 정상, Flow 3은 **0.91 s에 Empty**로 §B50-12 관측이 그대로 재현, 콘솔 오류 0.
+- **필드 주의**: Android의 `beforeinstallprompt`는 Chrome이 설치 가능으로 판정한 뒤에 온다. 첫 방문에 버튼이 없으면 Chrome 메뉴의 `앱 설치`/`홈 화면에 추가`가 경로이고, 설치가 끝나면 앱은 버튼을 숨긴다. iOS는 첫 방문부터 안내 버튼이 보인다.
 
 
 ### P4 프로덕션 배포 — 서버 완료 (2026-11-16)

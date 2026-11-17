@@ -238,7 +238,7 @@ B30-4는 **Bible 비준 대기** — 앱이 정직 초안으로 5종 카피(권�
 
 | # | 결정 | 확정 | 근거/검증 |
 |---|---|---|---|
-| B51-1 | 진입 형태 (owner 선택) | 설치 모드 3종: `button`(Chromium `beforeinstallprompt` 보유) · `guide`(iOS/iPadOS) · `none`(설치됨 또는 프롬프트 없음). `none`이면 버튼을 렌더하지 않는다 | 죽은 진입 금지. iOS는 네이티브 프롬프트가 존재하지 않으므로 공유 시트 안내만이 사실이다. iPadOS 13+ 데스크톱 UA는 `maxTouchPoints > 1`로 판별 |
+| B51-1 | 진입 형태 (owner 선택) | 설치 모드 3종: `button`(Chromium `beforeinstallprompt` 보유) · `guide`(iOS/iPadOS) · `none`(설치됨 또는 프롬프트 없음). `none`이면 버튼을 렌더하지 않는다 | 죽은 진입 금지. iOS는 네이티브 프롬프트가 존재하지 않으므로 공유 시트 안내만이 사실이다. iPadOS 13+ 데스크톱 UA는 `maxTouchPoints > 1`로 판별. Android 이벤트는 Chrome의 설치 가능 판정 이후에 오므로 첫 방문에는 버튼이 없을 수 있다 — 그때는 브라우저 메뉴가 경로이고, 설치 후에는 앱이 버튼을 숨긴다 |
 | B51-2 | 캡처 시점·1회성 | `main.tsx`가 React 마운트 **전** `initInstallCapture()`로 리스너 등록. `preventDefault()`로 브라우저 미니 인포바를 억제하고, 이벤트는 **1회만 소비**. `request()`는 소비 즉시 `canPrompt=false`로 내려 버튼이 사라진다 | 이벤트가 첫 렌더보다 먼저 올 수 있다. 두 번째 `prompt()`는 브라우저가 거부하므로 재시도 경로를 만들지 않는다. 프롬프트 거부/예외는 `unavailable`로 보고하고 결과를 꾸며내지 않는다 |
 | B51-3 | installed 판정 | `appinstalled` 이벤트와 standalone 실행(`display-mode: standalone`, iOS `navigator.standalone`)만 참. **프롬프트 수락은 설치 완료가 아니다** | 수락≠설치(사용자가 브라우저 UI에서 취소 가능). installed가 되면 late `beforeinstallprompt`도 무시 |
 | B51-4 | 접근성·포커스 | iOS 안내만 `aria-haspopup="dialog"` + `role=dialog`/`aria-modal`, 열릴 때 닫기로 포커스, Escape=닫기, 닫으면 `앱 설치` 버튼으로 복원. 가이드가 열린 동안 배경 `inert`. 네이티브 프롬프트 버튼에는 `aria-haspopup` 없음 | 기존 시트 계약(D082·장바구니)과 동일. 네이티브 프롬프트는 DOM 다이얼로그가 아니다 |
