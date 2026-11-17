@@ -234,6 +234,20 @@ B30-4는 **Bible 비준 대기** — 앱이 정직 초안으로 5종 카피(권�
 
 > **B50-열린 질문(Bible)**: ① **D5** — nearby 부재 시 Flow 2 exit·미취급/가맹점 진입의 임시 형태(현재 exit는 A만, 두 CTA는 inert) ② A 실패 카피 비준 ③ withheld+empty(단일 branch empty) 열화의 정본 형태 ④ 행 0 + failed/empty 혼합의 Error 판정 ⑤ 캐시 both-empty에서 스탬프 위치 ⑥ nearby 임계값·`hldyDt` 의미(A7/A8) ⑦ 지도 handoff 실사용.
 
+> **✅ 앱 내 PWA 설치 진입(2026-11-17, owner 명시 예외 — 설치 벽 아님)**: Bible Interface·Final 카피에 설치 진입이 없다. Anti-goal 4는 **설치 벽(강제)** 금지이지 진입 금지가 아니며, owner가 형태를 직접 골랐다(Android 네이티브 버튼 + iOS 공유 안내). 앱 소유 결정은 아래 §B51.
+
+| # | 결정 | 확정 | 근거/검증 |
+|---|---|---|---|
+| B51-1 | 진입 형태 (owner 선택) | 설치 모드 3종: `button`(Chromium `beforeinstallprompt` 보유) · `guide`(iOS/iPadOS) · `none`(설치됨 또는 프롬프트 없음). `none`이면 버튼을 렌더하지 않는다 | 죽은 진입 금지. iOS는 네이티브 프롬프트가 존재하지 않으므로 공유 시트 안내만이 사실이다. iPadOS 13+ 데스크톱 UA는 `maxTouchPoints > 1`로 판별 |
+| B51-2 | 캡처 시점·1회성 | `main.tsx`가 React 마운트 **전** `initInstallCapture()`로 리스너 등록. `preventDefault()`로 브라우저 미니 인포바를 억제하고, 이벤트는 **1회만 소비**. `request()`는 소비 즉시 `canPrompt=false`로 내려 버튼이 사라진다 | 이벤트가 첫 렌더보다 먼저 올 수 있다. 두 번째 `prompt()`는 브라우저가 거부하므로 재시도 경로를 만들지 않는다. 프롬프트 거부/예외는 `unavailable`로 보고하고 결과를 꾸며내지 않는다 |
+| B51-3 | installed 판정 | `appinstalled` 이벤트와 standalone 실행(`display-mode: standalone`, iOS `navigator.standalone`)만 참. **프롬프트 수락은 설치 완료가 아니다** | 수락≠설치(사용자가 브라우저 UI에서 취소 가능). installed가 되면 late `beforeinstallprompt`도 무시 |
+| B51-4 | 접근성·포커스 | iOS 안내만 `aria-haspopup="dialog"` + `role=dialog`/`aria-modal`, 열릴 때 닫기로 포커스, Escape=닫기, 닫으면 `앱 설치` 버튼으로 복원. 가이드가 열린 동안 배경 `inert`. 네이티브 프롬프트 버튼에는 `aria-haspopup` 없음 | 기존 시트 계약(D082·장바구니)과 동일. 네이티브 프롬프트는 DOM 다이얼로그가 아니다 |
+| B51-5 | 카피 | ko/en 5종(`INSTALL_BUTTON`·`INSTALL_GUIDE_TITLE`·`_STEP_SHARE`·`_STEP_ADD`·`_NOTE`)을 `CopyTable`에 추가, 키 패리티 테스트가 강제. 안내는 **Safari 한정이 아니라 "공유 버튼"** 일반형 | iOS Chrome/Firefox도 WebKit 공유 시트를 쓴다. 브랜드·매치 토큰 규칙(D069)은 그대로 |
+| B51-6 | 게이트 | vitest **946/946**(81 files), Playwright **89/89**(설치 E2E 1건 추가 — 320px 비중첩 + 합성 이벤트 소비 후 버튼 소멸), tsc·biome clean(201), build 성공 | 설치 E2E는 `Object.assign(new Event('beforeinstallprompt'), { prompt, userChoice })`로 합성한다(headless Chromium은 자연 발생시키지 않음) |
+| B51-7 | 번들 예산 — **명시 예외** | 엔트리 **223.13 kB / gzip 71.65 kB**. 정본 220 kB를 raw만 **3.13 kB 초과**, gzip은 72 이내. P4 머지에 한해 이 실측을 예외로 기록하고, 다음 번들 작업에서 회수 대상 | 원인: install store+hook+가이드 시트+ko/en 카피 5종. 회수 수단 후보: 가이드 시트 지연 분할(iOS에서만 필요 — `button` 경로는 로드하지 않음). 자동 검사는 없으므로 원장이 유일한 강제력 |
+
+> **B51-열린 질문(Bible)**: ① 설치 진입의 정본 문구·위치(헤더 3번째 컨트롤) ② 설치 후 첫 실행에서 보여줄 것이 있는지 ③ iOS 안내에 브라우저별 분기(Safari/Chrome)가 필요한지 — 현재는 공유 버튼 일반형.
+
 > **⚠️ Owner 명시 예외 — 쇼핑리스트 일괄(2026-10-15, `AGENTS.md` 질문정책 예외 명시)**: 최근 본 상품·쇼핑리스트·공유 기능은 Bible Interface L-표·단일-CTA·Final 카피에 근거가 없는 스펙 갭이다. Owner가 명시적으로 예외를 두고 처음부터 끝까지 구현을 지시, 전권 위임. 위반이 아니라 **기록된 예외**로 진행한다. 앱 소유 결정은 아래 §B47. 되돌림은 슬라이스별 머지 커밋 revert.
 
 | # | 결정 | 확정 | 근거/검증 |
