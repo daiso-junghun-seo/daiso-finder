@@ -4,11 +4,12 @@ import type { ScannerPort } from '../../domain/ports';
 import type { Locale } from '../../i18n/locale';
 import type { CartItem, StoreCart } from '../../infra/cart';
 import { CartSheetLoader } from '../components/CartSheetLoader';
+import { InstallGuideSheet } from '../components/InstallGuideSheet';
 import { ScannerOverlayLoader } from '../components/ScannerOverlayLoader';
 
 // Modal siblings of .surface-content, in one place so the DOM order (and therefore stacking) cannot
-// drift: store sheet, viewfinder, cart sheet. Scrim first, dialog last; the cart sheet is last because
-// it is the most recently opened overlay.
+// drift: store sheet, viewfinder, cart sheet, install guide. Scrim first, dialog last; the cart and
+// install sheets are last because they are the most recently opened overlays.
 export function SurfaceModals({
   sheetOpen,
   sheet,
@@ -26,6 +27,8 @@ export function SurfaceModals({
   onRemove,
   onRecheck,
   onImportJson,
+  installGuideOpen,
+  onCloseInstallGuide,
 }: {
   sheetOpen: boolean;
   sheet: ReactNode;
@@ -43,6 +46,8 @@ export function SurfaceModals({
   onRemove: (id: string) => void;
   onRecheck: (item: CartItem) => void;
   onImportJson: (text: string) => { ok: boolean; count: number; crossStore: boolean };
+  installGuideOpen: boolean;
+  onCloseInstallGuide: () => void;
 }) {
   return (
     <>
@@ -77,6 +82,12 @@ export function SurfaceModals({
             onRecheck={onRecheck}
             onImportJson={onImportJson}
           />
+        </>
+      )}
+      {installGuideOpen && (
+        <>
+          <div className="sheet-scrim" aria-hidden="true" />
+          <InstallGuideSheet locale={locale} onClose={onCloseInstallGuide} />
         </>
       )}
     </>

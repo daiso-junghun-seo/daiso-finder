@@ -21,6 +21,14 @@ export const SEARCH_INPUT_LABEL = '상품 검색';
 // App-owned (not Bible): label for the segmented locale control. Mirrored in i18n/en.ts.
 export const LOCALE_GROUP_LABEL = '표시 언어';
 
+// In-app install entry (§B51, owner exception). App-owned: the Bible has no install surface —
+// Anti-goal 4 forbids an install WALL, not an entry point. Mirrored in i18n/en.ts.
+export const INSTALL_BUTTON = '앱 설치';
+export const INSTALL_GUIDE_TITLE = '홈 화면에 추가';
+export const INSTALL_GUIDE_STEP_SHARE = '공유 버튼을 누르세요.';
+export const INSTALL_GUIDE_STEP_ADD = "'홈 화면에 추가'를 선택하세요.";
+export const INSTALL_GUIDE_NOTE = '홈 화면의 DAISO Finder 아이콘으로 바로 열 수 있어요.';
+
 export const LOADING_CARD_COPY = '이 매장 재고를 확인하고 있어요…';
 export const LOADING_DELAY_LINE = '연결이 느려서 확인이 조금 걸리고 있어요.';
 

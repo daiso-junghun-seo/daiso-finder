@@ -12,6 +12,7 @@ import type { ProductCandidate, StoreContext } from '../domain/types';
 import type { Locale } from '../i18n/locale';
 import { strings } from '../i18n/strings';
 import type { RecentView } from '../infra/recent-views';
+import { useInstallEntry } from '../pwa/useInstallEntry';
 import { LiveRegion } from './a11y/LiveRegion';
 import type { AlternativeSurfaceProps } from './alternative/AlternativeSurface';
 import { clearAlternativeCache } from './alternative/alternative-cache-signal';
@@ -118,6 +119,13 @@ export function AvailabilitySurface() {
   const cart = useCartController({ store, ui, lastSubmit, locale, dispatch });
   const wasCartOpen = useRef(cart.cartOpen);
 
+  // In-app install entry (§B51, owner exception): the snapshot decides whether the header offers a
+  // native prompt (Chromium) or iOS share-sheet guidance; 'none' renders no entry at all.
+  const install = useInstallEntry();
+  const [installGuideOpen, setInstallGuideOpen] = useState(false);
+  const installButtonRef = useRef<HTMLButtonElement>(null);
+  const wasInstallGuideOpen = useRef(false);
+
   useEffect(() => {
     // The ?scenario= harness drives the Playwright state sweep against the MOCK pipeline. It must never
     // run in a production build: a crafted URL could otherwise paint a fabricated answer over live data,
@@ -146,6 +154,12 @@ export function AvailabilitySurface() {
     if (wasCartOpen.current && !cart.cartOpen) cartButtonRef.current?.focus();
     wasCartOpen.current = cart.cartOpen;
   }, [cart.cartOpen]);
+
+  // Closing the install guide returns focus to the 앱 설치 opener — never <body>.
+  useEffect(() => {
+    if (wasInstallGuideOpen.current && !installGuideOpen) installButtonRef.current?.focus();
+    wasInstallGuideOpen.current = installGuideOpen;
+  }, [installGuideOpen]);
 
   // Any state change away from Success invalidates the Flow 2 handoff: a new lookup, a store change
   // (CHANGE_STORE lands Default), or an error drops the card instead of showing guidance for a
@@ -279,6 +293,16 @@ export function AvailabilitySurface() {
     answerCardRef.current?.focus();
   };
 
+  // Install entry (§B51): Chromium gets the native prompt (one-shot; the browser owns the rest of
+  // the UI). iOS has no beforeinstallprompt, so the entry opens the share-sheet guide instead.
+  const handleInstall = () => {
+    if (install.mode === 'guide') {
+      setInstallGuideOpen(true);
+      return;
+    }
+    void install.request();
+  };
+
   // Flow 2 entry: build the handoff from the answer already on screen. No request is awaited; the
   // dev-only ?navAge= harness can age the observation stamp for the stale-caption sweep.
   const handleNavigate = () => {
@@ -394,10 +418,11 @@ export function AvailabilitySurface() {
     <LiveRegion key={cart.cartNotice.id} message={cart.cartNotice.text} visuallyHidden />
   );
 
-  // While a modal (sheet, scanner, or cart) is open the background is inert (aria-modal made real):
-  // unreachable by keyboard and hidden from AT. First run renders the sheet alone, so no container
-  // exists to mark.
-  const backgroundInert = sheetOpen || scannerOpen || cart.cartOpen ? '' : undefined;
+  // While a modal (sheet, scanner, cart, or install guide) is open the background is inert
+  // (aria-modal made real): unreachable by keyboard and hidden from AT. First run renders the
+  // sheet alone, so no container exists to mark.
+  const backgroundInert =
+    sheetOpen || scannerOpen || cart.cartOpen || installGuideOpen ? '' : undefined;
 
   const alternativeSurface = alternative && (
     <Suspense fallback={<AlternativeLoading entry={alternative} locale={locale} />}>
@@ -486,6 +511,9 @@ export function AvailabilitySurface() {
           onSelectLocale={setLocale}
           onChangeStore={openSheet}
           changeButtonRef={changeStoreRef}
+          install={install.mode === 'none' ? undefined : install.mode}
+          onInstall={handleInstall}
+          installButtonRef={installButtonRef}
           onBack={
             alternative
               ? altDepth === 2
@@ -518,6 +546,8 @@ export function AvailabilitySurface() {
         onRemove={cart.removeItem}
         onRecheck={cart.recheckItem}
         onImportJson={cart.importJson}
+        installGuideOpen={installGuideOpen}
+        onCloseInstallGuide={() => setInstallGuideOpen(false)}
       />
     </main>
   );

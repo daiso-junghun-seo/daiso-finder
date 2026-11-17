@@ -17,6 +17,9 @@ export function StoreContextLine({
   onChangeStore,
   changeButtonRef,
   onBack,
+  install,
+  onInstall,
+  installButtonRef,
 }: {
   store: StoreContext;
   locale: Locale;
@@ -26,6 +29,11 @@ export function StoreContextLine({
   // Flow 2 back control (Interface/in-store-navigation.md §2 L4). Optional: Flow 1 surfaces never
   // show it. The glyph is decorative; the accessible name comes from the locale table.
   onBack?: () => void;
+  // In-app install entry (§B51): 'button' prompts natively (Chromium), 'guide' opens the iOS
+  // share-sheet sheet. Absent when installed or when the browser has nothing to offer.
+  install?: 'button' | 'guide';
+  onInstall?: () => void;
+  installButtonRef?: Ref<HTMLButtonElement>;
 }) {
   const S = strings(locale);
   return (
@@ -42,6 +50,19 @@ export function StoreContextLine({
       )}
       <span>{S.storeLine(store.strNm)}</span>
       <span className="store-context-actions">
+        {/* One-time install entry: only rendered while the platform offers a path (native
+            prompt on Chromium, share-sheet guidance on iOS) and not once installed. */}
+        {install && (
+          <button
+            ref={installButtonRef}
+            type="button"
+            className="text-label"
+            aria-haspopup={install === 'guide' ? 'dialog' : undefined}
+            onClick={onInstall}
+          >
+            {S.INSTALL_BUTTON}
+          </button>
+        )}
         {/* Segmented language control (iOS idiom at 44px): the pressed segment shows the
             CURRENT language — the single-toggle it replaces showed only the target, which
             read as the current state. Both segments stay ≥44px (Interface §6 wins over the

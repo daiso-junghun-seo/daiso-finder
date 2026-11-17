@@ -2,6 +2,7 @@ import { registerSW } from 'virtual:pwa-register';
 import { type ComponentType, StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { isDiagnosticsEnabled } from './diagnostics/enabled';
+import { initInstallCapture } from './pwa/install';
 import { AvailabilitySurface } from './ui/AvailabilitySurface';
 import './styles/tokens.css';
 import './styles/layout.css';
@@ -22,6 +23,8 @@ const DiagnosticsBar = lazy<ComponentType>(() =>
 );
 
 registerSW({ immediate: true });
+// Before React mounts: beforeinstallprompt fires once and may arrive before the first render.
+initInstallCapture();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

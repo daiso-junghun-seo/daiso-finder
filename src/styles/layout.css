@@ -576,6 +576,15 @@ main h1 {
   gap: var(--space-sm);
 }
 
+/* Install guide (§B51): two ordered share-sheet steps under the same sheet chrome. The list
+   keeps its markers inside the sheet gutter; the note reuses .text-caption. */
+.install-guide-steps {
+  display: grid;
+  gap: var(--space-sm);
+  margin: 0;
+  padding-inline-start: var(--space-lg);
+}
+
 .store-selection-sheet__header {
   display: flex;
   align-items: center;

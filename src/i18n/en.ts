@@ -21,6 +21,13 @@ export const STORE_CHANGE_BUTTON = 'Change store';
 export const SEARCH_INPUT_LABEL = 'Search products';
 export const LOCALE_GROUP_LABEL = 'Display language';
 
+// In-app install entry (§B51, owner exception). App-owned, mirroring ui/copy.ts.
+export const INSTALL_BUTTON = 'Install app';
+export const INSTALL_GUIDE_TITLE = 'Add to Home Screen';
+export const INSTALL_GUIDE_STEP_SHARE = 'Tap the Share button.';
+export const INSTALL_GUIDE_STEP_ADD = "Choose 'Add to Home Screen'.";
+export const INSTALL_GUIDE_NOTE = 'Open DAISO Finder from the icon on your Home Screen.';
+
 export const LOADING_CARD_COPY = 'Checking this store’s stock…';
 export const LOADING_DELAY_LINE = 'The connection is slow, taking a little longer.';
 

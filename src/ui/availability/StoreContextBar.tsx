@@ -14,6 +14,9 @@ export function StoreContextBar({
   onChangeStore,
   changeButtonRef,
   onBack,
+  install,
+  onInstall,
+  installButtonRef,
 }: {
   store: StoreContext;
   locale: Locale;
@@ -21,6 +24,9 @@ export function StoreContextBar({
   onChangeStore: () => void;
   changeButtonRef: Ref<HTMLButtonElement>;
   onBack?: () => void;
+  install?: 'button' | 'guide';
+  onInstall?: () => void;
+  installButtonRef?: Ref<HTMLButtonElement>;
 }) {
   return (
     <GlassSurface className="store-context-surface">
@@ -31,6 +37,9 @@ export function StoreContextBar({
         onChangeStore={onChangeStore}
         changeButtonRef={changeButtonRef}
         onBack={onBack}
+        install={install}
+        onInstall={onInstall}
+        installButtonRef={installButtonRef}
       />
     </GlassSurface>
   );

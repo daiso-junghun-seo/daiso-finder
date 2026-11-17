@@ -375,6 +375,37 @@ test('the store name and its actions never overlap on a 320px phone', async ({ p
   expect(onOneRow || wrapped, geometry).toBe(true);
 });
 
+// §B51: the install entry is the third control in the same cluster. It must obey the same
+// no-overlap rule at 320px, and one tap must spend the one-shot prompt event.
+test('the install entry joins the store bar without overlap and disappears once prompted', async ({
+  page,
+}) => {
+  await seedPhone(page, 320, 568);
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: '앱 설치' })).toHaveCount(0);
+
+  await page.evaluate(() => {
+    const event = new Event('beforeinstallprompt', { cancelable: true });
+    Object.assign(event, {
+      prompt: async () => {},
+      userChoice: Promise.resolve({ outcome: 'accepted' }),
+    });
+    window.dispatchEvent(event);
+  });
+
+  const install = page.getByRole('button', { name: '앱 설치' });
+  await expect(install).toBeVisible();
+  const nameBox = await boxOf(page.locator('.store-context-line > span').first(), 'store name');
+  const installBox = await boxOf(install, 'install entry');
+  const geometry = `name [${nameBox.x}, ${nameBox.x + nameBox.width}] y=${nameBox.y} · install x=${installBox.x} y=${installBox.y}`;
+  const onOneRow = nameBox.x + nameBox.width <= installBox.x + 0.5;
+  const wrapped = installBox.y >= nameBox.y + nameBox.height - 0.5;
+  expect(onOneRow || wrapped, geometry).toBe(true);
+
+  await install.click();
+  await expect(install).toHaveCount(0);
+});
+
 test('the sticky store bar stays above the scrolling answer card (390×480)', async ({ page }) => {
   await seedPhone(page, 390, 480);
   await openSuccess(page);

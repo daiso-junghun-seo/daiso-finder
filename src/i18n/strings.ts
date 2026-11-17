@@ -16,6 +16,11 @@ export interface CopyTable {
   readonly STORE_CHANGE_BUTTON: string;
   readonly SEARCH_INPUT_LABEL: string;
   readonly LOCALE_GROUP_LABEL: string;
+  readonly INSTALL_BUTTON: string;
+  readonly INSTALL_GUIDE_TITLE: string;
+  readonly INSTALL_GUIDE_STEP_SHARE: string;
+  readonly INSTALL_GUIDE_STEP_ADD: string;
+  readonly INSTALL_GUIDE_NOTE: string;
   readonly LOADING_CARD_COPY: string;
   readonly LOADING_DELAY_LINE: string;
   readonly ERROR_CACHED_BANNER: string;
