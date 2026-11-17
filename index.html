@@ -4,10 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#ffffff" />
-    <!-- Browser tab icon: the same owner-supplied tile at 48px (§B19). -->
-    <link rel="icon" href="/icons/favicon-48.png" type="image/png" />
+    <!-- Browser tab icon: the same owner-supplied tile at 48px (§B19). The query is a
+         cache-buster: the first icon set was served immutable before the header fix. -->
+    <link rel="icon" href="/icons/favicon-48.png?v=2" type="image/png" />
     <!-- iOS home-screen icon: Safari ignores the web manifest (§B19 assets). -->
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png?v=2" />
     <title>DAISO Finder</title>
   </head>
   <body>
