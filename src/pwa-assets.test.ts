@@ -20,3 +20,8 @@ test('index.html links the iOS home-screen icon (Safari ignores the manifest)', 
   expect(html).toContain('rel="apple-touch-icon"');
   expect(html).toContain('/icons/apple-touch-icon-180.png');
 });
+
+test('index.html links the browser-tab icon', () => {
+  expect(html).toContain('rel="icon"');
+  expect(html).toContain('/icons/favicon-48.png');
+});

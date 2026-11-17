@@ -11,6 +11,7 @@ which existed only to avoid redrawing the trademark.
 Outputs (public/icons/):
   icon-512.png           512 RGBA — rounded tile, fully transparent outside
   icon-192.png           192 RGBA — same artwork
+  favicon-48.png          48 RGBA — browser-tab icon (no favicon link existed before)
   apple-touch-icon-180   180 RGB  — full-bleed square (iOS applies its own corner mask;
                                    transparent pixels would composite to black)
   icon-maskable-512      512 RGB  — tile at 80% on a full-bleed red field, so an Android
@@ -125,6 +126,9 @@ def main() -> None:
     # Regular icons: the rounded tile itself, transparent outside (owner request: alpha PNG).
     rounded.resize((512, 512), Image.LANCZOS).save(f"{OUT}/icon-512.png", optimize=True)
     rounded.resize((192, 192), Image.LANCZOS).save(f"{OUT}/icon-192.png", optimize=True)
+    # Browser tab: 48px is the largest size Chrome/Edge request for a favicon. The tile's
+    # transparent corners read correctly on both light and dark tab strips.
+    rounded.resize((48, 48), Image.LANCZOS).save(f"{OUT}/favicon-48.png", optimize=True)
 
     # iOS ignores alpha (transparent corners composite to black) and applies its own mask:
     # a full-bleed square is the correct input. The tile keeps its native scale; the field
@@ -152,6 +156,7 @@ def main() -> None:
     for name in (
         "icon-192.png",
         "icon-512.png",
+        "favicon-48.png",
         "icon-maskable-512.png",
         "apple-touch-icon-180.png",
     ):
