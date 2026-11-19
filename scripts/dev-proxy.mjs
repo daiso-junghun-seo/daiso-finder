@@ -40,6 +40,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import esbuild from 'esbuild';
+import { clientKey } from './client-key.mjs';
 import { cacheControlFor } from './static-cache.mjs';
 
 const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -52,24 +53,18 @@ const SERVE_STATIC = process.env.SERVE_STATIC !== '0';
 // An availability body is a ~100-byte JSON object; 16 KiB is already generous. The cap exists so a
 // single request cannot make the proxy buffer arbitrary memory.
 const MAX_BODY_BYTES = process.env.MAX_BODY_BYTES ? Number(process.env.MAX_BODY_BYTES) : 16 * 1024;
-// Loopback-bound in production (the tunnel connects to 127.0.0.1), so keying on the socket address
-// would put every visitor in one bucket. Prefer Cloudflare's client header when it is present; a
-// direct caller can spoof it, but direct callers are already inside the host.
+// Bucket key: Cloudflare header, else the last X-Forwarded-For hop, else the socket address. The
+// trust reasoning and the spoofing cases live in client-key.mjs (unit-tested).
 const RATE_LIMIT_PER_MIN = process.env.RATE_LIMIT_PER_MIN
   ? Number(process.env.RATE_LIMIT_PER_MIN)
   : 120;
 const rateBuckets = new Map();
 
-function clientKey(req) {
-  const cf = req.headers['cf-connecting-ip'];
-  return typeof cf === 'string' && cf ? cf : (req.socket.remoteAddress ?? 'unknown');
-}
-
 // Fixed-window counter. Small and deliberately boring: this is a blast-radius guard, not billing.
 function allowRequest(req) {
   if (!(RATE_LIMIT_PER_MIN > 0)) return true;
   const now = Date.now();
-  const key = clientKey(req);
+  const key = clientKey(req.headers, req.socket.remoteAddress);
   const bucket = rateBuckets.get(key);
   if (!bucket || now >= bucket.resetAt) {
     if (rateBuckets.size > 10_000) {
