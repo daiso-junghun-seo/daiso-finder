@@ -1,8 +1,10 @@
 // src/ui/availability/SurfaceModals.tsx
 import type { ReactNode } from 'react';
 import type { ScannerPort } from '../../domain/ports';
+import type { StoreContext } from '../../domain/types';
 import type { Locale } from '../../i18n/locale';
 import type { CartItem, StoreCart } from '../../infra/cart';
+import type { CartMatchResult } from '../cart-match';
 import { CartSheetLoader } from '../components/CartSheetLoader';
 import { InstallGuideSheet } from '../components/InstallGuideSheet';
 import { ScannerOverlayLoader } from '../components/ScannerOverlayLoader';
@@ -27,6 +29,7 @@ export function SurfaceModals({
   onRemove,
   onRecheck,
   onImportJson,
+  onShopAt,
   installGuideOpen,
   onCloseInstallGuide,
 }: {
@@ -46,6 +49,7 @@ export function SurfaceModals({
   onRemove: (id: string) => void;
   onRecheck: (item: CartItem) => void;
   onImportJson: (text: string) => { ok: boolean; count: number; crossStore: boolean };
+  onShopAt: (store: StoreContext, result: CartMatchResult) => void;
   installGuideOpen: boolean;
   onCloseInstallGuide: () => void;
 }) {
@@ -81,6 +85,7 @@ export function SurfaceModals({
             onRemove={onRemove}
             onRecheck={onRecheck}
             onImportJson={onImportJson}
+            onShopAt={onShopAt}
           />
         </>
       )}

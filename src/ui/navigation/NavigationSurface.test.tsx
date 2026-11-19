@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react';
 import { mockAnswers } from '../../adapters/mock/fixtures';
 import type { StoreStockRepository } from '../../domain/ports';
 import type { AvailabilityAnswer, StoreContext } from '../../domain/types';
-import { STR } from '../../i18n/strings';
+import { strings } from '../../i18n/strings';
 import {
   NAV_MISSING_LINK,
   NAV_PHOTO_MISSING_NOTE,
@@ -21,8 +21,8 @@ const NOW = new Date(2026, 6, 15, 9, 0).getTime();
 const STORE: StoreContext = { strCd: '001', strNm: '명동역점' };
 const ANSWER = mockAnswers.inStock as InStockAnswer;
 const MULTI = mockAnswers.inStockMultiLocation as InStockAnswer;
-const KO = STR.ko;
-const EN = STR.en;
+const KO = strings('ko');
+const EN = strings('en');
 
 function entry(overrides: Partial<NavigationEntry> = {}): NavigationEntry {
   return {

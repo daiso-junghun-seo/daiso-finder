@@ -9,6 +9,7 @@ import type { StoreContext } from '../../domain/types';
 import type { Locale } from '../../i18n/locale';
 import { strings } from '../../i18n/strings';
 import { GlassSurface } from './GlassSurface';
+import { LocaleSelect } from './LocaleSelect';
 
 export function StoreSelectionSheet({
   current,
@@ -17,6 +18,7 @@ export function StoreSelectionSheet({
   geolocation,
   onSelect,
   onClose,
+  onSelectLocale,
 }: {
   current: StoreContext | null;
   locale: Locale;
@@ -24,6 +26,10 @@ export function StoreSelectionSheet({
   geolocation: GeolocationPort;
   onSelect: (store: StoreContext) => void;
   onClose?: () => void;
+  // First run opens this sheet before any store exists, so the language control must live
+  // here too — otherwise a shopper whose device language was detected incorrectly is stuck
+  // with unreadable guidance until they pick a store.
+  onSelectLocale?: (locale: Locale) => void;
 }) {
   const S = strings(locale);
   const [nearby, setNearby] = useState<Array<StoreContext & { distanceM: number }> | null>(null);
@@ -99,11 +105,14 @@ export function StoreSelectionSheet({
           <h2 id="store-select-title" className="text-heading">
             {S.STORE_SELECT_TITLE}
           </h2>
-          {onClose && (
-            <button type="button" className="text-label" onClick={onClose}>
-              {S.STORE_SELECT_CLOSE}
-            </button>
-          )}
+          <span className="store-context-actions">
+            {onSelectLocale && <LocaleSelect locale={locale} onSelect={onSelectLocale} />}
+            {onClose && (
+              <button type="button" className="text-label" onClick={onClose}>
+                {S.STORE_SELECT_CLOSE}
+              </button>
+            )}
+          </span>
         </div>
         <input
           ref={searchRef}

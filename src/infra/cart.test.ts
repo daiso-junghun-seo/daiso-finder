@@ -11,6 +11,7 @@ import {
   saveCarts,
   setItemQty,
   toggleItemChecked,
+  transferCart,
 } from './cart';
 
 const inStock: AvailabilityAnswer = {
@@ -109,6 +110,74 @@ test('corrupt storage degrades to empty, blocked writes never throw (G3)', () =>
     throw new Error('blocked');
   });
   expect(() => saveCarts({})).not.toThrow();
+});
+
+// §B52: moving the memo after the shopper taps "shop here" at a matched store.
+test('transferCart moves the whole list to the target and empties the source', () => {
+  const item = itemFromAnswer('밀폐용기', '12345', inStock, 1, 2);
+  if (!item) throw new Error('test setup failed');
+  const carts = addToCart({}, '001', '명동역점', { ...item, qty: 3, checked: false });
+
+  const moved = transferCart(carts, '001', '002', '강남점');
+
+  expect(cartFor(moved, '001')).toBeNull();
+  expect(cartFor(moved, '002')).toMatchObject({ storeCd: '002', storeName: '강남점' });
+  expect(cartFor(moved, '002')?.items[0]).toMatchObject({ id: '12345', qty: 3, checked: false });
+});
+
+test('transferCart clears the old store’s shelf position and applies only fresh observations', () => {
+  const a = itemFromAnswer('밀폐용기', '1', inStock, 100, 200);
+  const b = itemFromAnswer('수납', '2', inStock, 100, 200);
+  if (!a || !b) throw new Error('test setup failed');
+  const carts = addToCart(addToCart({}, '001', '명동역점', a), '001', '명동역점', b);
+
+  const moved = transferCart(carts, '001', '002', '강남점', [
+    { id: '1', price: 2500, location: { floor: 'B1', zone: '12' }, observedAt: 999 },
+  ]);
+  const rows = cartFor(moved, '002')?.items ?? [];
+
+  expect(rows.find((row) => row.id === '1')).toMatchObject({
+    price: 2500,
+    location: { floor: 'B1', zone: '12' },
+    observedAt: 999,
+  });
+  // No refresh for row 2: the price snapshot survives, the other store's location does not.
+  expect(rows.find((row) => row.id === '2')).toMatchObject({ price: 2000, observedAt: 100 });
+  expect(rows.find((row) => row.id === '2')?.location).toBeUndefined();
+});
+
+test('transferCart keeps target-only rows, dedupes shared ids in favor of the moved row, and never sums qty', () => {
+  const shared = itemFromAnswer('밀폐용기', '1', inStock, 1, 2);
+  const targetOnly = itemFromAnswer('수납', '2', inStock, 1, 2);
+  if (!shared || !targetOnly) throw new Error('test setup failed');
+  let carts = addToCart({}, '001', '명동역점', { ...shared, qty: 2 });
+  carts = addToCart(carts, '002', '강남점', { ...shared, qty: 4, price: 3000 });
+  carts = addToCart(carts, '002', '강남점', targetOnly);
+
+  const moved = transferCart(carts, '001', '002', '강남점');
+  const rows = cartFor(moved, '002')?.items ?? [];
+
+  expect(rows).toHaveLength(2);
+  const sharedRow = rows.find((row) => row.id === '1');
+  expect(sharedRow?.qty).toBe(2); // the moved list wins; 2 + 4 would invent a quantity
+  expect(rows.some((row) => row.id === '2')).toBe(true);
+});
+
+test('transferCart is a no-op for the same store, a missing source, or an empty source', () => {
+  const item = itemFromAnswer('밀폐용기', '12345', inStock, 1, 2);
+  if (!item) throw new Error('test setup failed');
+  const carts = addToCart({}, '001', '명동역점', item);
+
+  expect(transferCart(carts, '001', '001', '명동역점')).toBe(carts);
+  expect(transferCart(carts, '999', '002', '강남점')).toBe(carts);
+  expect(
+    transferCart(
+      { '001': { storeCd: '001', storeName: '명동역점', items: [] } },
+      '001',
+      '002',
+      '강남점',
+    ),
+  ).toEqual({ '001': { storeCd: '001', storeName: '명동역점', items: [] } });
 });
 
 test('a cart round-trips through storage byte-identically', () => {

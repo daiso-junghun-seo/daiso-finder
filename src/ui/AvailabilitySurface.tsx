@@ -10,7 +10,7 @@ import {
 import { defaultPolicy } from '../domain/policy';
 import type { ProductCandidate, StoreContext } from '../domain/types';
 import type { Locale } from '../i18n/locale';
-import { strings } from '../i18n/strings';
+import { announcementForLocale, strings } from '../i18n/strings';
 import type { RecentView } from '../infra/recent-views';
 import { useInstallEntry } from '../pwa/useInstallEntry';
 import { LiveRegion } from './a11y/LiveRegion';
@@ -34,6 +34,7 @@ import {
 } from './availability/pipelines';
 import { runScenario } from './availability/scenario';
 import { useCartController } from './availability/useCart';
+import type { CartMatchResult } from './cart-match';
 import { GlassSurface } from './components/GlassSurface';
 import { StoreSelectionSheet } from './components/StoreSelectionSheet';
 import { altLoadingLine, announcementFor } from './copy';
@@ -135,6 +136,13 @@ export function AvailabilitySurface() {
     if (!scenario) return;
     void runScenario(scenario, dispatch);
   }, [dispatch]);
+
+  // Keep the document language in step with the guidance language. The static `lang="ko"` in
+  // index.html is only the pre-hydration default; assistive tech and CJK font selection read
+  // this attribute, and every locale is LTR (no dir flip).
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   // Modal close (닫기 / Escape / store select) returns focus to the 매장 변경 opener — never body
   // (Interface §6 focus order). After a first-run select the button mounts on the same commit.
@@ -240,6 +248,15 @@ export function AvailabilitySurface() {
     if (keep.kind === 'scan') void runByScan(next, keep.value, dispatch);
     else if (keep.kind === 'candidate') void runByPdNo(next, keep.candidate, dispatch);
     else void runQuery(next, keep.keyword, dispatch);
+  };
+
+  // §B52: the shopper tapped "shop here" on a matched store. Move the memo first (the cart is
+  // per-store, so otherwise the target list would look empty), close the sheet, then switch
+  // context through the SAME path as 매장 변경 (retained lookup re-runs under the new store).
+  const handleShopAt = (next: StoreContext, result: CartMatchResult) => {
+    cart.transferTo(next, result);
+    cart.closeCart();
+    handleSelectStore(next);
   };
 
   // Typed submit and recent-search taps share this: trim/guard, bump recency, retain the lookup,
@@ -373,6 +390,7 @@ export function AvailabilitySurface() {
       geolocation={browserGeolocation}
       onSelect={handleSelectStore}
       onClose={store ? closeSheet : undefined}
+      onSelectLocale={setLocale}
     />
   );
 
@@ -474,7 +492,11 @@ export function AvailabilitySurface() {
     );
   } else {
     const nowMs = Date.now();
-    const announcement = announcementFor(ui, defaultPolicy, nowMs, locale).join('. ');
+    const announcement = (
+      locale === 'ko'
+        ? announcementFor(ui, defaultPolicy, nowMs)
+        : announcementForLocale(locale, ui, defaultPolicy, nowMs)
+    ).join('. ');
     // 담기 exists only for priced answers (§B47) — priceless kinds render no button at all.
     const priced = pricedAnswerOf(ui);
     // 대안 보기 is wired only where the negative answer promises it (temporarilyOut, discontinued);
@@ -546,6 +568,7 @@ export function AvailabilitySurface() {
         onRemove={cart.removeItem}
         onRecheck={cart.recheckItem}
         onImportJson={cart.importJson}
+        onShopAt={handleShopAt}
         installGuideOpen={installGuideOpen}
         onCloseInstallGuide={() => setInstallGuideOpen(false)}
       />

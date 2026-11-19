@@ -15,6 +15,11 @@ import { formatDistance, formatLocation, formatPrice, formatRelativeTimeEn } fro
 
 export const DEFAULT_HEADLINE = 'Check if this store has it';
 export const DEFAULT_SUBHEAD = 'Scan a barcode or type a product name.';
+// Three-step walkthrough (§B52), passive and below the search field (Anti-goal 4).
+export const HOW_IT_WORKS_LABEL = 'How it works';
+export const HOW_IT_WORKS_SCAN = 'Scan a barcode or search by product name';
+export const HOW_IT_WORKS_STOCK = 'Check stock here and at nearby stores';
+export const HOW_IT_WORKS_LOCATE = 'Follow the floor and zone to find it';
 export const SEARCH_PLACEHOLDER = 'Product name or scan barcode';
 export const SCAN_BUTTON_LABEL = 'Scan';
 export const STORE_CHANGE_BUTTON = 'Change store';
@@ -142,6 +147,10 @@ export const RECENT_VIEWS_LABEL = 'Recently viewed';
 export const ADD_TO_CART_BUTTON = 'Add';
 export const CART_ADDED_NOTICE = 'Added to your list';
 export const CART_TITLE = 'Shopping list';
+// Planner, not checkout (owner decision §B52) — the English title already reads "list"; this
+// caption still states that no payment exists anywhere in the app.
+export const CART_PURPOSE =
+  'This list is a shopping planner, not a checkout. It records what to buy at the store.';
 export const CART_EMPTY_NOTE = 'Nothing here yet. Press Add on an answer card.';
 export const CART_SNAPSHOT_NOTE =
   'Saved info from when you added it. Check again for today’s stock.';
@@ -180,6 +189,42 @@ export function cartImportDoneLabel(count: number): string {
 }
 export function cartImportCrossStoreLabel(count: number): string {
   return `Loaded ${count} items. Shelf locations from the other store were cleared.`;
+}
+
+// ── Shopping-list stock matching (owner decision §B52) ──────────────────────────────────────
+// Explicit button only; up to 10 checked rows × the active + 3 nearest stores. "Every item" requires
+// an in-stock answer for each row — unknown (franchise/error) never counts as stocked. Switching
+// stores moves the list only when the shopper taps; nothing changes behind their back.
+export const CART_MATCH_BUTTON = 'Check nearby stock';
+export const CART_MATCH_HINT = 'We will find the nearest store that has every checked item.';
+export const CART_MATCH_LOADING = 'Checking stock at nearby stores…';
+export const CART_MATCH_FULL_TITLE = 'Store with every item';
+export const CART_MATCH_PARTIAL_TITLE = 'Stores with some items';
+export const CART_MATCH_NO_FULL =
+  'No nearby store has every item. You can buy some of them at the stores below.';
+export const CART_MATCH_NEARBY_UNAVAILABLE =
+  'Could not find nearby stores, so only this store was checked.';
+export const CART_MATCH_CURRENT_STORE = 'Current store';
+export const CART_MATCH_SWITCH = 'Shop here';
+export const CART_MATCH_ALREADY_HERE = 'This store has every item.';
+export const CART_MATCH_NONE_CHECKED = 'Check at least one item to look up.';
+export function cartMatchLimitNote(max: number): string {
+  return `Up to ${max} items are checked at a time.`;
+}
+export function cartMatchCoverage(matched: number, total: number): string {
+  return `${matched}/${total}`;
+}
+export function cartMatchStoreRow(storeName: string, distanceM: number): string {
+  return `${storeName} · ${formatDistance(distanceM)}`;
+}
+export function cartMatchMissingLabel(items: string): string {
+  return `Missing: ${items}`;
+}
+export function cartMatchUnknownLabel(items: string): string {
+  return `Could not check: ${items}`;
+}
+export function cartMatchSwitchLabel(storeName: string): string {
+  return `Shop at ${storeName}`;
 }
 
 export const RESULTS_NOTICE = 'These are search results. Scanning is more accurate.';

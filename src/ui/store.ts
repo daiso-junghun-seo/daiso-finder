@@ -3,8 +3,10 @@ import { create } from 'zustand';
 import { initialState, reduce } from '../domain/state-machine';
 import type { StoreContext, StoreEvent, UiState } from '../domain/types';
 import { type Locale, loadLocale, resolveLocale, saveLocale } from '../i18n/locale';
+import { isLocaleLoaded, loadLocaleTable } from '../i18n/strings';
 import {
   type CartItem,
+  type CartItemRefresh,
   type Carts,
   type StoreCart,
   addToCart,
@@ -13,6 +15,7 @@ import {
   saveCarts,
   setItemQty,
   toggleItemChecked,
+  transferCart as transferCartInCarts,
 } from '../infra/cart';
 import {
   loadRecentSearches,
@@ -58,6 +61,12 @@ interface AvailabilityStore {
   toggleItemChecked: (storeCd: string, id: string) => void;
   removeItem: (storeCd: string, id: string) => void;
   importCart: (storeCd: string, storeName: string, imported: StoreCart) => void;
+  transferCart: (
+    fromCd: string,
+    toCd: string,
+    toName: string,
+    refreshes: CartItemRefresh[],
+  ) => void;
   openCart: () => void;
   closeCart: () => void;
   setLocale: (locale: Locale) => void;
@@ -139,11 +148,29 @@ export const useAvailabilityStore = create<AvailabilityStore>((set) => ({
       saveCarts(next);
       return { carts: next };
     }),
+  transferCart: (fromCd, toCd, toName, refreshes) =>
+    set((s) => {
+      const next = transferCartInCarts(s.carts, fromCd, toCd, toName, refreshes);
+      saveCarts(next);
+      return { carts: next };
+    }),
   openCart: () => set({ cartOpen: true }),
   closeCart: () => set({ cartOpen: false }),
-  setLocale: (locale) =>
-    set(() => {
+  // ko/en are always resident, so their switch stays synchronous. The other ten tables are
+  // lazy chunks: load first, then commit the locale — never show Japanese under an English
+  // table (or vice versa). A failed chunk keeps the current language; the select simply
+  // reverts, and the next attempt retries the import.
+  setLocale: (locale) => {
+    if (isLocaleLoaded(locale)) {
       saveLocale(locale);
-      return { locale };
-    }),
+      set({ locale });
+      return;
+    }
+    void loadLocaleTable(locale)
+      .then(() => {
+        saveLocale(locale);
+        set({ locale });
+      })
+      .catch(() => {});
+  },
 }));

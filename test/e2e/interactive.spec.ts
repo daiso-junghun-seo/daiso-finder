@@ -578,3 +578,128 @@ test('a pasted cart from another store imports without that store’s shelf loca
   );
   expect(stored['002'].items[0].location).toBeUndefined();
 });
+
+// §B47 share cancel, end-to-end: closing the OS sheet is a decision, not a failure. The sheet must
+// not copy behind the shopper's back and must not fall back to the hand-select textarea.
+// The stub also records that the share call happened at all — without it the test would pass even if
+// 공유하기 never reached nativeShare.
+test('a cancelled share sheet neither copies nor opens the hand-select fallback', async ({
+  page,
+}) => {
+  const cart = {
+    storeCd: '001',
+    storeName: '명동역점',
+    items: [
+      {
+        id: '19987',
+        name: '리빙 밀폐용기 1.2L',
+        query: '밀폐용기',
+        pdNo: '19987',
+        price: 2000,
+        qty: 1,
+        checked: true,
+        addedAt: 1,
+        observedAt: 1,
+      },
+    ],
+  };
+  await page.addInitScript((seeded) => {
+    localStorage.setItem('daiso.storeContext', JSON.stringify({ strCd: '001', strNm: '명동역점' }));
+    localStorage.setItem('daiso.carts.v1', JSON.stringify({ '001': seeded }));
+    const state = { shareCalls: 0, clipboardWrites: 0 };
+    Object.defineProperty(window, '__shareState', { value: state });
+    // AbortError is the Web Share API's cancel signal; nativeShare maps it to 'cancelled'.
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: () => {
+        state.shareCalls += 1;
+        return Promise.reject(new DOMException('cancelled', 'AbortError'));
+      },
+    });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: () => {
+          state.clipboardWrites += 1;
+          return Promise.resolve();
+        },
+      },
+    });
+  }, cart);
+
+  await page.goto('/');
+  await page.getByRole('button', { name: /^장바구니 1개/ }).click();
+  await page.getByRole('button', { name: '공유하기' }).click();
+
+  // A page.evaluate round-trip is a later task, so the handler's rejection microtask has run.
+  const state = await page.evaluate(
+    () => (window as unknown as { __shareState: unknown }).__shareState,
+  );
+  expect(state).toEqual({ shareCalls: 1, clipboardWrites: 0 });
+  await expect(page.getByText('복사했어요.')).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: '공유할 내용' })).toHaveCount(0);
+  // Cancelling the OS sheet leaves the cart sheet exactly where it was.
+  await expect(page.getByRole('dialog', { name: /^장바구니/ })).toBeVisible();
+});
+
+// §B47 quantity cap, end-to-end: the stepper clamps at 99 (infra/cart.ts MAX_QTY). The unit tests
+// pin setItemQty; this proves the sheet's + button cannot push past it and that nothing is written.
+test('the quantity stepper clamps at 99 instead of growing past the cap', async ({ page }) => {
+  const cart = {
+    storeCd: '001',
+    storeName: '명동역점',
+    items: [
+      {
+        id: '19987',
+        name: '리빙 밀폐용기 1.2L',
+        query: '밀폐용기',
+        pdNo: '19987',
+        price: 2000,
+        qty: 99,
+        checked: true,
+        addedAt: 1,
+        observedAt: 1,
+      },
+    ],
+  };
+  await page.addInitScript((seeded) => {
+    localStorage.setItem('daiso.storeContext', JSON.stringify({ strCd: '001', strNm: '명동역점' }));
+    localStorage.setItem('daiso.carts.v1', JSON.stringify({ '001': seeded }));
+  }, cart);
+
+  await page.goto('/');
+  await page.getByRole('button', { name: /^장바구니 99개/ }).click();
+  const qty = page.locator('.cart-sheet').getByText('99개', { exact: true });
+  await expect(qty).toBeVisible();
+  await page.getByRole('button', { name: '수량 늘리기' }).click();
+  await expect(qty).toBeVisible();
+
+  const stored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('daiso.carts.v1') ?? '{}'),
+  );
+  expect(stored['001'].items[0].qty).toBe(99);
+});
+
+// §B47 recent views, end-to-end: a resolved product comes back on the next launch as a shortcut,
+// and tapping it re-runs the lookup instead of showing a stale availability claim (D061).
+test('a resolved product returns as a recent view after relaunch and re-runs the lookup', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('daiso.storeContext', JSON.stringify({ strCd: '001', strNm: '명동역점' }));
+  });
+
+  await page.goto('/');
+  const input = page.getByLabel('상품 검색');
+  await input.fill('밀폐용기');
+  await input.press('Enter');
+  await page.getByRole('button', { name: /리빙 밀폐용기 1\.2L/ }).click();
+  await expect(page.getByText('이 매장에 있어요').first()).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText('최근 본 상품')).toBeVisible();
+  const row = page.getByRole('button', { name: /리빙 밀폐용기 1\.2L/ });
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect(page.getByText('이 매장에 있어요').first()).toBeVisible();
+});

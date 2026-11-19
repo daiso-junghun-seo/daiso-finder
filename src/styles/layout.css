@@ -383,6 +383,103 @@ input[type="checkbox"] {
   margin-top: var(--space-sm);
 }
 
+/* Owner decision §B52 — passive three-step walkthrough on entry and in the empty list. It never
+   gates the first answer (Anti-goal 4). Rows reserve three caption lines each, so switching
+   guidance language (ko → ru/mn, a longer wrap) does not move anything below (CLS). */
+.how-it-works {
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-lg);
+  background: var(--tint-neutral);
+}
+
+.how-it-works__title {
+  margin: 0 0 var(--space-sm);
+  font-weight: 600;
+}
+
+.how-it-works__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-block-size: 196px;
+}
+
+.how-it-works__step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-block-size: 60px;
+}
+
+.how-it-works__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  inline-size: 28px;
+  block-size: 28px;
+  border-radius: 50%;
+  background: var(--action-bg);
+  color: var(--action-fg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Owner decision §B52 — stock matching inside the list. Rows are quiet cards; only a full
+   match takes the success tint (same AA pair as the status pill). The switch action stays a
+   text button so the sheet keeps a single filled primary (the match button itself). */
+.cart-match {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+.cart-match__result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.cart-match__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.cart-match__store {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--tint-neutral);
+}
+
+.cart-match__store--full {
+  background: var(--tint-success);
+}
+
+.cart-match__store-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+
+.cart-match__coverage {
+  margin-inline-start: auto;
+}
+
+.cart-match__switch {
+  align-self: flex-start;
+  text-decoration: underline;
+}
+
 /* A candidate row is one flex line: fixed photo, name takes the row, price hugs right.
    Rows read as cards: radius + room, name weighted, price plain (UI polish). */
 .candidate-list button {
@@ -520,33 +617,26 @@ main h1 {
   margin-inline-start: auto;
 }
 
-/* Segmented language control (iOS idiom at 44px — the 32pt idiom would break the
-   Interface §6 target rule, so segments stay full height). The pressed segment shows
-   the CURRENT language: the single-toggle it replaces showed only the target, which
-   read as the current state. */
-.locale-segmented {
-  display: inline-flex;
-  background: var(--tint-neutral);
+/* Language picker: a native select keeps the platform wheel/list and a stable width.
+   inline-size is FIXED (not auto) so switching 中文 → Français cannot resize the store
+   line; the label ellipsises when the platform renders it narrower. 44px min height
+   keeps the Interface §6 touch target. */
+.locale-select {
+  flex: none;
+  inline-size: 8.5rem;
+  min-block-size: 44px;
+  padding: 6px 10px;
   border: 0;
-  margin: 0;
-  padding: 2px;
   border-radius: var(--radius-pill);
-  min-inline-size: 0;
-}
-
-.locale-segmented button {
-  border-color: transparent;
-  background: transparent;
+  background: var(--tint-neutral);
   color: var(--text-secondary);
-  min-width: 44px;
-  padding: 6px 12px;
+  font: inherit;
+  text-overflow: ellipsis;
 }
 
-.locale-segmented button[aria-pressed="true"] {
-  background: var(--surface-solid);
-  color: var(--text-primary);
-  border-radius: var(--radius-pill);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+.locale-select:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 .answer-card > div > * + * {

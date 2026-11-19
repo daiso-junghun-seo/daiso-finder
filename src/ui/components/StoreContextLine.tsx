@@ -2,13 +2,14 @@
 // Store-context display (Interface §2 IA: "always present and always correctable").
 // 매장 변경 opens the D082 store-selection sheet via the injected handler; the surface may pass a
 // ref to the button so the modal sheet can restore focus to its opener on close (Interface §6).
-// The locale control beside it is a KO|EN segmented pair (each segment ≥44px); the store line
-// wraps the pair to its own row when a narrow phone cannot hold the name and both actions.
-// It only switches guidance language; match tokens never translate (D069).
+// The locale control beside it is a 12-language native select (each option names itself);
+// the store line wraps the control to its own row when a narrow phone cannot hold the name
+// and the actions. It only switches guidance language; match tokens never translate (D069).
 import type { Ref } from 'react';
 import type { StoreContext } from '../../domain/types';
 import type { Locale } from '../../i18n/locale';
 import { strings } from '../../i18n/strings';
+import { LocaleSelect } from './LocaleSelect';
 
 export function StoreContextLine({
   store,
@@ -63,29 +64,9 @@ export function StoreContextLine({
             {S.INSTALL_BUTTON}
           </button>
         )}
-        {/* Segmented language control (iOS idiom at 44px): the pressed segment shows the
-            CURRENT language — the single-toggle it replaces showed only the target, which
-            read as the current state. Both segments stay ≥44px (Interface §6 wins over the
-            32pt idiom). */}
-        <fieldset className="locale-segmented">
-          <legend className="visually-hidden">{S.LOCALE_GROUP_LABEL}</legend>
-          <button
-            type="button"
-            className="text-label"
-            aria-pressed={locale === 'ko'}
-            onClick={() => onSelectLocale('ko')}
-          >
-            KO
-          </button>
-          <button
-            type="button"
-            className="text-label"
-            aria-pressed={locale === 'en'}
-            onClick={() => onSelectLocale('en')}
-          >
-            EN
-          </button>
-        </fieldset>
+        {/* Language picker (12 languages). Each option names itself; the fixed-width select
+            keeps the store line from jumping when the selection changes (CLS). */}
+        <LocaleSelect locale={locale} onSelect={onSelectLocale} />
         <button ref={changeButtonRef} type="button" className="text-label" onClick={onChangeStore}>
           {S.STORE_CHANGE_BUTTON}
         </button>

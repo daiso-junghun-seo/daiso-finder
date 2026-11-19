@@ -1,5 +1,6 @@
 // src/ui/store.test.ts
 import { initialState } from '../domain/state-machine';
+import { strings } from '../i18n/strings';
 import { loadRecentSearches } from '../infra/recent-searches';
 import { loadStoreContext } from '../infra/store-context';
 import { useAvailabilityStore } from './store';
@@ -68,5 +69,34 @@ describe('recent searches', () => {
     useAvailabilityStore.getState().recordSearch('밀폐용기');
     useAvailabilityStore.getState().recordSearch('밀폐용기');
     expect(useAvailabilityStore.getState().recentSearches).toEqual(['밀폐용기']);
+  });
+});
+
+// Owner decision §B52: only ko/en ship in the entry chunk. A language switch must never paint
+// one language's guidance under another language's <select> value, so a lazy table commits
+// only after its chunk resolves. ko/en stay synchronous (they are always resident).
+describe('locale switch', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useAvailabilityStore.setState({ locale: 'ko' });
+  });
+
+  test('a resident table (ko) commits synchronously and persists', () => {
+    useAvailabilityStore.setState({ locale: 'en' });
+    useAvailabilityStore.getState().setLocale('ko');
+    expect(useAvailabilityStore.getState().locale).toBe('ko');
+    expect(localStorage.getItem('daiso.locale')).toBe('ko');
+  });
+
+  test('a lazy table commits only after its chunk loads', async () => {
+    useAvailabilityStore.getState().setLocale('ja');
+    // Still Korean on the same tick: the select's value must not move before the table exists.
+    expect(useAvailabilityStore.getState().locale).toBe('ko');
+    await vi.waitFor(() => {
+      expect(useAvailabilityStore.getState().locale).toBe('ja');
+    });
+    expect(localStorage.getItem('daiso.locale')).toBe('ja');
+    // The chunk really is the Japanese table, not the English fallback.
+    expect(strings('ja').HOW_IT_WORKS_LABEL).toBe('使い方');
   });
 });

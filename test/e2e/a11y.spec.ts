@@ -15,6 +15,15 @@ const states = [
 
 const schemes = ['light', 'dark'] as const;
 
+// Every surface enters with the 220ms card-enter fade (layout.css). axe computes contrast from
+// computed styles, so a scan that lands mid-fade measures semi-transparent text and reports
+// color-contrast violations that do not exist in the settled state — the source of the intermittent
+// flow 3 light-theme failures. Reduced motion is a supported mode (tokens.css cuts animation and
+// transition to none), and it changes timing only, never color, so the scan still sees the real
+// settled palette.
+const emulateScanScheme = (page: Page, scheme: (typeof schemes)[number]) =>
+  page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+
 // Flow 2 guidance states (Interface/in-store-navigation.md §4) are reached through the Flow 1 CTA,
 // not a URL: the hand-off is UI-shell state over the answer, so each entry names how to get there.
 const navigationStates = [
@@ -103,7 +112,7 @@ for (const scheme of schemes) {
     test(`state "${name}" has no serious or critical axe violations (${scheme})`, async ({
       page,
     }) => {
-      await page.emulateMedia({ colorScheme: scheme });
+      await emulateScanScheme(page, scheme);
       await page.addInitScript(() => {
         localStorage.setItem(
           'daiso.storeContext',
@@ -123,7 +132,10 @@ for (const scheme of schemes) {
         blocking.map(
           (violation) =>
             `${violation.id}: ${violation.help} (${violation.nodes.length} nodes: ${violation.nodes
-              .map((node) => node.target.join(' '))
+              .map(
+                (node) =>
+                  `${node.target.join(' ')}${node.failureSummary ? ` — ${node.failureSummary.split('\n').at(-1)?.trim()}` : ''}`,
+              )
               .join(', ')})`,
         ),
       ).toEqual([]);
@@ -134,7 +146,7 @@ for (const scheme of schemes) {
     test(`flow 2 "${name}" has no serious or critical axe violations (${scheme})`, async ({
       page,
     }) => {
-      await page.emulateMedia({ colorScheme: scheme });
+      await emulateScanScheme(page, scheme);
       await page.addInitScript(() => {
         localStorage.setItem(
           'daiso.storeContext',
@@ -155,7 +167,10 @@ for (const scheme of schemes) {
         blocking.map(
           (violation) =>
             `${violation.id}: ${violation.help} (${violation.nodes.length} nodes: ${violation.nodes
-              .map((node) => node.target.join(' '))
+              .map(
+                (node) =>
+                  `${node.target.join(' ')}${node.failureSummary ? ` — ${node.failureSummary.split('\n').at(-1)?.trim()}` : ''}`,
+              )
               .join(', ')})`,
         ),
       ).toEqual([]);
@@ -166,7 +181,7 @@ for (const scheme of schemes) {
     test(`flow 3 "${name}" has no serious or critical axe violations (${scheme})`, async ({
       page,
     }) => {
-      await page.emulateMedia({ colorScheme: scheme });
+      await emulateScanScheme(page, scheme);
       await page.addInitScript(() => {
         localStorage.setItem(
           'daiso.storeContext',
@@ -187,7 +202,10 @@ for (const scheme of schemes) {
         blocking.map(
           (violation) =>
             `${violation.id}: ${violation.help} (${violation.nodes.length} nodes: ${violation.nodes
-              .map((node) => node.target.join(' '))
+              .map(
+                (node) =>
+                  `${node.target.join(' ')}${node.failureSummary ? ` — ${node.failureSummary.split('\n').at(-1)?.trim()}` : ''}`,
+              )
               .join(', ')})`,
         ),
       ).toEqual([]);

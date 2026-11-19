@@ -126,6 +126,57 @@ export function cartTotal(cart: StoreCart): Money {
   return cart.items.reduce((sum, i) => (i.checked ? sum + i.price * i.qty : sum), 0);
 }
 
+// One row's fresh observation at the target store (from cart matching, §B52). Only known
+// values are carried; an absent location clears the old store's shelf position.
+export interface CartItemRefresh {
+  id: string;
+  price?: Money;
+  location?: StoreLocation;
+  observedAt?: number;
+}
+
+// Pure: move the list to another store after the shopper taps "shop here". The cart is per-store,
+// so without the move the list would look empty at the target. Shelf positions are store-specific:
+// every moved row loses its old location, and regains one only when matching observed it at the
+// target. Rows already listed at the target (from an earlier visit) are kept unless the moved list
+// has the same id — the shopper's current list wins, and quantities are never summed.
+export function transferCart(
+  carts: Carts,
+  fromCd: string,
+  toCd: string,
+  toName: string,
+  refreshes: CartItemRefresh[] = [],
+): Carts {
+  if (fromCd === toCd) return carts;
+  const source = carts[fromCd];
+  if (!source || source.items.length === 0) return carts;
+  const byId = new Map(refreshes.map((refresh) => [refresh.id, refresh]));
+  const moved = source.items.map((item) => {
+    const refresh = byId.get(item.id);
+    const cleared = item.location ? { ...item, location: undefined } : item;
+    if (!refresh) return cleared;
+    return {
+      ...cleared,
+      ...(refresh.price !== undefined ? { price: refresh.price } : {}),
+      ...(refresh.location !== undefined ? { location: refresh.location } : {}),
+      ...(refresh.observedAt !== undefined ? { observedAt: refresh.observedAt } : {}),
+    };
+  });
+  const movedIds = new Set(moved.map((item) => item.id));
+  const existing = carts[toCd]?.items ?? [];
+  const next: Carts = { ...carts };
+  delete next[fromCd];
+  next[toCd] = {
+    storeCd: toCd,
+    storeName: toName,
+    items: [...moved, ...existing.filter((item) => !movedIds.has(item.id))].slice(
+      0,
+      MAX_ITEMS_PER_STORE,
+    ),
+  };
+  return next;
+}
+
 // 담을 개수 across all rows (checked or not) — the link label counts the bag, not the bill.
 export function cartQtyCount(cart: StoreCart): number {
   return cart.items.reduce((sum, i) => sum + i.qty, 0);

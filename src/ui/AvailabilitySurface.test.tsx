@@ -106,14 +106,23 @@ test('default surface shows the purpose headline', () => {
 test('the locale control switches guidance to English and persists the choice', async () => {
   const user = userEvent.setup();
   render(<AvailabilitySurface />);
-  await user.click(screen.getByRole('button', { name: 'EN' }));
+  const select = screen.getByRole('combobox', { name: '표시 언어' });
+  await user.selectOptions(select, 'en');
   expect(screen.getByRole('button', { name: 'Scan' })).toBeInTheDocument();
   expect(screen.getByText('Check if this store has it')).toBeInTheDocument();
   // Match tokens stay Korean (D069) while guidance translates.
   expect(screen.getByText('DAISO 명동역점')).toBeInTheDocument();
   expect(localStorage.getItem('daiso.locale')).toBe('en');
-  await user.click(screen.getByRole('button', { name: 'KO' }));
+  expect(document.documentElement.lang).toBe('en');
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Display language' }), 'ko');
   expect(screen.getByRole('button', { name: '바코드 스캔' })).toBeInTheDocument();
+  expect(document.documentElement.lang).toBe('ko');
+});
+
+test('the locale control offers all 12 languages from the first screen', () => {
+  render(<AvailabilitySurface />);
+  expect(screen.getByRole('combobox', { name: '표시 언어' })).toBeInTheDocument();
+  expect(screen.getAllByRole('option')).toHaveLength(12);
 });
 
 test('a RESULT event renders the real Bible copy for the in-stock answer, not a raw state name', () => {
@@ -480,7 +489,7 @@ describe('Flow 2 handoff (in-store navigation)', () => {
     render(<AvailabilitySurface />);
     landOnSuccess();
     await user.click(screen.getByRole('button', { name: SUCCESS_IN_STOCK_CTA }));
-    await user.click(screen.getByRole('button', { name: 'EN' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: '표시 언어' }), 'en');
     expect(screen.getByText(/11F · No\. 56/, { selector: 'p' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
   });

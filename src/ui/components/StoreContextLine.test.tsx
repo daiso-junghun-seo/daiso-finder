@@ -28,7 +28,7 @@ test('매장 변경 invokes the change handler', async () => {
   expect(onChangeStore).toHaveBeenCalled();
 });
 
-test('the segmented control presses the CURRENT language, not the target', async () => {
+test('the locale select presses the CURRENT language, not the target', async () => {
   const onSelectLocale = vi.fn();
   render(
     <StoreContextLine
@@ -37,10 +37,14 @@ test('the segmented control presses the CURRENT language, not the target', async
       onSelectLocale={onSelectLocale}
     />,
   );
-  // ko pressed, EN unpressed — the state the old target-only toggle misreported.
-  expect(screen.getByRole('button', { name: 'KO' })).toHaveAttribute('aria-pressed', 'true');
-  expect(screen.getByRole('button', { name: 'EN' })).toHaveAttribute('aria-pressed', 'false');
-  await userEvent.click(screen.getByRole('button', { name: 'EN' }));
+  const select = screen.getByRole('combobox', { name: '표시 언어' });
+  expect(select).toHaveValue('ko');
+  // 12 languages, each option naming itself so the picker stays usable abroad.
+  expect(screen.getByRole('option', { name: '한국어' })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'English' })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: '中文（繁體）' })).toBeInTheDocument();
+  expect(screen.getAllByRole('option')).toHaveLength(12);
+  await userEvent.selectOptions(select, 'en');
   expect(onSelectLocale).toHaveBeenCalledWith('en');
   expect(screen.getByText('다이소 명동역점')).toBeInTheDocument();
 });

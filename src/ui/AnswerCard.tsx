@@ -9,7 +9,7 @@ import { strings } from '../i18n/strings';
 import { GlassSurface } from './components/GlassSurface';
 import { ProductPhoto } from './components/ProductPhoto';
 import { priceLocationLine } from './copy';
-import { formatLocation, formatPrice, formatRelativeTimeEn, formatRelativeTimeKo } from './format';
+import { formatLocation, formatPrice, formatRelativeTime } from './format';
 
 type NonDefaultUiState = Exclude<UiState, { state: 'default' }>;
 
@@ -176,9 +176,8 @@ function renderErrorCached(
     extraPositionsLabel,
     factsFor,
   } = strings(locale);
-  const relTime = (at: number) =>
-    locale === 'en' ? formatRelativeTimeEn(at, nowMs) : formatRelativeTimeKo(at, nowMs);
-  const facts = factsFor(answer, locale);
+  const relTime = (at: number) => formatRelativeTime(locale, at, nowMs);
+  const facts = factsFor(answer);
   const line = priceLocationLine(answer, locale);
   // priceLocationLine requires both price and location together; an inStock answer can be cached with a
   // known price but no location (state-machine.ts only gates Success/Partial on hasLocation, not the
@@ -251,7 +250,7 @@ function renderSuccess(
     factsFor,
     lowQtyCaption,
   } = strings(locale);
-  const facts = factsFor(answer, locale);
+  const facts = factsFor(answer);
   if (answer.kind === 'inStock') {
     const [primary, ...rest] = answer.locations;
     const isLowQty = answer.qtyUpperBound <= policy.lowQtyCutoff;
@@ -345,8 +344,7 @@ function renderPartial(
     partialLocationMissingConfirmed,
     partialStaleCacheBody,
   } = strings(locale);
-  const relTime = (at: number) =>
-    locale === 'en' ? formatRelativeTimeEn(at, nowMs) : formatRelativeTimeKo(at, nowMs);
+  const relTime = (at: number) => formatRelativeTime(locale, at, nowMs);
   const { answer, freshness, trigger } = ui;
   if (trigger === 'franchise') {
     return (

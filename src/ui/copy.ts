@@ -6,7 +6,6 @@ import type {
   StoreLocation,
   UiState,
 } from '../domain/types';
-import { announcementForEn, factsFor as factsForEn } from '../i18n/en';
 import type { Locale } from '../i18n/locale';
 import { formatDistance, formatLocation, formatPrice, formatRelativeTimeKo } from './format';
 
@@ -14,6 +13,12 @@ export const DEFAULT_HEADLINE = '이 매장에 있는지 바로 확인해 보세
 // App-owned helper (not a Bible table line — draft pending ratification like the scan
 // drafts): one orienting sentence under the headline. Mirrored in i18n/en.ts.
 export const DEFAULT_SUBHEAD = '바코드를 스캔하거나 상품명을 입력해 보세요';
+// Three-step walkthrough (§B52). Passive: it sits BELOW the search field and behind the cart's
+// empty state, never between the shopper and the first answer (Anti-goal 4 — no onboarding gate).
+export const HOW_IT_WORKS_LABEL = '이렇게 찾아요';
+export const HOW_IT_WORKS_SCAN = '바코드를 스캔하거나 상품명을 검색해요';
+export const HOW_IT_WORKS_STOCK = '이 매장과 주변 매장의 재고를 확인해요';
+export const HOW_IT_WORKS_LOCATE = '층·구역 안내로 매장에서 바로 찾아요';
 export const SEARCH_PLACEHOLDER = '상품명 또는 바코드 스캔';
 export const SCAN_BUTTON_LABEL = '바코드 스캔';
 export const STORE_CHANGE_BUTTON = '매장 변경';
@@ -124,10 +129,9 @@ export interface AnswerFacts {
 
 // Shared between Success and Error(cached): both show the same declarative facts about the answer,
 // differing only in the surrounding frame (celebratory vs "here is what we still know").
-// locale defaults to ko so every existing caller keeps the verbatim path; 'en' delegates to
-// the English twin (same structure, translated pieces — i18n/en.ts).
-export function factsFor(answer: AvailabilityAnswer, locale: Locale = 'ko'): AnswerFacts {
-  if (locale === 'en') return factsForEn(answer);
+// Korean only — every other language reads its own factsFor from its table (strings.ts), so this
+// module never imports another locale's table into the entry chunk (§B52).
+export function factsFor(answer: AvailabilityAnswer): AnswerFacts {
   switch (answer.kind) {
     case 'inStock':
       return { status: SUCCESS_IN_STOCK_STATUS, cta: SUCCESS_IN_STOCK_CTA };
@@ -162,14 +166,13 @@ export function priceLocationLine(
 type NonDefaultUiState = Exclude<UiState, { state: 'default' }>;
 
 // Ordered per Interface §6: status line first, then price·location, then the freshness stamp, then the CTA.
-// locale defaults to ko (verbatim path untouched); 'en' delegates to the twin.
+// Korean only; other languages call announcementForLocale (strings.ts), which reads that locale's
+// table and keeps the same order contract.
 export function announcementFor(
   ui: NonDefaultUiState,
   policy: DataOwnerPolicy,
   nowMs: number,
-  locale: Locale = 'ko',
 ): string[] {
-  if (locale === 'en') return announcementForEn(ui, policy, nowMs);
   switch (ui.state) {
     case 'loading':
       return ui.slow ? [LOADING_CARD_COPY, LOADING_DELAY_LINE] : [LOADING_CARD_COPY];
@@ -227,6 +230,9 @@ export const RECENT_VIEWS_LABEL = '최근 본 상품';
 export const ADD_TO_CART_BUTTON = '담기';
 export const CART_ADDED_NOTICE = '장바구니에 담았어요';
 export const CART_TITLE = '장바구니';
+// The list is a planner, not a checkout: no payment happens anywhere in this app (owner decision
+// §B52). The title stays Bible-verbatim; this caption carries the clarification.
+export const CART_PURPOSE = '장바구니는 결제가 아니라, 이 매장에서 살 품목을 적어 두는 목록이에요.';
 export const CART_EMPTY_NOTE = '아직 담은 상품이 없어요. 답 카드에서 담기를 눌러 보세요.';
 export const CART_SNAPSHOT_NOTE = '담을 당시 정보예요. 오늘 재고는 다시 확인해 주세요.';
 export const CART_CLOSE = '닫기';
@@ -264,6 +270,41 @@ export function cartImportDoneLabel(count: number): string {
 }
 export function cartImportCrossStoreLabel(count: number): string {
   return `${count}개 상품을 불러왔어요. 다른 매장에서 담은 위치는 표시하지 않아요.`;
+}
+
+// ── Shopping-list stock matching (owner decision §B52) ───────────────────────────────────────
+// Explicit button only: checking up to 10 rows × 4 stores is a bounded batch, never a background
+// claim. "All items" means every checked row answered in stock; unknown (franchise/error) never
+// counts as stocked. The shopper taps a store to move the list — nothing switches by force.
+export const CART_MATCH_BUTTON = '주변 매장 재고 확인';
+export const CART_MATCH_HINT = '이 목록의 품목이 모두 있는 가장 가까운 매장을 찾아드려요.';
+export const CART_MATCH_LOADING = '주변 매장 재고를 확인하고 있어요…';
+export const CART_MATCH_FULL_TITLE = '모든 품목이 있는 매장';
+export const CART_MATCH_PARTIAL_TITLE = '일부만 있는 매장';
+export const CART_MATCH_NO_FULL =
+  '모든 품목이 있는 주변 매장을 찾지 못했어요. 아래 매장에서 일부만 살 수 있어요.';
+export const CART_MATCH_NEARBY_UNAVAILABLE = '주변 매장을 찾지 못해 현재 매장만 확인했어요.';
+export const CART_MATCH_CURRENT_STORE = '현재 매장';
+export const CART_MATCH_SWITCH = '여기서 장보기';
+export const CART_MATCH_ALREADY_HERE = '지금 매장에 모든 품목이 있어요.';
+export const CART_MATCH_NONE_CHECKED = '확인할 품목을 하나 이상 체크해 주세요.';
+export function cartMatchLimitNote(max: number): string {
+  return `한 번에 ${max}개 품목까지만 확인해요.`;
+}
+export function cartMatchCoverage(matched: number, total: number): string {
+  return `${matched}/${total}`;
+}
+export function cartMatchStoreRow(storeName: string, distanceM: number): string {
+  return `${storeName} · ${formatDistance(distanceM)}`;
+}
+export function cartMatchMissingLabel(items: string): string {
+  return `없는 품목: ${items}`;
+}
+export function cartMatchUnknownLabel(items: string): string {
+  return `확인하지 못한 품목: ${items}`;
+}
+export function cartMatchSwitchLabel(storeName: string): string {
+  return `${storeName}에서 장보기`;
 }
 
 // Interface §copy-table (AI low / literal results notice). This fallback-first feature has no AI

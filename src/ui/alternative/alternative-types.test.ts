@@ -1,5 +1,5 @@
 import type { AlternativeReason } from '../../domain/types';
-import { STR } from '../../i18n/strings';
+import { strings } from '../../i18n/strings';
 import { altReasonLabel } from './alternative-labels';
 
 const REASONS: AlternativeReason[] = [
@@ -14,9 +14,9 @@ const REASONS: AlternativeReason[] = [
 // two render paths must never disagree on.
 test('every entry reason has its own "why we are here" line in both locales', () => {
   for (const locale of ['ko', 'en'] as const) {
-    const labels = REASONS.map((reason) => altReasonLabel(reason, STR[locale]));
+    const labels = REASONS.map((reason) => altReasonLabel(reason, strings(locale)));
     expect(new Set(labels).size).toBe(REASONS.length);
     expect(labels.every((label) => label.length > 0)).toBe(true);
   }
-  expect(altReasonLabel('flow2', STR.ko)).toBe(STR.ko.ALT_REASON_FLOW2);
+  expect(altReasonLabel('flow2', strings('ko'))).toBe(strings('ko').ALT_REASON_FLOW2);
 });

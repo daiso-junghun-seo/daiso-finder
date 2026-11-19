@@ -63,10 +63,25 @@ test('the language switch re-renders guidance grammar without translating match 
   page,
 }) => {
   await answerThenNavigate(page, 'inStock');
-  await page.getByRole('button', { name: 'EN', exact: true }).click();
+  await page.getByRole('combobox', { name: '표시 언어' }).selectOption('en');
   await expect(page.locator('p.navigation-location')).toContainText('11F · No. 56');
   await expect(page.getByRole('button', { name: 'Back' })).toBeVisible();
   // The product name is a match token — never translated (D069).
+  await expect(page.getByText('리빙 밀폐용기 1.2L')).toBeVisible();
+});
+
+// §B52: only ko/en ship in the entry chunk; the other ten tables are dynamic imports. The switch
+// must await the chunk and then paint that language — never the English fallback under a
+// Japanese select value.
+test('switching to a lazy language loads its chunk and renders Japanese guidance', async ({
+  page,
+}) => {
+  await answerThenNavigate(page, 'inStock');
+  await page.getByRole('combobox', { name: '표시 언어' }).selectOption('ja');
+  await expect(page.getByRole('combobox', { name: '表示言語' })).toHaveValue('ja');
+  await expect(page.locator('p.navigation-location')).toContainText('11F · No. 56');
+  await expect(page.getByRole('button', { name: '戻る' })).toBeVisible();
+  // Match tokens never translate (D069): the Korean product name survives.
   await expect(page.getByText('리빙 밀폐용기 1.2L')).toBeVisible();
 });
 

@@ -239,11 +239,20 @@ test('.store-context-line is a spaced row with a quiet change affordance', () =>
   expect(ruleFor('.store-context-line button')).toMatch(/text-decoration:\s*underline/);
 });
 
-test('the locale segmented control presses the current language (44px segments)', () => {
-  expect(ruleFor('.locale-segmented')).toMatch(/border-radius:\s*var\(--radius-pill\)/);
-  expect(ruleFor('.locale-segmented button[aria-pressed="true"]')).toMatch(
-    /background:\s*var\(--surface-solid\)/,
-  );
+test('the locale select keeps a fixed 44px pill (no CLS on language switch)', () => {
+  expect(ruleFor('.locale-select')).toMatch(/inline-size:\s*8\.5rem/);
+  expect(ruleFor('.locale-select')).toMatch(/min-block-size:\s*44px/);
+  expect(ruleFor('.locale-select')).toMatch(/border-radius:\s*var\(--radius-pill\)/);
+  expect(ruleFor('.locale-select')).toMatch(/text-overflow:\s*ellipsis/);
+});
+
+test('the onboarding walkthrough reserves fixed row heights (no CLS on language switch)', () => {
+  expect(ruleFor('.how-it-works__steps')).toMatch(/min-block-size:\s*196px/);
+  expect(ruleFor('.how-it-works__step')).toMatch(/min-block-size:\s*60px/);
+  const index = ruleFor('.how-it-works__index');
+  expect(index).toMatch(/inline-size:\s*28px/);
+  expect(index).toMatch(/block-size:\s*28px/);
+  expect(index).toMatch(/border-radius:\s*50%/);
 });
 
 test('.candidate-list rows read as cards with a weighted name', () => {

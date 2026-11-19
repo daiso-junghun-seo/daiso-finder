@@ -2,19 +2,20 @@
 import type { StoreLocation } from '../domain/types';
 import type { Locale } from '../i18n/locale';
 
-// Prices render per locale, digits identical (comma-grouped both sides) so the number stays
-// matchable against the shelf tag in either language: ko `2,000원`, en `₩2,000`.
+// Prices render per locale, digits identical (comma-grouped everywhere) so the number stays
+// matchable against the shelf tag in any language: ko `2,000원`, all others `₩2,000`.
 export function formatPrice(price: number, locale: Locale = 'ko'): string {
-  return locale === 'en'
-    ? `₩${price.toLocaleString('en-US')}`
-    : `${price.toLocaleString('ko-KR')}원`;
+  return locale === 'ko'
+    ? `${price.toLocaleString('ko-KR')}원`
+    : `₩${price.toLocaleString('en-US')}`;
 }
 
 export function formatLocation(location: StoreLocation, locale: Locale = 'ko'): string {
-  if (locale === 'en') {
+  if (locale !== 'ko') {
     // Digits stay identical (the matchable part — D069); only the grammar words move:
-    // `11층 56번` → `11F · No. 56`, `지하 1층 56번` → `B1 · No. 56`. Recorded risk (§B46):
-    // if store signage turns out Korean-only, English grammar misdirects — revert on evidence.
+    // `11층 56번` → `11F · No. 56`, `지하 1층 56번` → `B1 · No. 56`. The Latin floor grammar
+    // is shared by every non-ko locale (recorded risk §B46/§B52): if store signage turns out
+    // Korean-only, translated grammar misdirects — revert on evidence.
     const floor = location.floor.startsWith('-')
       ? `B${location.floor.slice(1)}`
       : `${location.floor}F`;
@@ -96,6 +97,46 @@ export function formatRelativeTimeEn(observedAtMs: number, nowMs: number): strin
   const period = hour < 12 ? 'AM' : 'PM';
   const hour12 = hour % 12 === 0 ? 12 : hour % 12;
   return `${dayLabel}, ${hour12} ${period}`;
+}
+
+// Locale-generic relative time for the ten added languages. ko/en keep their own functions
+// above (byte-identical output, so existing contracts and tests do not move). today/yesterday
+// come from Intl.RelativeTimeFormat (numeric:'auto' → "today" / "hier" / "今日"); older dates
+// use an absolute month/day. Time uses Intl's own hour cycle rather than a hand-written 12h
+// rule, because ja/th/ru do not share English AM/PM. If a runtime lacks the locale data,
+// degrading to the English line beats throwing inside the answer card.
+export function formatRelativeTime(locale: Locale, observedAtMs: number, nowMs: number): string {
+  if (locale === 'ko') return formatRelativeTimeKo(observedAtMs, nowMs);
+  if (locale === 'en') return formatRelativeTimeEn(observedAtMs, nowMs);
+  const observed = new Date(observedAtMs);
+  const now = new Date(nowMs);
+  const dayDiff = Math.floor(
+    (startOfDay(now).getTime() - startOfDay(observed).getTime()) / 86_400_000,
+  );
+  try {
+    const dayLabel =
+      dayDiff <= 1
+        ? new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(-dayDiff, 'day')
+        : new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(observed);
+    const time = new Intl.DateTimeFormat(locale, { hour: 'numeric' }).format(observed);
+    return `${dayLabel} ${time}`;
+  } catch {
+    return formatRelativeTimeEn(observedAtMs, nowMs);
+  }
+}
+
+// Closing time for Flow 3 cards ("Open until 6 PM" / "18時" / "18:00"). Only the added
+// locales take this path; en keeps its own AM/PM formatter in i18n/en.ts.
+export function formatHour(locale: Locale, hour24: number, minute: number): string {
+  try {
+    return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(
+      new Date(2000, 0, 1, hour24, minute),
+    );
+  } catch {
+    const period = hour24 < 12 ? 'AM' : 'PM';
+    const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+    return `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
+  }
 }
 
 function startOfDay(d: Date): Date {

@@ -2,6 +2,7 @@
 import type { Locale } from '../../i18n/locale';
 import { strings } from '../../i18n/strings';
 import type { RecentView } from '../../infra/recent-views';
+import { HowItWorks } from '../components/HowItWorks';
 import { formatPrice } from '../format';
 
 // Default state body: the purpose statement, recent searches, and recently resolved products.
@@ -24,6 +25,7 @@ export function DefaultBody({
     <>
       <h1>{S.DEFAULT_HEADLINE}</h1>
       <p className="text-caption">{S.DEFAULT_SUBHEAD}</p>
+      <HowItWorks locale={locale} />
       {recentSearches.length > 0 && (
         <div className="recent-searches">
           <p className="text-caption">{S.RECENT_SEARCHES_LABEL}</p>

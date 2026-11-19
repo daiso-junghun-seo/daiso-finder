@@ -4,15 +4,19 @@
 // comes only from an explicit per-item 다시 확인, which the surface runs and which lands as
 // a normal answer behind this sheet (the sheet closes first — background is inert while open).
 import { useEffect, useRef, useState } from 'react';
+import type { StoreContext } from '../../domain/types';
 import type { Locale } from '../../i18n/locale';
 import { strings } from '../../i18n/strings';
 import type { StoreCart } from '../../infra/cart';
 import { cartTotal } from '../../infra/cart';
 import type { CartItem } from '../../infra/cart';
 import { copyText, nativeShare } from '../../infra/text-share';
+import type { CartMatchResult } from '../cart-match';
 import { buildShareText, exportCartJson } from '../cart-memo';
 import { formatLocation, formatPrice } from '../format';
+import { CartMatchPanel } from './CartMatchPanel';
 import { GlassSurface } from './GlassSurface';
+import { HowItWorks } from './HowItWorks';
 
 // Exported so the lazy wrapper (CartSheetLoader) can type its fallback and stand-in against the
 // sheet's own contract rather than a drifting copy of it.
@@ -29,6 +33,9 @@ export type CartSheetProps = {
   // Parses pasted JSON into this store's list; returns what happened for the status line.
   // crossStore = the memo came from another store, so its floor/zone snapshots were dropped.
   onImportJson: (text: string) => { ok: boolean; count: number; crossStore: boolean };
+  // §B52: explicit tap from the stock-match panel. The surface moves the list, closes the sheet,
+  // and switches store; absent in unit tests that only exercise the memo.
+  onShopAt?: (store: StoreContext, result: CartMatchResult) => void;
 };
 
 export function CartSheet({
@@ -41,6 +48,7 @@ export function CartSheet({
   onRemove,
   onRecheck,
   onImportJson,
+  onShopAt,
 }: CartSheetProps) {
   const S = strings(locale);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -114,9 +122,13 @@ export function CartSheet({
             {S.CART_CLOSE}
           </button>
         </div>
+        <p className="text-caption">{S.CART_PURPOSE}</p>
         <p className="text-caption">{S.CART_SNAPSHOT_NOTE}</p>
         {!cart || cart.items.length === 0 ? (
-          <p className="text-body">{S.CART_EMPTY_NOTE}</p>
+          <>
+            <p className="text-body">{S.CART_EMPTY_NOTE}</p>
+            <HowItWorks locale={locale} />
+          </>
         ) : (
           <>
             <ul className="cart-sheet__list">
@@ -170,6 +182,12 @@ export function CartSheet({
               ))}
             </ul>
             <p className="text-heading">{S.cartTotalLabel(total)}</p>
+            <CartMatchPanel
+              store={{ strCd: cart.storeCd, strNm: cart.storeName }}
+              items={cart.items}
+              locale={locale}
+              {...(onShopAt ? { onShopAt } : {})}
+            />
           </>
         )}
         {/* Import is NOT gated on a non-empty list: the common transfer case is exactly a fresh

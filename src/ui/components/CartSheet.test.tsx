@@ -79,6 +79,22 @@ test('an empty list still offers import (the fresh-store transfer case), but not
   expect(screen.queryByRole('button', { name: '내보내기' })).not.toBeInTheDocument();
 });
 
+test('the sheet states its purpose (a planner, not a checkout) and offers the explicit stock check', () => {
+  const h = handlers();
+  render(<CartSheet cart={cart} otherStoreCount={0} locale="ko" {...h} />);
+  expect(
+    screen.getByText('장바구니는 결제가 아니라, 이 매장에서 살 품목을 적어 두는 목록이에요.'),
+  ).toBeInTheDocument();
+  // §B52: the batch check is a pressed step, never something that runs when the sheet opens.
+  expect(screen.getByRole('button', { name: '주변 매장 재고 확인' })).toBeInTheDocument();
+});
+
+test('an empty list renders no stock-match step', () => {
+  const h = handlers();
+  render(<CartSheet cart={null} otherStoreCount={0} locale="ko" {...h} />);
+  expect(screen.queryByRole('button', { name: '주변 매장 재고 확인' })).not.toBeInTheDocument();
+});
+
 test('other stores’ lists render as an honest count, never their rows', () => {
   const h = handlers();
   render(<CartSheet cart={cart} otherStoreCount={2} locale="ko" {...h} />);

@@ -2,152 +2,134 @@
 // (ui/copy.ts, untouched); en is the first-draft mirror (./en). Locale-free helpers
 // (priceLocationLine, splitAimGuide, formatters) are shared, never mirrored — only
 // TEXT-bearing exports belong here, enforced by the key-parity test (strings.test.ts).
+//
+// The added ten languages are built by create-copy-table.ts from a text dictionary.
+// CopyTable is DERIVED from en (string literals widened), so a new key added to en fails
+// compilation in every locale table until it is translated; Record<Locale, CopyTable>
+// fails compilation when a language is forgotten in the registry.
 import type { DataOwnerPolicy } from '../domain/policy';
-import type { AvailabilityAnswer, SimilarAlternative, StoreLocation } from '../domain/types';
+import type { AvailabilityAnswer, UiState } from '../domain/types';
 import * as ko from '../ui/copy';
-import * as en from './en';
+import { formatLocation, formatPrice, formatRelativeTime } from '../ui/format';
+import type * as en from './en';
 import type { Locale } from './locale';
 
-export interface CopyTable {
-  readonly DEFAULT_HEADLINE: string;
-  readonly DEFAULT_SUBHEAD: string;
-  readonly SEARCH_PLACEHOLDER: string;
-  readonly SCAN_BUTTON_LABEL: string;
-  readonly STORE_CHANGE_BUTTON: string;
-  readonly SEARCH_INPUT_LABEL: string;
-  readonly LOCALE_GROUP_LABEL: string;
-  readonly INSTALL_BUTTON: string;
-  readonly INSTALL_GUIDE_TITLE: string;
-  readonly INSTALL_GUIDE_STEP_SHARE: string;
-  readonly INSTALL_GUIDE_STEP_ADD: string;
-  readonly INSTALL_GUIDE_NOTE: string;
-  readonly LOADING_CARD_COPY: string;
-  readonly LOADING_DELAY_LINE: string;
-  readonly ERROR_CACHED_BANNER: string;
-  readonly ERROR_NO_CACHE_BODY: string;
-  readonly RETRY_BUTTON: string;
-  readonly SUCCESS_IN_STOCK_STATUS: string;
-  readonly SUCCESS_IN_STOCK_CTA: string;
-  readonly LIVE_FRESHNESS_CAPTION: string;
-  readonly SUCCESS_OUT_BODY: string;
-  readonly SUCCESS_OUT_CTA: string;
-  readonly SUCCESS_OUT_SECONDARY_CTA: string;
-  readonly SUCCESS_ENDED_BODY: string;
-  readonly SUCCESS_ENDED_CTA: string;
-  readonly SUCCESS_NOT_CARRIED_BODY: string;
-  readonly SUCCESS_NOT_CARRIED_CTA: string;
-  readonly SUCCESS_RESTOCKING_CTA: string;
-  readonly PARTIAL_FRANCHISE_BODY: string;
-  readonly PARTIAL_FRANCHISE_CTA: string;
-  readonly PARTIAL_NO_LOCATION_CTA: string;
-  readonly PARTIAL_STALE_CACHE_CTA: string;
-  readonly STORE_SELECT_TITLE: string;
-  readonly STORE_SELECT_CLOSE: string;
-  readonly STORE_SELECT_NEARBY_HEADER: string;
-  readonly STORE_SELECT_SEARCH_PLACEHOLDER: string;
-  readonly STORE_SELECT_NO_LOCATION_NOTE: string;
-  readonly PARTIAL_NO_LOCATION_NOTE: string;
-  readonly RECENT_SEARCHES_LABEL: string;
-  readonly RECENT_VIEWS_LABEL: string;
-  readonly ADD_TO_CART_BUTTON: string;
-  readonly CART_ADDED_NOTICE: string;
-  readonly CART_TITLE: string;
-  readonly CART_EMPTY_NOTE: string;
-  readonly CART_SNAPSHOT_NOTE: string;
-  readonly CART_CLOSE: string;
-  readonly CART_QTY_DECREASE: string;
-  readonly CART_QTY_INCREASE: string;
-  readonly CART_REMOVE_BUTTON: string;
-  cartLinkLabel(count: number, total: number): string;
-  cartTotalLabel(total: number): string;
-  cartQtyText(qty: number): string;
-  cartCheckLabel(name: string): string;
-  cartOtherStoresLabel(count: number): string;
-  readonly CART_SHARE_BUTTON: string;
-  readonly CART_EXPORT_BUTTON: string;
-  readonly CART_IMPORT_BUTTON: string;
-  readonly CART_IMPORT_LABEL: string;
-  readonly CART_IMPORT_CONFIRM: string;
-  readonly CART_COPIED: string;
-  readonly CART_COPY_FAILED: string;
-  readonly CART_SHARE_TEXT_LABEL: string;
-  readonly CART_EXPORT_TEXT_LABEL: string;
-  readonly CART_IMPORT_FAILED: string;
-  readonly CART_UNCHECKED_MARK: string;
-  cartImportDoneLabel(count: number): string;
-  cartImportCrossStoreLabel(count: number): string;
-  readonly RESULTS_NOTICE: string;
-  readonly SCAN_AIM_GUIDE: string;
-  readonly SCAN_AIM_GUIDE_TOKEN: string;
-  readonly SCAN_PERMISSION_DENIED: string;
-  readonly SCAN_UNSUPPORTED: string;
-  readonly SCAN_FAILED: string;
-  readonly SCAN_HINT: string;
-  readonly NAV_BACK_LABEL: string;
-  readonly NAV_LOCATION_LABEL: string;
-  readonly NAV_MISSING_LINK: string;
-  readonly NAV_PHOTO_MISSING_NOTE: string;
-  readonly NAV_RECOVERY_STILL_BODY: string;
-  readonly NAV_SOLD_OUT_BODY: string;
-  navigationMultiHeading(count: number): string;
-  navigationRecoveryOther(location: StoreLocation): string;
-  navigationStaleBody(relativeTime: string): string;
-  navigationFreshnessCaption(observedAtMs: number, nowMs: number): string;
-  nearbyStoreRowLabel(strNm: string, distanceM: number): string;
-  storeLine(storeName: string): string;
-  emptyBody(query: string): string;
-  lowQtyCaption(qtyUpperBound: number): string;
-  cachedFreshnessCaption(relativeTime: string): string;
-  extraPositionsLabel(count: number): string;
-  restockBody(lchDay: string): string;
-  partialLocationMissingConfirmed(price: number): string;
-  partialStaleCacheBody(relativeTime: string): string;
-  factsFor(
-    answer: AvailabilityAnswer,
-    locale?: Locale,
-  ): { status: string; cta: string; secondaryCta?: string };
-  scanEmptyBody(value: string): string;
-  readonly ALT_BACK_LABEL: string;
-  readonly ALT_REASON_TEMPORARILY_OUT: string;
-  readonly ALT_REASON_DISCONTINUED: string;
-  readonly ALT_REASON_NOT_CARRIED: string;
-  readonly ALT_REASON_FRANCHISE: string;
-  readonly ALT_REASON_FLOW2: string;
-  readonly ALT_SIMILAR_HEADING: string;
-  readonly ALT_NEARBY_HEADING: string;
-  readonly ALT_LOADING_BOTH: string;
-  readonly ALT_LOADING_SIMILAR: string;
-  readonly ALT_LOADING_NEARBY: string;
-  readonly ALT_SIMILAR_EMPTY: string;
-  readonly ALT_NEARBY_EMPTY: string;
-  readonly ALT_SIMILAR_FAILED: string;
-  readonly ALT_NEARBY_FAILED: string;
-  readonly ALT_SLOT_RETRY: string;
-  readonly ALT_EMPTY_BOTH: string;
-  readonly ALT_EMPTY_MALL: string;
-  readonly ALT_EMPTY_RESEARCH: string;
-  readonly ALT_EMPTY_STAFF: string;
-  readonly ALT_ERROR_BODY: string;
-  readonly ALT_ERROR_RETRY: string;
-  readonly ALT_ERROR_STAFF: string;
-  readonly ALT_STORE_CARD_IN_STOCK: string;
-  readonly ALT_STORE_CARD_CLOSED: string;
-  altLoadingLine(issued: { similar: boolean; nearby: boolean }): string;
-  altStaleBody(relativeTime: string): string;
-  altSimilarRowLabel(row: SimilarAlternative, policy: DataOwnerPolicy): string;
-  altNearbyRowLabel(
-    strNm: string,
-    distanceM: number,
-    closingTime: string,
-    closedToday: boolean,
-  ): string;
-  altStoreCardHeading(strNm: string, distanceM: number): string;
-  altClosingLabel(closingTime: string): string | null;
-  altMapLinkLabel(address: string): string;
+type EnTable = typeof en;
+type Widen<T> = { [K in keyof T]: T[K] extends string ? string : T[K] };
+
+export type CopyTable = Widen<Omit<EnTable, 'announcementForEn'>>;
+
+// Only ko (Bible SSOT, the default) stays in the entry chunk. The other eleven tables load on
+// demand: inlining all 12 languages cost ~94 kB raw / ~30 kB gzip and broke the bundle budget
+// (§B52). A language becomes selectable only after its table is in memory, so no component ever
+// renders a half-loaded table — see setLocale in ui/store.ts and the boot gate in main.tsx.
+const tables = new Map<Locale, CopyTable>([['ko', ko]]);
+
+const LOADERS: Record<Exclude<Locale, 'ko'>, () => Promise<CopyTable>> = {
+  en: () => import('./en').then((m) => m),
+  'zh-CN': () => import('./zh-CN').then((m) => m.zhCN),
+  'zh-TW': () => import('./zh-TW').then((m) => m.zhTW),
+  ja: () => import('./ja').then((m) => m.ja),
+  th: () => import('./th').then((m) => m.th),
+  mn: () => import('./mn').then((m) => m.mn),
+  ru: () => import('./ru').then((m) => m.ru),
+  vi: () => import('./vi').then((m) => m.vi),
+  id: () => import('./id').then((m) => m.id),
+  es: () => import('./es').then((m) => m.es),
+  fr: () => import('./fr').then((m) => m.fr),
+};
+
+export function isLocaleLoaded(locale: Locale): boolean {
+  return tables.has(locale);
 }
 
-export const STR: Record<Locale, CopyTable> = { ko, en };
+// Resolves once the table is in memory. The module system caches the chunk, so concurrent calls
+// share one fetch. A rejection is the caller's to handle (boot falls back to the resident Korean
+// table; setLocale keeps the current language) — strings() never throws.
+export async function loadLocaleTable(locale: Locale): Promise<void> {
+  if (locale === 'ko') return;
+  if (tables.has(locale)) return;
+  tables.set(locale, await LOADERS[locale]());
+}
 
+// Synchronous by contract: every caller renders the current locale immediately. An unloaded
+// table falls back to the resident Korean table — reachable only if a load failed or a test
+// skipped the preload, never in the normal switch path (setLocale awaits first).
 export function strings(locale: Locale): CopyTable {
-  return STR[locale];
+  return tables.get(locale) ?? tables.get('en') ?? ko;
+}
+
+type NonDefaultUiState = Exclude<UiState, { state: 'default' }>;
+
+// Ordered per Interface §6: status line first, then price·location, then the freshness stamp,
+// then the CTA. Same order contract as ko/en; used for every non-ko locale (en included —
+// its output stays identical to announcementForEn).
+export function announcementForLocale(
+  locale: Locale,
+  ui: NonDefaultUiState,
+  policy: DataOwnerPolicy,
+  nowMs: number,
+): string[] {
+  const S = strings(locale);
+  const relTime = (at: number) => formatRelativeTime(locale, at, nowMs);
+  switch (ui.state) {
+    case 'loading':
+      return ui.slow ? [S.LOADING_CARD_COPY, S.LOADING_DELAY_LINE] : [S.LOADING_CARD_COPY];
+    case 'empty':
+      return [ui.origin === 'scan' ? S.scanEmptyBody(ui.query) : S.emptyBody(ui.query)];
+    case 'candidates':
+      // Unreachable: AnswerCard never renders candidates, so no announcement copy is needed.
+      return [];
+    case 'error': {
+      if (ui.variant === 'noCache') return [S.ERROR_NO_CACHE_BODY, S.RETRY_BUTTON];
+      const facts = S.factsFor(ui.answer);
+      const line = localPriceLine(S, ui.answer, locale);
+      const relative = S.cachedFreshnessCaption(relTime(ui.freshness.observedAt));
+      return [
+        S.ERROR_CACHED_BANNER,
+        facts.status,
+        ...(line ? [line] : []),
+        relative,
+        S.RETRY_BUTTON,
+      ];
+    }
+    case 'success': {
+      const { answer } = ui;
+      const facts = S.factsFor(answer);
+      const line = localPriceLine(S, answer, locale);
+      const freshnessCap =
+        answer.kind === 'inStock' && answer.qtyUpperBound <= policy.lowQtyCutoff
+          ? S.lowQtyCaption(answer.qtyUpperBound)
+          : S.LIVE_FRESHNESS_CAPTION;
+      return [facts.status, ...(line ? [line] : []), freshnessCap, facts.cta];
+    }
+    case 'partial': {
+      const { answer, freshness, trigger } = ui;
+      if (trigger === 'franchise') return [S.PARTIAL_FRANCHISE_BODY, S.PARTIAL_FRANCHISE_CTA];
+      if (trigger === 'locationMissing') {
+        if (answer.kind !== 'inStock') return [];
+        return [
+          S.partialLocationMissingConfirmed(answer.price),
+          S.PARTIAL_NO_LOCATION_NOTE,
+          S.PARTIAL_NO_LOCATION_CTA,
+        ];
+      }
+      const relative = freshness ? relTime(freshness.observedAt) : '';
+      return [S.partialStaleCacheBody(relative), S.PARTIAL_STALE_CACHE_CTA];
+    }
+  }
+}
+
+// priceLocationLine in ui/copy.ts defaults to ko; this one is locale-explicit for every
+// added language. It is text-free (digits are match tokens), so it lives here rather than
+// being duplicated into all ten dictionaries.
+function localPriceLine(
+  _S: CopyTable,
+  answer: AvailabilityAnswer,
+  locale: Locale,
+): string | undefined {
+  if (answer.kind !== 'inStock') return undefined;
+  const primary = answer.locations[0];
+  if (!primary) return undefined;
+  return `${formatPrice(answer.price, locale)} · ${formatLocation(primary, locale)}`;
 }

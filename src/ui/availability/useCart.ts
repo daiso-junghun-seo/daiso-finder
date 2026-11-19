@@ -7,6 +7,7 @@ import type { StoreContext, StoreEvent, UiState } from '../../domain/types';
 import type { Locale } from '../../i18n/locale';
 import { strings } from '../../i18n/strings';
 import { type CartItem, cartFor, cartQtyCount, cartTotal, itemFromAnswer } from '../../infra/cart';
+import type { CartMatchResult } from '../cart-match';
 import { isCrossStoreImport, parseCartImport } from '../cart-share';
 import { useAvailabilityStore } from '../store';
 import { type SubmittedQuery, pricedAnswerOf, runByPdNo, runQuery } from './pipelines';
@@ -33,6 +34,7 @@ export function useCartController({
   const toggleItemCheckedAction = useAvailabilityStore((s) => s.toggleItemChecked);
   const removeCartItemAction = useAvailabilityStore((s) => s.removeItem);
   const importCart = useAvailabilityStore((s) => s.importCart);
+  const transferCartAction = useAvailabilityStore((s) => s.transferCart);
   const [cartNotice, setCartNotice] = useState<{ id: number; text: string } | null>(null);
   const cartAddedNotice = strings(locale).CART_ADDED_NOTICE;
 
@@ -119,6 +121,24 @@ export function useCartController({
     if (store) removeCartItemAction(store.strCd, id);
   };
 
+  // §B52: move the list to the store the shopper tapped. Rows refreshed by matching carry the
+  // target store's shelf position and observation time; unknown rows keep their old snapshot and
+  // lose the other store's location (transferCart clears it). The store switch itself is the
+  // caller's job — this only moves the memo, never changes context behind the shopper's back.
+  const transferTo = (target: StoreContext, result: CartMatchResult) => {
+    if (!store || target.strCd === store.strCd) return;
+    const match = result.stores.find((entry) => entry.store.strCd === target.strCd);
+    const refreshes = (match?.items ?? [])
+      .filter((item) => item.available === true || item.price !== undefined)
+      .map((item) => ({
+        id: item.id,
+        price: item.price,
+        location: item.location,
+        observedAt: item.available === null ? undefined : result.at,
+      }));
+    transferCartAction(store.strCd, target.strCd, target.strNm, refreshes);
+  };
+
   return {
     cartOpen,
     openCart,
@@ -135,5 +155,6 @@ export function useCartController({
     setQty,
     toggleChecked,
     removeItem,
+    transferTo,
   };
 }
