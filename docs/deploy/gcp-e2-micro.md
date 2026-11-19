@@ -300,7 +300,9 @@ curl -sS -X POST https://136-118-220-98.sslip.io/api/stores \
 
 ### 12.3 알려진 한계
 
-- Caddy 뒤에서 `req.socket.remoteAddress`가 `127.0.0.1`이라 레이트리밋 버킷이 **전역
-  120 req/min** 하나로 동작한다. 필드 테스트 규모(1~2명)에는 충분하지만, 공개 전에는
-  `X-Forwarded-For`(Caddy가 덮어쓴 값)를 읽도록 바꿔야 한다.
+- ~~Caddy 뒤에서 `req.socket.remoteAddress`가 `127.0.0.1`이라 레이트리밋 버킷이 **전역
+  120 req/min** 하나로 동작한다.~~ **2026-11-19 코드 수정**: `scripts/client-key.mjs`가
+  `cf-connecting-ip` → `x-forwarded-for`의 **마지막 홉**(Caddy가 덧붙인 실제 피어) → 소켓 주소 순으로
+  키를 만든다. 첫 홉을 쓰면 클라이언트가 보낸 값으로 버킷을 고를 수 있어 마지막 홉이다.
+  **운영 VM에는 아직 배포 전**이므로 재배포 전까지는 예전 동작(전역 버킷)이 유지된다.
 - 무료 체험 계정이다. §11의 업그레이드 기한을 넘기면 VM이 사라진다.

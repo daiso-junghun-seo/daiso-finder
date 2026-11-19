@@ -86,7 +86,7 @@
 
 - **게이트**: 전 단계 100% green, skip 0.
 - **커버리지**: CI가 `test:coverage`로 강제한다. 전역 lines/statements 94·branches/functions 85, `src/domain/**` 98/90/90/98, `src/adapters/**` 95/85/90/95, `src/ui/**` 95/85/90/95, `functions/**` 90/75/95/90. **내리지 않는다.**
-- **성능**: Flow 2 tap→card <100ms, Flow 1 submit→first result ≤2s, 엔트리 ≤220 kB(gzip ≤72 kB). **P2 실측 224.68 kB / gzip 72.58 kB**, **P3 실측 237.87 kB / gzip 76.23 kB**(지연청크 14.70/4.79 kB)로 정본을 초과했고, **P3 예외 상한 240 kB / gzip 78 kB**(§B50-11)로 머지했다. **2026-11-13 복귀 실측: 218.65 kB / gzip 70.27 kB — 정본 이내.** 수단: 카트 시트 4.60·스캐너 오버레이 2.33·stock adapter 3.94(warm-up, 첫 query는 warm chunk await)·Flow 3 표면 15.45. `NavigationSurface`는 tap→card <100ms(fetch 0회) 계약 때문에 분할하지 않았다. **2026-11-17 설치 진입 실측: 223.13 kB / gzip 71.65 kB — raw만 3.13 kB 초과, P4 한정 예외(§B51-7).** 회수 후보: 가이드 시트 지연 분할.
+- **성능**: Flow 2 tap→card <100ms, Flow 1 submit→first result ≤2s, 엔트리 ≤220 kB(gzip ≤72 kB). **P2 실측 224.68 kB / gzip 72.58 kB**, **P3 실측 237.87 kB / gzip 76.23 kB**(지연청크 14.70/4.79 kB)로 정본을 초과했고, **P3 예외 상한 240 kB / gzip 78 kB**(§B50-11)로 머지했다. **2026-11-13 복귀 실측: 218.65 kB / gzip 70.27 kB — 정본 이내.** 수단: 카트 시트 4.60·스캐너 오버레이 2.33·stock adapter 3.94(warm-up, 첫 query는 warm chunk await)·Flow 3 표면 15.45. `NavigationSurface`는 tap→card <100ms(fetch 0회) 계약 때문에 분할하지 않았다. **2026-11-17 설치 진입 실측: 223.13 kB / gzip 71.65 kB — raw만 3.13 kB 초과, P4 한정 예외(§B51-7).** **2026-11-19 12개 언어 실측: 220.50 kB / gzip 71.34 kB — gzip 정본 이내, raw 0.50 kB 초과는 §B51-7 상한 이내(§B52-9).** 수단: en 포함 11개 언어 테이블 지연 분할(정적 12개는 306.54/98.47). 회수 후보: `NavigationSurface`(6.92 kB) 지연 분할. 가이드 시트 지연 분할은 0.30 kB 절감으로 부적격(2026-11-19).
 - **접근성**: axe serious/critical 0 (6상태 × 2테마 + Flow 2 4상태 × 2 + Flow 3 5상태 × 2).
 - **운영**: CI <10분, flake <2%, 배포 후 health/logs 확인.
 
