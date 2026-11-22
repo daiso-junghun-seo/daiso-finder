@@ -1,5 +1,6 @@
 import { LOCALES } from '../i18n/locale';
 import {
+  formatDistance,
   formatHour,
   formatLchDay,
   formatLocation,
@@ -154,5 +155,39 @@ test('formatHour returns a usable closing time for every locale', () => {
     expect(rendered).not.toContain('NaN');
     // 24h or 12h, the hour (18 or 6) must be readable.
     expect(/18|6/.test(rendered)).toBe(true);
+  }
+});
+
+test('formatDistance rejects non-finite and negative inputs instead of printing a unit', () => {
+  expect(formatDistance(Number.NaN)).toBe('');
+  expect(formatDistance(Number.POSITIVE_INFINITY)).toBe('');
+  expect(formatDistance(-1)).toBe('');
+  expect(formatDistance(999)).toBe('999m');
+  expect(formatDistance(1200)).toBe('1.2km');
+});
+
+test('formatRelativeTime degrades to the English line when the runtime lacks locale data', () => {
+  const observed = new Date(2026, 6, 14, 18, 20).getTime();
+  const now = new Date(2026, 6, 15, 9, 0).getTime();
+  const spy = vi.spyOn(Intl, 'RelativeTimeFormat').mockImplementation(() => {
+    throw new Error('missing locale data');
+  });
+  try {
+    expect(formatRelativeTime('ja', observed, now)).toBe(formatRelativeTimeEn(observed, now));
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test('formatHour falls back to a hand-written 12-hour clock when Intl throws', () => {
+  const spy = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(() => {
+    throw new Error('missing locale data');
+  });
+  try {
+    expect(formatHour('ja', 18, 5)).toBe('6:05 PM');
+    expect(formatHour('ja', 0, 30)).toBe('12:30 AM');
+    expect(formatHour('ja', 12, 0)).toBe('12:00 PM');
+  } finally {
+    spy.mockRestore();
   }
 });

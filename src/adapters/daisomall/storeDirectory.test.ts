@@ -96,3 +96,28 @@ test('nearby fetch: a non-ok response or network failure degrades to []', async 
   });
   await expect(boomNearby(37.5, 127.0)).resolves.toEqual([]);
 });
+
+test('the default fetch implementations use global fetch and the internal /api/stores proxy', async () => {
+  const original = globalThis.fetch;
+  const calls: Array<{ url: string; body: string }> = [];
+  globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ url: String(url), body: String(init?.body ?? '') });
+    return new Response(
+      JSON.stringify({ stores: [{ strCd: '11043', strNm: '명동역점', km: 0.5 }] }),
+      { status: 200 },
+    );
+  }) as typeof fetch;
+  try {
+    await expect(createDaisoStoreDirectory().searchStores('명동')).resolves.toEqual([
+      { strCd: '11043', strNm: '명동역점' },
+    ]);
+    await expect(createDaisoNearbyFetch()(37.5, 127)).resolves.toEqual([
+      { strCd: '11043', strNm: '명동역점', distanceM: 500 },
+    ]);
+    expect(calls.map((c) => c.url)).toEqual(['/api/stores', '/api/stores']);
+    expect(calls[0]?.body).toContain('명동');
+    expect(calls[1]?.body).toContain('37.5');
+  } finally {
+    globalThis.fetch = original;
+  }
+});

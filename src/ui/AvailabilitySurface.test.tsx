@@ -55,6 +55,15 @@ const scanControl = vi.hoisted(() => ({
   decode: undefined as ((value: string) => void) | undefined,
 }));
 
+// The overlay arms the scanner in an effect, so a resolved dialog can beat the resolver on a busy
+// machine — and decode?.() would then silently do nothing. Wait for the armed resolver explicitly.
+async function decodeScan(value: string) {
+  await waitFor(() => expect(scanControl.decode).toBeTypeOf('function'));
+  await act(async () => {
+    scanControl.decode?.(value);
+  });
+}
+
 // Records every ProductSearchPort call the surface's production pipeline makes, delegating to the real
 // mock search so no other test's behaviour changes. Used to prove the scan path never searches at all.
 const searchControl = vi.hoisted(() => ({ calls: [] as string[] }));
@@ -219,6 +228,42 @@ describe('keep product on store switch (2026-10-13)', () => {
     expect(await screen.findByText('다이소 을지로점')).toBeInTheDocument();
     expect(await screen.findByText(RESULTS_NOTICE, { selector: 'p' })).toBeInTheDocument();
     expect(useAvailabilityStore.getState().recentSearches).toEqual(['밀폐용기']);
+  });
+
+  test('a store switch re-runs a retained candidate lookup by pdNo, never by search', async () => {
+    const user = userEvent.setup();
+    render(<AvailabilitySurface />);
+    await user.type(screen.getByLabelText('상품 검색'), '밀폐용기{Enter}');
+    await user.click(await screen.findByRole('button', { name: /리빙 밀폐용기 1\.2L/ }));
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    searchControl.calls = [];
+
+    await user.click(screen.getByRole('button', { name: '매장 변경' }));
+    await user.type(screen.getByPlaceholderText('매장명 또는 지역명으로 검색'), '을지로');
+    await user.click(await screen.findByRole('button', { name: '을지로점' }));
+
+    expect(await screen.findByText('다이소 을지로점')).toBeInTheDocument();
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    expect(searchControl.calls).toEqual([]);
+  });
+
+  test('a store switch re-runs a retained scan by its decoded value', async () => {
+    const user = userEvent.setup();
+    scanControl.decode = undefined;
+    render(<AvailabilitySurface />);
+    await user.click(screen.getByRole('button', { name: SCAN_BUTTON_LABEL }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    await decodeScan('19987');
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    searchControl.calls = [];
+
+    await user.click(screen.getByRole('button', { name: '매장 변경' }));
+    await user.type(screen.getByPlaceholderText('매장명 또는 지역명으로 검색'), '을지로');
+    await user.click(await screen.findByRole('button', { name: '을지로점' }));
+
+    expect(await screen.findByText('다이소 을지로점')).toBeInTheDocument();
+    expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
+    expect(searchControl.calls).toEqual([]);
   });
 });
 
@@ -646,6 +691,21 @@ describe('candidates (search-first flow)', () => {
 });
 
 describe('scenario harness is dev-only (F4)', () => {
+  test('a ?scenario= URL drives the mock pipeline in a DEV build', async () => {
+    window.history.pushState({}, '', '/?scenario=loading');
+    try {
+      render(<AvailabilitySurface />);
+      await waitFor(() =>
+        expect(useAvailabilityStore.getState().ui).toMatchObject({
+          state: 'loading',
+          query: 'loading',
+        }),
+      );
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+  });
+
   test('a ?scenario= URL is ignored in a production build — no fabricated answer paints over Default', () => {
     vi.stubEnv('DEV', false);
     window.history.pushState({}, '', '/?scenario=temporarilyOut');
@@ -786,6 +846,16 @@ describe('recent views (§B47)', () => {
     await userEvent.click(screen.getByRole('button', { name: /리빙 밀폐용기 1\.2L · 2,000원/ }));
     expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
     expect(searchControl.calls).not.toContain('리빙 밀폐용기 1.2L');
+  });
+
+  test('a recent view with no pdNo/price goes search-first and fills the input', async () => {
+    useAvailabilityStore.setState({
+      recentViews: [{ key: '수납 바구니', name: '수납 바구니', query: '수납 바구니', viewedAt: 1 }],
+    });
+    render(<AvailabilitySurface />);
+    await userEvent.click(screen.getByRole('button', { name: '수납 바구니' }));
+    await waitFor(() => expect(screen.getByLabelText('상품 검색')).toHaveValue('수납 바구니'));
+    expect(useAvailabilityStore.getState().recentSearches).toContain('수납 바구니');
   });
 });
 
@@ -946,9 +1016,7 @@ describe('barcode scan entry', () => {
     render(<AvailabilitySurface />);
     await user.click(screen.getByRole('button', { name: SCAN_BUTTON_LABEL }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    await act(async () => {
-      scanControl.decode?.('19987');
-    });
+    await decodeScan('19987');
     expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
     expect(searchControl.calls).toEqual([]);
   });
@@ -1088,9 +1156,7 @@ describe('barcode scan entry', () => {
     render(<AvailabilitySurface />);
     await user.click(screen.getByRole('button', { name: SCAN_BUTTON_LABEL }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    await act(async () => {
-      scanControl.decode?.('19987');
-    });
+    await decodeScan('19987');
     expect(await screen.findByText('이 매장에 있어요')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     // The answer copy alone would not catch a handler that dropped or mangled the decoded value — assert

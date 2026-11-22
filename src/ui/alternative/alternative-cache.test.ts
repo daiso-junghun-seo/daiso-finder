@@ -1,4 +1,5 @@
-import { createAlternativeCache } from './alternative-cache';
+import { alternativeCache, createAlternativeCache } from './alternative-cache';
+import { clearAlternativeCache } from './alternative-cache-signal';
 import type { AlternativeEntry, AlternativeSnapshot } from './alternative-types';
 
 const STORE = { strCd: '10803', strNm: '명동역점' };
@@ -110,4 +111,14 @@ test('clear empties every key', () => {
   cache.save(ENTRY, snapshot());
   cache.clear();
   expect(cache.load(ENTRY)).toBeNull();
+});
+
+// The Flow 3 chunk owns a singleton, but a store switch clears it from the EAGER surface through
+// the signal module. That registration is the only link between the two, and dropping it would
+// leave a previous store's answer cache live across a store switch.
+test('the chunk singleton registers its clear with the eager signal', () => {
+  alternativeCache.save(ENTRY, snapshot());
+  expect(alternativeCache.load(ENTRY)).not.toBeNull();
+  clearAlternativeCache();
+  expect(alternativeCache.load(ENTRY)).toBeNull();
 });

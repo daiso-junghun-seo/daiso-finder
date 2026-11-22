@@ -92,6 +92,72 @@ test('a decoded frame ends the loop with its value', async () => {
   expect(outcome).toEqual({ kind: 'decoded', value: '19987' });
 });
 
+// jsdom has no 2d context; the default copy path calls getContext and its optional chain would be
+// fine, but jsdom logs a "not implemented" error to stderr for every call. Silence it while still
+// exercising the real default function (null context -> no-op draw).
+function silenceCanvasContext() {
+  return vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => null);
+}
+
+// The production wiring passes NO deps: the browser's requestAnimationFrame, a real canvas, and a
+// real 2d copy. Every other test injects those, so a broken default would only fail on a device.
+test('the shipped frame plumbing works without injected deps (rAF path)', async () => {
+  const canvasSpy = silenceCanvasContext();
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    frames.push(cb);
+    cb(0);
+    return frames.length;
+  });
+  try {
+    const dispose = vi.fn();
+    const decoder: FrameDecoder = { decodeFrame: async () => '19987', dispose };
+    const outcome = await runFrameLoop(decoder, target(), new AbortController().signal);
+    expect(outcome).toEqual({ kind: 'decoded', value: '19987' });
+    expect(frames.length).toBeGreaterThan(0);
+    expect(dispose).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.unstubAllGlobals();
+    canvasSpy.mockRestore();
+  }
+});
+
+test('without requestAnimationFrame the default frame wait falls back to a timer', async () => {
+  const canvasSpy = silenceCanvasContext();
+  vi.stubGlobal('requestAnimationFrame', undefined);
+  try {
+    const decoder: FrameDecoder = { decodeFrame: async () => '19987', dispose: () => {} };
+    const outcome = await runFrameLoop(decoder, target(), new AbortController().signal, {
+      minIntervalMs: 0,
+    });
+    expect(outcome).toEqual({ kind: 'decoded', value: '19987' });
+  } finally {
+    vi.unstubAllGlobals();
+    canvasSpy.mockRestore();
+  }
+});
+
+test('a frame callback that fires twice resolves the wait only once (settled guard)', async () => {
+  const canvasSpy = silenceCanvasContext();
+  let extraCall = false;
+  const decoder: FrameDecoder = { decodeFrame: async () => '19987', dispose: () => {} };
+  try {
+    const outcome = await runFrameLoop(decoder, target(), new AbortController().signal, {
+      minIntervalMs: 0,
+      nextFrame: (cb) => {
+        cb();
+        if (!extraCall) {
+          extraCall = true;
+          cb(); // the pending callback still fires, but the promise already settled
+        }
+      },
+    });
+    expect(outcome).toEqual({ kind: 'decoded', value: '19987' });
+  } finally {
+    canvasSpy.mockRestore();
+  }
+});
+
 test('frames with nothing in them are retried until one decodes', async () => {
   let calls = 0;
   const decoder: FrameDecoder = {
