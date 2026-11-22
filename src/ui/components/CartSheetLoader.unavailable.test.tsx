@@ -4,7 +4,7 @@
 //
 // The throwing mock stands in for a stale service worker serving an index.html whose chunk hash has
 // rotated — the same failure shape main.test.tsx uses for the diagnostics chunk.
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { StoreCart } from '../../infra/cart';
 import { CartSheetLoader } from './CartSheetLoader';
 
@@ -44,4 +44,17 @@ test('a failed cart chunk renders the honest stand-in and keeps the dialog contr
   // location.reload is non-configurable, so only its presence is pinned here; the one-line handler
   // mirrors the Flow 3 stand-in, which has the same untestable-in-jsdom reload.
   expect(screen.getByRole('button', { name: '다시 확인' })).toBeInTheDocument();
+});
+
+// The shell owns the dialog contract while the chunk is missing, including the IME guard: a Korean
+// composition Escape must not dismiss it. The loaded sheet has its own copy of this test; this one
+// holds the shell (SheetShell) to the same contract, which nothing else can reach.
+test('a composing Escape never dismisses the loading shell', async () => {
+  const h = handlers();
+  render(<CartSheetLoader cart={cart} otherStoreCount={0} locale="ko" {...h} />);
+  expect(await screen.findByRole('dialog', { name: '장바구니 · 명동역점' })).toBeInTheDocument();
+  fireEvent.keyDown(document, { key: 'Escape', isComposing: true });
+  expect(h.onClose).not.toHaveBeenCalled();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(h.onClose).toHaveBeenCalledTimes(1);
 });

@@ -176,3 +176,63 @@ test('a cross-store import says the other store’s shelf locations were cleared
     await screen.findByText('2개 상품을 불러왔어요. 다른 매장에서 담은 위치는 표시하지 않아요.'),
   ).toBeInTheDocument();
 });
+
+test('내보내기 copies the JSON memo and reports it', async () => {
+  const writeText = vi.fn(async (_text: string) => {});
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText },
+  });
+  try {
+    const h = handlers();
+    render(<CartSheet cart={cart} otherStoreCount={0} locale="ko" {...h} />);
+    await userEvent.click(screen.getByRole('button', { name: '내보내기' }));
+    expect(await screen.findByText('복사했어요')).toBeInTheDocument();
+    const copied = writeText.mock.calls[0]?.[0] as unknown as string;
+    expect(copied).toContain('"storeCd":"001"');
+  } finally {
+    Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});
+
+test('내보내기 with no clipboard falls back to hand-select text and selects it on focus', async () => {
+  Reflect.deleteProperty(navigator, 'clipboard');
+  const h = handlers();
+  render(<CartSheet cart={cart} otherStoreCount={0} locale="ko" {...h} />);
+  await userEvent.click(screen.getByRole('button', { name: '내보내기' }));
+  expect(
+    await screen.findByText('복사하지 못했어요. 아래 텍스트를 직접 선택해 주세요.'),
+  ).toBeInTheDocument();
+  const box = screen.getByLabelText('내보낸 내용') as HTMLTextAreaElement;
+  fireEvent.focus(box);
+  expect(box.selectionStart).toBe(0);
+  expect(box.selectionEnd).toBe(box.value.length);
+});
+
+test('a composing Escape never closes the sheet (IME safety)', () => {
+  const h = handlers();
+  render(<CartSheet cart={cart} otherStoreCount={0} locale="ko" {...h} />);
+  fireEvent.keyDown(document, { key: 'Escape', isComposing: true });
+  expect(h.onClose).not.toHaveBeenCalled();
+});
+
+test('a native share that succeeds neither copies nor shows the fallback', async () => {
+  const share = vi.fn(async () => {});
+  Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+  const writeText = vi.fn(async () => {});
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText },
+  });
+  try {
+    const h = handlers();
+    render(<CartSheet cart={cart} otherStoreCount={0} locale="ko" {...h} />);
+    await userEvent.click(screen.getByRole('button', { name: '공유하기' }));
+    await vi.waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(writeText).not.toHaveBeenCalled());
+    expect(screen.queryByLabelText('공유할 내용')).not.toBeInTheDocument();
+  } finally {
+    Reflect.deleteProperty(navigator, 'share');
+    Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});

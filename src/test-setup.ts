@@ -1,4 +1,6 @@
-import '@testing-library/jest-dom';
+// Vitest 5 no longer exposes the `jest` matcher namespace the package's root entry augments;
+// the /vitest entry is what extends Vitest's own Assertion type (and does the runtime install).
+import '@testing-library/jest-dom/vitest';
 import { loadLocaleTable } from './i18n/strings';
 
 // The suite runs in Korean: component copy resolves the device language, and jsdom's

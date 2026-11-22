@@ -72,6 +72,39 @@ describe('recent searches', () => {
   });
 });
 
+describe('cart actions (§B47)', () => {
+  const item = {
+    id: '12345',
+    name: '리빙 밀폐용기 1.2L',
+    query: '밀폐용기',
+    pdNo: '12345',
+    price: 2000,
+    qty: 1,
+    checked: true,
+    addedAt: 1,
+    observedAt: 1,
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    useAvailabilityStore.setState({
+      carts: { '001': { storeCd: '001', storeName: '명동역점', items: [item] } },
+    });
+  });
+
+  test('toggleItemChecked flips only the named row and persists', () => {
+    useAvailabilityStore.getState().toggleItemChecked('001', '12345');
+    expect(useAvailabilityStore.getState().carts['001']?.items[0]?.checked).toBe(false);
+    expect(localStorage.getItem('daiso.carts.v1')).toContain('"checked":false');
+  });
+
+  test('removeItem drops the row from that store list and persists the empty cart', () => {
+    useAvailabilityStore.getState().removeItem('001', '12345');
+    expect(useAvailabilityStore.getState().carts['001']?.items).toEqual([]);
+    expect(localStorage.getItem('daiso.carts.v1')).toContain('"items":[]');
+  });
+});
+
 // Owner decision §B52: only ko/en ship in the entry chunk. A language switch must never paint
 // one language's guidance under another language's <select> value, so a lazy table commits
 // only after its chunk resolves. ko/en stay synchronous (they are always resident).

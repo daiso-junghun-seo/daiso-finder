@@ -2,9 +2,18 @@
 
 > 이 저장소에서 새 세션을 시작하면 **여기부터** 읽는다. 결정·실행 원장은 [`docs/notes/open-questions.md`](notes/open-questions.md). `.superpowers/`는 `.gitignore` 대상이라 새 클론에는 존재하지 않는다 — 정본으로 링크하지 않는다.
 
-## 현재 상태 (2026-11-19)
+## 현재 상태 (2026-11-22)
 
-**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) · P3 Flow 3 Alternative Discovery(2026-11-12)까지 완료.** **P4 프로덕션 런타임은 2026-11-16 GCP e2-micro에 배포됐다 — <https://136-118-220-98.sslip.io>.** **앱 내 설치 진입(Android 버튼 + iOS 안내)과 새 앱 아이콘은 2026-11-17 구현·게이트 완료.** **12개 언어 확장·쇼핑리스트 일괄 재고 매칭·3단 안내는 2026-11-19 구현·게이트 완료.** 남은 것은 실제 매장에서의 필드 검증이다.
+**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) · P3 Flow 3 Alternative Discovery(2026-11-12)까지 완료.** **P4 프로덕션 런타임은 2026-11-16 GCP e2-micro에 배포됐다 — <https://136-118-220-98.sslip.io>.** **앱 내 설치 진입(Android 버튼 + iOS 안내)과 새 앱 아이콘은 2026-11-17 구현·게이트 완료.** **12개 언어 확장·쇼핑리스트 일괄 재고 매칭·3단 안내는 2026-11-19 구현·게이트 완료.** **툴체인은 2026-11-22 Vite 8·Vitest 5로 올렸다(§B54).** 남은 것은 실제 매장에서의 필드 검증이다.
+
+### 툴체인 업그레이드 — Vite 8 · Vitest 5 (2026-11-22)
+
+- **범위(§B54, D7 이행)**: vite 8.3.8 · vitest 5.1.1 · `@vitest/coverage-v8` 5.1.1 · `@vitejs/plugin-react` 5.2.0 · `vite-plugin-pwa` 2.0.0 · esbuild 0.28.2. 앱 코드·카피·3-flow·6상태·D082·D083·읽기 전용 어댑터·스캔 로직은 불변. plugin-react 6.x는 Babel 8/rolldown 피어에서 ERESOLVE가 나 5.2.0을 쓴다.
+- **번들**: Vite 8(Rolldown/Oxc)에서 엔트리 **190.91 kB / gzip 59.96 kB** — 직전 220.50/71.34에서 **−29.59/−11.38**. precache는 **45 entries / 1134.40 KiB**(청크 구성 변화).
+- **Vitest 5 적응**: `test-setup.ts`를 `@testing-library/jest-dom/vitest`로 교체. Vitest 5는 `jest` 매처 네임스페이스를 타입에 노출하지 않아 패키지 루트 entry가 `Assertion`을 확장하지 못했다(433건 TS2339). statements 집계 변화로 `src/ui/**`가 94.91%까지 내려왔으나 **임계값은 그대로** 두고 누락 분기를 테스트로 닫아 95.12%로 복귀했다.
+- **게이트(2026-11-22 실측)**: `tsc -b` clean, biome clean(227), vitest **1053/1053**(90 files), coverage 임계값 green(전역 94.72/87.87/94.50/96.70), Playwright **93/93**, build 성공.
+- **정본**: [`notes/open-questions.md`](notes/open-questions.md) §B54. 범프는 `chore/toolchain-vite-8`에서 게이트 후 `main`에 로컬 머지(푸시·VM 재배포 없음).
+
 
 ### 12개 언어 + 쇼핑리스트 일괄 매칭 + 3단 안내 (2026-11-19)
 
@@ -94,7 +103,7 @@
 3. **D4 Bible 결정** — 통로 중 위치 이동·품절 외 부정 상태의 종료/재안내 카피. P2는 관측·보류까지만 구현했다.
 4. ~~**§B47 나머지 커버리지**~~ ✅ **마감(2026-11-19, §B47-4)** — 교차 매장 import·공유 취소·최근 본 재실행·수량 상한 99가 모두 E2E로 고정됐다(`interactive.spec.ts`). 공유 취소는 복사 0회·폴백 없음까지 확인한다.
 5. ~~**엔트리 번들 예산**~~ ✅ **정본 이내(2026-11-19)** — 엔트리 **220.50 kB / gzip 71.34 kB**, gzip은 72 이내, raw는 220을 0.50 kB 초과하지만 §B51-7의 223.13 kB 상한 이내다(§B52-9). 12개 언어를 정적으로 넣었을 때의 306.54/98.47에서 en까지 지연 분할해 회수했다. `NavigationSurface`는 tap→card <100ms 계약 때문에 여전히 분할하지 않았다(6.92 kB, 다음 회수 후보).
-6. **툴체인 업그레이드** — vite 5→8, vitest 3→5. CI green을 유지한 별도 브랜치에서 단계적으로(D7).
+6. ~~**툴체인 업그레이드**~~ ✅ **완료(2026-11-22, D7·§B54)** — vite 8.3.8·vitest 5.1.1. 게이트 green(1053/1053 · Playwright 93/93 · tsc·biome·build), 엔트리 **190.91 kB / gzip 59.96 kB**. 남은 것은 운영 VM 재배포뿐이며 이는 아래 7의 프록시 재배포와 함께 한다.
 7. **공개 확대 전 하드닝** — 레이트리밋 키는 ✅ 코드 완료(2026-11-19, `scripts/client-key.mjs`): CF 헤더 → XFF **마지막 홉** → 소켓 주소. 단, 운영 VM 재배포 전까지는 예전 전역 버킷이 계속 동작한다(배포 후 `/health`·로그로 확인). 남은 것은 egress 한도(월 1 GB) 관측이고, 그 전까지는 지인 규모 필드 테스트만.
 8. **신규 10개 언어 카피 검토** — 원어민 검토와 Bible 비준이 아직 없다. 앱 신규 카피(`HOW_IT_WORKS_*`·`CART_PURPOSE`·`CART_MATCH_*`)도 같은 검토 대상이다(§B52-열린 질문 ①).
 

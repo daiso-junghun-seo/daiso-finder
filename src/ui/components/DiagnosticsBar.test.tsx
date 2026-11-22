@@ -104,6 +104,20 @@ test('a clipboard failure is surfaced instead of silently swallowed', async () =
   expect(await screen.findByText(/복사 실패/)).toBeInTheDocument();
 });
 
+test('a successful copy writes the report and clears any failure notice', async () => {
+  const user = userEvent.setup();
+  const writeText = vi.fn(async (_text: string) => {});
+  stubClipboard({ writeText });
+  render(<DiagnosticsBar />);
+  await user.click(screen.getByRole('button', { name: /스캔 전/ }));
+  await user.click(screen.getByRole('button', { name: '복사' }));
+  await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+  // The button must copy exactly the report the textarea shows — same string, no second build.
+  const report = screen.getByLabelText('진단 보고서') as HTMLTextAreaElement;
+  expect(writeText.mock.calls[0]?.[0]).toBe(report.value);
+  expect(screen.queryByText(/복사 실패/)).not.toBeInTheDocument();
+});
+
 // The tick effect is guarded by `if (!scanning) return;`. Reinstating the `|| expanded` it replaced
 // keeps every other test in this file green, so the guard is otherwise unprotected — pin it here.
 // Ticking while merely expanded rewrites the textarea's value twice a second (경과 and 캐시 나이 both

@@ -1,7 +1,7 @@
 // src/domain/state-machine.test.ts
 import { mockAnswers } from '../adapters/mock/fixtures';
 import { initialState, reduce } from './state-machine';
-import type { AvailabilityAnswer, Freshness, ProductCandidate } from './types';
+import type { AvailabilityAnswer, Freshness, ProductCandidate, StoreEvent } from './types';
 
 const live: Freshness = { class: 'live', observedAt: 1000 };
 const loading = reduce(initialState, { type: 'SUBMIT', query: '밀폐용기' });
@@ -239,4 +239,15 @@ describe('query retention (B15)', () => {
     });
     expect(stale).toMatchObject({ state: 'partial', trigger: 'staleCache', query: '밀폐용기' });
   });
+});
+
+test('an unknown event type is ignored (defensive default keeps the current state)', () => {
+  const state = answer({
+    kind: 'inStock',
+    productName: 'X',
+    price: 2000,
+    locations: [{ floor: '11', zone: '56' }],
+    qtyUpperBound: 50,
+  });
+  expect(reduce(state, { type: 'NOT_A_REAL_EVENT' } as unknown as StoreEvent)).toBe(state);
 });

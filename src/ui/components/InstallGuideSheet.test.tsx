@@ -1,6 +1,6 @@
 // src/ui/components/InstallGuideSheet.test.tsx — §B51 iOS guide. Same modal contract as the
 // D082 sheet: focus lands on 닫기, Escape dismisses, and the copy tells the share-sheet steps.
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { InstallGuideSheet } from './InstallGuideSheet';
 
@@ -26,6 +26,16 @@ test('닫기 and Escape both dismiss', async () => {
 
   await user.keyboard('{Escape}');
   expect(onClose).toHaveBeenCalledTimes(2);
+});
+
+// A Korean IME cancels the composition on Escape — closing the sheet then would lose the shopper's
+// text without a close intent. Same guard as the cart sheet, pinned here because the guide is a
+// separate sheet with its own listener.
+test('a composing Escape does not dismiss the guide', () => {
+  const onClose = vi.fn();
+  render(<InstallGuideSheet locale="ko" onClose={onClose} />);
+  fireEvent.keyDown(document, { key: 'Escape', isComposing: true });
+  expect(onClose).not.toHaveBeenCalled();
 });
 
 test('the English guide translates the instructions only', () => {

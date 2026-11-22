@@ -4,7 +4,7 @@
 >
 > **철칙**(CLAUDE.md §2·§3): Canon에 답 있으면 따른다. 없거나 모순이면 **중단·질문**. 스펙 갭은 앱에서 임의 결정 금지 → **Bible에 결정/RFC로 에스컬레이션**(Bible 세션에서, 이 세션과 분리) 후 따른다. 앱-레벨 결정만 이 저장소가 자체 기록(Bible D-번호 미소비).
 >
-> 최종 갱신: 2026-11-19 (§B52 12개 언어·쇼핑리스트 일괄 매칭·3단 안내, §B47-4 E2E 마감, §B53 레이트리밋 버킷 키. 그 이전: 2026-07-22 Flow 1 live-data 컷오버 — §B21–B27 앱 소유 결정 + 전체-브랜치 최종 리뷰 후속 4건).
+> 최종 갱신: 2026-11-22 (§B54 툴체인 Vite 8·Vitest 5, D7 이행. 그 이전: 2026-11-19 §B52 12개 언어·쇼핑리스트 일괄 매칭·3단 안내, §B47-4 E2E 마감, §B53 레이트리밋 버킷 키 / 2026-07-22 Flow 1 live-data 컷오버 — §B21–B27 앱 소유 결정 + 전체-브랜치 최종 리뷰 후속 4건).
 
 ---
 
@@ -233,6 +233,17 @@ B30-4는 **Bible 비준 대기** — 앱이 정직 초안으로 5종 카피(권�
 > **B50-구현 확정(2026-11-12)**: ① **표면 소유권** — 목록→store card→Flow 2 overlay 스택은 `AlternativeSurface`가 소유한다. 부모(`AvailabilitySurface`)는 진입 상태·헤더 back 신호(`backSignal`)·깊이(`onDepthChange`)만 갖는다(spec §1 개정). Flow 1이 연 Flow 2는 DOM에 `hidden`으로 남겨 phase(특히 soldOut exit)를 보존하고, hidden 동안 resume refresh를 하지 않는다(`hiddenRef`). ② **지연 청크** — 표면·질의·캐시·DEV fixture를 `import()`로 분리하고, wired CTA(부정 Success 또는 `navigation !== null`)에서 선로딩한다. error boundary가 없으므로 청크 실패는 표면과 같은 문구의 Error stand-in으로 대체한다. ③ **혼합 답 렌더 수정** — failed 슬롯이 empty 문장과 실패 문장을 동시에 렌더하던 구현을 spec §5.1대로 고쳤다(실패 문장 + slot retry만, 그룹 자리에서). ④ **비준 대기 카피 추가** — A-only 진행 문장 `비슷한 상품을 확인하고 있어요…`, A 실패 문장은 앱 초안이다(ko/en 동시). ⑤ **게이트** — vitest 915/915(72 files), Playwright 88/88(dev 85 + preview 3), Flow 3 axe 5상태×light/dark, 커버리지 CI 임계값 green, tsc·biome·build green.
 
 > **B50-열린 질문(Bible)**: ① **D5** — nearby 부재 시 Flow 2 exit·미취급/가맹점 진입의 임시 형태(현재 exit는 A만, 두 CTA는 inert) ② A 실패 카피 비준 ③ withheld+empty(단일 branch empty) 열화의 정본 형태 ④ 행 0 + failed/empty 혼합의 Error 판정 ⑤ 캐시 both-empty에서 스탬프 위치 ⑥ nearby 임계값·`hldyDt` 의미(A7/A8) ⑦ 지도 handoff 실사용.
+
+> **✅ 툴체인 업그레이드 — Vite 8 · Vitest 5(2026-11-22, D7 이행 — Bible D-번호 미소비)**: D7의 조건(CI green 유지, 별도 브랜치)대로 `chore/toolchain-vite-8`에서 올렸다. 앱 코드·카피·3-flow·6상태·D082·D083·읽기 전용 어댑터·스캔 로직은 그대로다. 앱 소유 결정은 아래 §B54.
+
+| # | 결정 | 확정 | 근거/검증 |
+|---|---|---|---|
+| B54-1 | 버전 | vite 8.3.8 · vitest 5.1.1 · `@vitest/coverage-v8` 5.1.1 · `@vitejs/plugin-react` 5.2.0 · `vite-plugin-pwa` 2.0.0 · esbuild 0.28.2 | plugin-react 6.x는 Babel 8/rolldown 피어에서 ERESOLVE가 난다. Vite 8은 esbuild 0.28을 optional peer로 요구하고 루트 `scripts/dev-proxy.mjs`도 esbuild를 직접 쓰므로 함께 올렸다 |
+| B54-2 | Vitest 5 적응 | `test-setup.ts`는 `@testing-library/jest-dom/vitest`를 import한다. 커버리지 임계값은 **그대로** 두고 부족분을 테스트로 닫았다 | Vitest 5는 `jest` 매처 네임스페이스를 타입에 노출하지 않아 패키지 루트 entry가 `Assertion`을 확장하지 못한다(433건 TS2339). `/vitest` entry가 `Assertion`·`AsymmetricMatchers`를 확장한다. Vitest 5의 statements 집계 변화로 `src/ui/**`가 94.91%까지 내려왔고, 임계값 인하 대신 누락 분기를 테스트로 닫아 95.12%로 복귀했다 |
+| B54-3 | 게이트(2026-11-22 실측) | `tsc -b` clean, biome clean(227), vitest **1053/1053**(90 files), coverage 임계값 green(전역 statements 94.72 · branches 87.87 · functions 94.50 · lines 96.70), Playwright **93/93**, build 성공 — 엔트리 **190.91 kB / gzip 59.96 kB**, precache **45 entries / 1134.40 KiB** | Vite 8(Rolldown/Oxc)에서 엔트리가 220.50/71.34 → **190.91/59.96**(−29.59/−11.38)으로 줄었다. 임계값·앱 코드는 불변. 원격 push·VM 재배포는 하지 않았다 |
+| B54-4 | 커버리지 보강 | `scenario`(DEV 하네스 전 분기) · `useCart`(가드·재확인·import/transfer) · CartSheet 공유/내보내기 · 최근 본 재실행·매장 전환 3경로 · Flow 3 지연 청크 · frameLoop 기본 배선 · storeDirectory 기본 fetch · IME Escape(가이드·SheetShell) · DiagnosticsBar 복사 성공 · 대체 캐시 싱글턴 clear | 임계값 인하 없이 닫았다. `AvailabilitySurface`의 SCAN decode 대기는 `decode?.()` 경합을 없애 풀-스위트 flake를 막았다(단독 통과·전체 실패 1건 재현 후 수정) |
+
+> **B54-열린 질문(Bible)**: 없음 — 앱-레벨 의존성 정리다. Vite 8의 브라우저 타깃·Rolldown 기본값이 Bible의 지원 기기 범위와 어긋나는지는 배포 후 필드 관측에서 확인한다.
 
 > **✅ 레이트리밋 버킷 키(2026-11-19, 공개 확대 전 하드닝 — Bible D-번호 미소비)**: 운영은 Node 프록시가 loopback에 묶여 있고 Caddy가 유일한 홉이라, 소켓 주소를 키로 쓰면 모든 방문자가 **전역 120 req/min** 한 버킷을 공유한다(deploy §12.3). 키를 헤더 기반으로 바꿨다. 앱 소유 결정은 아래 §B53.
 
