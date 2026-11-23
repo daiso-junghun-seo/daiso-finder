@@ -80,7 +80,7 @@
 | D4 | Flow 2 열린 경험 질문 2개(도보 중 위치 이동, 품절 외 부정 상태 변화) | P3 exit 카피 | P2는 `unapplied`로 보류(§B49-D4) — Bible 에스컬레이션 유지 |
 | D5 | nearby 데이터 부재 시 Flow 2 exit의 임시 형태 | P2/P3 릴리스 순서 | Bible 결정 |
 | D6 | PWA precache 범위(§B31-7) | — | **완료: `globIgnores` 없이 수용, lazy 실패 무해화 유지** |
-| D7 | 툴체인 업그레이드 시점(vite 5→8, vitest 3→5) | — | **완료: 2026-11-22 `chore/toolchain-vite-8` — vite 8.3.8·vitest 5.1.1, 게이트 green(§B54)** |
+| D7 | 툴체인 업그레이드 시점(vite 5→8, vitest 3→5) | — | **완료: 2026-11-22 `chore/toolchain-vite-8` — vite 8.3.8·vitest 5.1.1, 게이트 green(§B54). 2026-11-23 push(CI 45086061487 green)·운영 VM 재배포(`fcfc428`)** |
 
 ## 지표
 

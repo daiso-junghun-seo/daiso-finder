@@ -2,9 +2,9 @@
 
 > 이 저장소에서 새 세션을 시작하면 **여기부터** 읽는다. 결정·실행 원장은 [`docs/notes/open-questions.md`](notes/open-questions.md). `.superpowers/`는 `.gitignore` 대상이라 새 클론에는 존재하지 않는다 — 정본으로 링크하지 않는다.
 
-## 현재 상태 (2026-11-22)
+## 현재 상태 (2026-11-23)
 
-**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) · P3 Flow 3 Alternative Discovery(2026-11-12)까지 완료.** **P4 프로덕션 런타임은 2026-11-16 GCP e2-micro에 배포됐다 — <https://136-118-220-98.sslip.io>.** **앱 내 설치 진입(Android 버튼 + iOS 안내)과 새 앱 아이콘은 2026-11-17 구현·게이트 완료.** **12개 언어 확장·쇼핑리스트 일괄 재고 매칭·3단 안내는 2026-11-19 구현·게이트 완료.** **툴체인은 2026-11-22 Vite 8·Vitest 5로 올렸다(§B54).** 남은 것은 실제 매장에서의 필드 검증이다.
+**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) · P3 Flow 3 Alternative Discovery(2026-11-12)까지 완료.** **P4 프로덕션 런타임은 2026-11-16 GCP e2-micro에 배포됐다 — <https://136-118-220-98.sslip.io>.** **앱 내 설치 진입(Android 버튼 + iOS 안내)과 새 앱 아이콘은 2026-11-17 구현·게이트 완료.** **12개 언어 확장·쇼핑리스트 일괄 재고 매칭·3단 안내는 2026-11-19 구현·게이트 완료.** **툴체인은 2026-11-22 Vite 8·Vitest 5로 올렸다(§B54).** **2026-11-23 `main`을 push하고 운영 VM을 `fcfc428`로 재배포했다 — Vite 8 빌드와 프록시 per-client 레이트리밋이 프로덕션에 있다.** 남은 것은 실제 매장에서의 필드 검증이다.
 
 ### 툴체인 업그레이드 — Vite 8 · Vitest 5 (2026-11-22)
 
@@ -12,7 +12,7 @@
 - **번들**: Vite 8(Rolldown/Oxc)에서 엔트리 **190.91 kB / gzip 59.96 kB** — 직전 220.50/71.34에서 **−29.59/−11.38**. precache는 **45 entries / 1134.40 KiB**(청크 구성 변화).
 - **Vitest 5 적응**: `test-setup.ts`를 `@testing-library/jest-dom/vitest`로 교체. Vitest 5는 `jest` 매처 네임스페이스를 타입에 노출하지 않아 패키지 루트 entry가 `Assertion`을 확장하지 못했다(433건 TS2339). statements 집계 변화로 `src/ui/**`가 94.91%까지 내려왔으나 **임계값은 그대로** 두고 누락 분기를 테스트로 닫아 95.12%로 복귀했다.
 - **게이트(2026-11-22 실측)**: `tsc -b` clean, biome clean(227), vitest **1053/1053**(90 files), coverage 임계값 green(전역 94.72/87.87/94.50/96.70), Playwright **93/93**, build 성공.
-- **정본**: [`notes/open-questions.md`](notes/open-questions.md) §B54. 범프는 `chore/toolchain-vite-8`에서 게이트 후 `main`에 로컬 머지(푸시·VM 재배포 없음).
+- **정본**: [`notes/open-questions.md`](notes/open-questions.md) §B54. 범프는 `chore/toolchain-vite-8`에서 게이트 후 `main`에 머지했고, **2026-11-23 push(CI run 45086061487 green) → 운영 VM 재배포(`deployed-sha` `fcfc428`)까지 완료**했다.
 
 
 ### 12개 언어 + 쇼핑리스트 일괄 매칭 + 3단 안내 (2026-11-19)
@@ -43,7 +43,8 @@
 - **과금 킬 스위치**: GCP에는 Compute Engine 지출 상한이 없어서, **예산 100% 도달 시 프로젝트 결제를 해제하는 Cloud Function**을 두었다(`deploy/gcp-killswitch/`, 예산 **2,000 KRW/월**, 프로젝트 스코프, `INCLUDE_ALL_CREDITS`). 무료 티어는 크레딧으로 적용되므로 한도 안에서는 순액 0 → 오발동 없음. 서비스 계정 권한은 결제 계정이 아니라 **프로젝트 스코프 `roles/billing.projectManager`** 하나뿐이다. **합성 메시지로 실발동 검증 완료** — `billingEnabled=false` 확인 후 재연결. 삭제는 없고, 재개는 `gcloud billing projects link`.
 - **실측**: 공개 `/health` 200(TLS 포함 0.21 s) · `POST /api/stores {"query":"강남"}` 200/10개 매장 **0.149 s** · `POST /api/availability {"strCd":"11199","keyword":"밀폐용기"}` 200/`밀폐용기 2.8 L`/2,000원/`stck:"0"`/`locations:[{"floor":"-2","zone":"68"}]` **0.803 s**(클라이언트 예산 1.8 s). PWA 자산(`/`, manifest, `sw.js`, 아이콘 2종) 모두 200.
 - **부트스트랩**: `deploy/node-proxy/bootstrap.sh` 1회로 스왑·Node 22·Caddy·systemd·첫 배포까지 약 10분. 이후 갱신은 `deploy.sh`(빌드 → 트리 교체 → health → 실패 시 자동 롤백).
-- **남은 한계**: Caddy 뒤에서 레이트리밋 버킷이 전역 120/min 하나다(`X-Forwarded-For` 미인식) — 필드 규모에는 충분, 공개 전 수정. 무료 체험 계정이라 **2027-01-19경 이전에 유료 결제 계정으로 업그레이드**해야 VM이 유지된다(Always Free 한도 안이면 청구 0). 검증 명령에서 `gcloud compute ssh --command`가 따옴표를 지우는 함정은 런북 §12.2.
+- **레이트리밋(2026-11-23 배포)**: Caddy 뒤 전역 버킷 문제는 `scripts/client-key.mjs`(CF 헤더 → XFF 마지막 홉 → 소켓)로 해소해 프로덕션에 배포했다. 실서비스 검증: 같은 시각 `cf-connecting-ip: 203.0.113.10`으로 121회 → **400×120 + 429×1**, 다른 키 `.11`과 헤더 없음은 400 — 버킷이 클라이언트별로 분리된다.
+- **남은 한계**: 무료 체험 계정이라 **2027-01-19경 이전에 유료 결제 계정으로 업그레이드**해야 VM이 유지된다(Always Free 한도 안이면 청구 0). 검증 명령에서 `gcloud compute ssh --command`가 따옴표를 지우는 함정은 런북 §12.2.
 - **데스크톱 브라우저 스모크(2026-11-16, Chromium 390×844)**: 설치 없이도 Flow 1→2→3이 프로덕션에서 돈다. `강남` 매장 선택 → `미니 밀폐용기` 후보 탭 → 답 **1.70 s** → `위치 보기` → **지하 2층 65번**. 품절 상품(`세로형 밀폐용기 2.8 L`)은 `대안 보기` → Flow 3 **1.24 s**. SW `activated`, 콘솔 오류 0.
 - **필드 관측 1건(§B50-12)**: Flow 3 Group A가 **상품명을 그대로 재검색**하기 때문에, 후보 탭 → 품절 → `대안 보기` 경로에서 `이 매장에는 비슷한 상품이 없어요`가 뜬다. 같은 매장에서 키워드 `밀폐용기`로는 3행이 나온다. Bible의 열린 가설("literal keyword similarity … requires field validation")에 대한 첫 증거이며, 앱에서 고치지 않고 05_AI 프로세스로 올린다.
 - **정본**: [`docs/deploy/gcp-e2-micro.md`](deploy/gcp-e2-micro.md).
@@ -98,13 +99,13 @@
 
 ### 지금 남은 것 (우선순위)
 
-1. **P4 필드 검증** — 서버는 최신(`7cf65f8`)이다(<https://136-118-220-98.sslip.io>). 남은 것은 **폰에서 설치 진입으로 PWA를 설치한 뒤** 실제 매장에서 Flow 1→2→3을 걷는 것이다(설치 후 탭을 닫았다 다시 열어 SW를 갱신). nearby live 해제 조건은 §B50-2의 데이터 질문(`hldyDt`·A7·임계값)이 닫힐 때다.
+1. **P4 필드 검증** — 서버는 최신(`fcfc428`)이다(<https://136-118-220-98.sslip.io>). 남은 것은 **폰에서 설치 진입으로 PWA를 설치한 뒤** 실제 매장에서 Flow 1→2→3을 걷는 것이다(설치 후 탭을 닫았다 다시 열어 SW를 갱신). nearby live 해제 조건은 §B50-2의 데이터 질문(`hldyDt`·A7·임계값)이 닫힐 때다.
 2. **무료 체험 → 유료 결제 계정 업그레이드** — 2027-01-19경 체험 계정이 닫히면 VM이 삭제된다. Always Free 한도 안이면 업그레이드 후 청구는 0이고, 킬 스위치는 그대로 동작한다.
 3. **D4 Bible 결정** — 통로 중 위치 이동·품절 외 부정 상태의 종료/재안내 카피. P2는 관측·보류까지만 구현했다.
 4. ~~**§B47 나머지 커버리지**~~ ✅ **마감(2026-11-19, §B47-4)** — 교차 매장 import·공유 취소·최근 본 재실행·수량 상한 99가 모두 E2E로 고정됐다(`interactive.spec.ts`). 공유 취소는 복사 0회·폴백 없음까지 확인한다.
 5. ~~**엔트리 번들 예산**~~ ✅ **정본 이내(2026-11-19)** — 엔트리 **220.50 kB / gzip 71.34 kB**, gzip은 72 이내, raw는 220을 0.50 kB 초과하지만 §B51-7의 223.13 kB 상한 이내다(§B52-9). 12개 언어를 정적으로 넣었을 때의 306.54/98.47에서 en까지 지연 분할해 회수했다. `NavigationSurface`는 tap→card <100ms 계약 때문에 여전히 분할하지 않았다(6.92 kB, 다음 회수 후보).
-6. ~~**툴체인 업그레이드**~~ ✅ **완료(2026-11-22, D7·§B54)** — vite 8.3.8·vitest 5.1.1. 게이트 green(1053/1053 · Playwright 93/93 · tsc·biome·build), 엔트리 **190.91 kB / gzip 59.96 kB**. 남은 것은 운영 VM 재배포뿐이며 이는 아래 7의 프록시 재배포와 함께 한다.
-7. **공개 확대 전 하드닝** — 레이트리밋 키는 ✅ 코드 완료(2026-11-19, `scripts/client-key.mjs`): CF 헤더 → XFF **마지막 홉** → 소켓 주소. 단, 운영 VM 재배포 전까지는 예전 전역 버킷이 계속 동작한다(배포 후 `/health`·로그로 확인). 남은 것은 egress 한도(월 1 GB) 관측이고, 그 전까지는 지인 규모 필드 테스트만.
+6. ~~**툴체인 업그레이드**~~ ✅ **완료(2026-11-22, D7·§B54)** — vite 8.3.8·vitest 5.1.1. 게이트 green(1053/1053 · Playwright 93/93 · tsc·biome·build), 엔트리 **190.91 kB / gzip 59.96 kB**. **2026-11-23 운영 VM 재배포 완료** — 프로덕션 엔트리 `assets/index-BMQxnTqA.js` **190,910 B**, `/health` ok, `POST /api/availability` 200(1.387 s).
+7. **공개 확대 전 하드닝** — 레이트리밋 키는 ✅ 완료(2026-11-19 코드, **2026-11-23 프로덕션 배포·검증**): CF 헤더 → XFF **마지막 홉** → 소켓 주소. 라이브 검증은 121회 중 120×400 + 1×429, 동시각 다른 키·헤더 없음 400(전역 버킷이면 429). 남은 것은 egress 한도(월 1 GB) 관측이고, 그 전까지는 지인 규모 필드 테스트만.
 8. **신규 10개 언어 카피 검토** — 원어민 검토와 Bible 비준이 아직 없다. 앱 신규 카피(`HOW_IT_WORKS_*`·`CART_PURPOSE`·`CART_MATCH_*`)도 같은 검토 대상이다(§B52-열린 질문 ①).
 
 ### 최근 완료 (§B47, 상세는 원장)

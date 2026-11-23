@@ -265,7 +265,7 @@ sudo journalctl -u caddy -n 50 --no-pager
 | URL | <https://136-118-220-98.sslip.io> |
 | VM | `daiso-finder-proxy` · `us-west1-b` · `e2-micro` · 30 GB `pd-standard` |
 | 고정 IP | `136.118.220.98` (`daiso-proxy-ip`) |
-| 배포 커밋 | `d5a5c31` |
+| 배포 커밋 | `d5a5c31` (부트스트랩) → **최근 갱신 `fcfc428` (2026-11-23)** |
 | 부트스트랩 소요 | 약 10분 (`npm ci` 2분 + `tsc -b`/`vite build` 5~6분) |
 | 공개 `/health` | 200, TLS 포함 0.21 s |
 | `POST /api/stores` `{"query":"강남"}` | 200, 10개 매장, **0.149 s** |
@@ -304,5 +304,7 @@ curl -sS -X POST https://136-118-220-98.sslip.io/api/stores \
   120 req/min** 하나로 동작한다.~~ **2026-11-19 코드 수정**: `scripts/client-key.mjs`가
   `cf-connecting-ip` → `x-forwarded-for`의 **마지막 홉**(Caddy가 덧붙인 실제 피어) → 소켓 주소 순으로
   키를 만든다. 첫 홉을 쓰면 클라이언트가 보낸 값으로 버킷을 고를 수 있어 마지막 홉이다.
-  **운영 VM에는 아직 배포 전**이므로 재배포 전까지는 예전 동작(전역 버킷)이 유지된다.
+  **2026-11-23 운영 VM에 배포(`deployed-sha` `fcfc428`)·검증 완료**: 같은 시각 `cf-connecting-ip:
+  203.0.113.10`으로 121회 → **400×120 + 429×1**, 다른 키 `.11`·헤더 없음은 400. 전역 버킷이면
+  뒤이은 두 요청도 429였어야 한다. 서비스는 `active`, 엔트리는 `assets/index-BMQxnTqA.js`(190,910 B).
 - 무료 체험 계정이다. §11의 업그레이드 기한을 넘기면 VM이 사라진다.

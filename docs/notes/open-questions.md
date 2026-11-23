@@ -4,7 +4,7 @@
 >
 > **철칙**(CLAUDE.md §2·§3): Canon에 답 있으면 따른다. 없거나 모순이면 **중단·질문**. 스펙 갭은 앱에서 임의 결정 금지 → **Bible에 결정/RFC로 에스컬레이션**(Bible 세션에서, 이 세션과 분리) 후 따른다. 앱-레벨 결정만 이 저장소가 자체 기록(Bible D-번호 미소비).
 >
-> 최종 갱신: 2026-11-22 (§B54 툴체인 Vite 8·Vitest 5, D7 이행. 그 이전: 2026-11-19 §B52 12개 언어·쇼핑리스트 일괄 매칭·3단 안내, §B47-4 E2E 마감, §B53 레이트리밋 버킷 키 / 2026-07-22 Flow 1 live-data 컷오버 — §B21–B27 앱 소유 결정 + 전체-브랜치 최종 리뷰 후속 4건).
+> 최종 갱신: 2026-11-23 (운영 VM을 `fcfc428`로 재배포 — Vite 8 빌드·per-client 레이트리밋 라이브 검증. 그 이전: 2026-11-22 §B54 툴체인 Vite 8·Vitest 5, D7 이행 / 2026-11-19 §B52 12개 언어·쇼핑리스트 일괄 매칭·3단 안내, §B47-4 E2E 마감, §B53 레이트리밋 버킷 키 / 2026-07-22 Flow 1 live-data 컷오버 — §B21–B27 앱 소유 결정 + 전체-브랜치 최종 리뷰 후속 4건).
 
 ---
 
@@ -240,7 +240,7 @@ B30-4는 **Bible 비준 대기** — 앱이 정직 초안으로 5종 카피(권�
 |---|---|---|---|
 | B54-1 | 버전 | vite 8.3.8 · vitest 5.1.1 · `@vitest/coverage-v8` 5.1.1 · `@vitejs/plugin-react` 5.2.0 · `vite-plugin-pwa` 2.0.0 · esbuild 0.28.2 | plugin-react 6.x는 Babel 8/rolldown 피어에서 ERESOLVE가 난다. Vite 8은 esbuild 0.28을 optional peer로 요구하고 루트 `scripts/dev-proxy.mjs`도 esbuild를 직접 쓰므로 함께 올렸다 |
 | B54-2 | Vitest 5 적응 | `test-setup.ts`는 `@testing-library/jest-dom/vitest`를 import한다. 커버리지 임계값은 **그대로** 두고 부족분을 테스트로 닫았다 | Vitest 5는 `jest` 매처 네임스페이스를 타입에 노출하지 않아 패키지 루트 entry가 `Assertion`을 확장하지 못한다(433건 TS2339). `/vitest` entry가 `Assertion`·`AsymmetricMatchers`를 확장한다. Vitest 5의 statements 집계 변화로 `src/ui/**`가 94.91%까지 내려왔고, 임계값 인하 대신 누락 분기를 테스트로 닫아 95.12%로 복귀했다 |
-| B54-3 | 게이트(2026-11-22 실측) | `tsc -b` clean, biome clean(227), vitest **1053/1053**(90 files), coverage 임계값 green(전역 statements 94.72 · branches 87.87 · functions 94.50 · lines 96.70), Playwright **93/93**, build 성공 — 엔트리 **190.91 kB / gzip 59.96 kB**, precache **45 entries / 1134.40 KiB** | Vite 8(Rolldown/Oxc)에서 엔트리가 220.50/71.34 → **190.91/59.96**(−29.59/−11.38)으로 줄었다. 임계값·앱 코드는 불변. 원격 push·VM 재배포는 하지 않았다 |
+| B54-3 | 게이트(2026-11-22 실측) | `tsc -b` clean, biome clean(227), vitest **1053/1053**(90 files), coverage 임계값 green(전역 statements 94.72 · branches 87.87 · functions 94.50 · lines 96.70), Playwright **93/93**, build 성공 — 엔트리 **190.91 kB / gzip 59.96 kB**, precache **45 entries / 1134.40 KiB** | Vite 8(Rolldown/Oxc)에서 엔트리가 220.50/71.34 → **190.91/59.96**(−29.59/−11.38)으로 줄었다. 임계값·앱 코드는 불변. **2026-11-23 push(CI run 45086061487 green) → 운영 VM 재배포(`deployed-sha` `fcfc428`) 완료** — 프로덕션 엔트리 190,910 B |
 | B54-4 | 커버리지 보강 | `scenario`(DEV 하네스 전 분기) · `useCart`(가드·재확인·import/transfer) · CartSheet 공유/내보내기 · 최근 본 재실행·매장 전환 3경로 · Flow 3 지연 청크 · frameLoop 기본 배선 · storeDirectory 기본 fetch · IME Escape(가이드·SheetShell) · DiagnosticsBar 복사 성공 · 대체 캐시 싱글턴 clear | 임계값 인하 없이 닫았다. `AvailabilitySurface`의 SCAN decode 대기는 `decode?.()` 경합을 없애 풀-스위트 flake를 막았다(단독 통과·전체 실패 1건 재현 후 수정) |
 
 > **B54-열린 질문(Bible)**: 없음 — 앱-레벨 의존성 정리다. Vite 8의 브라우저 타깃·Rolldown 기본값이 Bible의 지원 기기 범위와 어긋나는지는 배포 후 필드 관측에서 확인한다.
@@ -250,7 +250,7 @@ B30-4는 **Bible 비준 대기** — 앱이 정직 초안으로 5종 카피(권�
 | # | 결정 | 확정 | 근거/검증 |
 |---|---|---|---|
 | B53-1 | 프록시 버킷 키 | `cf-connecting-ip` → `x-forwarded-for`의 **마지막 홉** → 소켓 주소. 첫 홉은 클라이언트가 보낼 수 있으므로 쓰지 않는다. 키는 64자로 자른다 | Caddy가 실제 피어를 덧붙이므로 마지막 홉이 신뢰 경계다. 프록시가 loopback에 묶여 있다는 전제(HOST 기본값)가 이 신뢰의 근거다 |
-| B53-2 | 검증·배포 상태 | `scripts/client-key.mjs` + `scripts/client-key.test.mjs`(5건: CF 우선·마지막 홉·단일 홉·빈 홉 폴백·키 상한). `dev-proxy.mjs`는 이 함수를 쓴다 | **코드만 완료 — 운영 VM 재배포 전**이라 실서비스는 아직 전역 버킷이다. 배포 후 로그로 확인한다. egress 한도(월 1 GB)는 미착수 |
+| B53-2 | 검증·배포 상태 | `scripts/client-key.mjs` + `scripts/client-key.test.mjs`(5건: CF 우선·마지막 홉·단일 홉·빈 홉 폴백·키 상한). `dev-proxy.mjs`는 이 함수를 쓴다. **2026-11-23 운영 VM 배포·라이브 검증** | 같은 시각 `cf-connecting-ip: 203.0.113.10` 121회 → **400×120 + 429×1**, 다른 키 `.11`·헤더 없음 400. 전역 버킷이면 셋 다 429였다. egress 한도(월 1 GB)는 미착수 |
 
 > **✅ 12개 언어·쇼핑리스트 재고 매칭·3단 안내(2026-11-19, owner 지시 — Bible D-번호 미소비)**: ko/en 2개 언어 PWA를 12개 언어로 확장하고, §B47 쇼핑리스트에 "이 목록을 한 번에 살 수 있는 가장 가까운 매장" 찾기를 더했다. 3-flow·6상태·D082·D083·D069는 그대로다. 앱 소유 결정은 아래 §B52.
 
