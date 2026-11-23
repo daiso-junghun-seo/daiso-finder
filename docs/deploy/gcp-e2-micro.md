@@ -271,7 +271,7 @@ sudo journalctl -u caddy -n 50 --no-pager
 | URL | <https://136-118-220-98.sslip.io> |
 | VM | `daiso-finder-proxy` · `us-west1-b` · `e2-micro` · 30 GB `pd-standard` |
 | 고정 IP | `136.118.220.98` (`daiso-proxy-ip`) |
-| 배포 커밋 | `d5a5c31` (부트스트랩) → **최근 갱신 `fcfc428` (2026-11-23)** |
+| 배포 커밋 | `d5a5c31` (부트스트랩) → **최근 갱신 `e3fbaf6` (2026-11-23)** |
 | 부트스트랩 소요 | 약 10분 (`npm ci` 2분 + `tsc -b`/`vite build` 5~6분) |
 | 공개 `/health` | 200, TLS 포함 0.21 s |
 | `POST /api/stores` `{"query":"강남"}` | 200, 10개 매장, **0.149 s** |
@@ -287,6 +287,11 @@ sudo journalctl -u caddy -n 50 --no-pager
 열리므로(둘 다 availability를 먼저 호출한다) 실제 경로는 웜 구간을 탄다. 그래도 앱을 새로 켜고
 곧바로 Flow 3로 가는 예외 경로는 예산에 근접하니, 필드에서 Error가 보이면 이 콜드 스타트를 먼저
 의심한다.
+
+**같은 날 `e3fbaf6` 재배포**: 델타(`643e547`·`e3fbaf6`)는 **docs-only**여서 빌드 산출물이 `fcfc428`과
+바이트 동일했다 — 엔트리 `assets/index-BMQxnTqA.js` **190,910 B**, precache **45 entries / 1,134.40 KiB**,
+`/health` 200, `POST /api/availability` 200 **1.54 s**. 재시작 때 `systemd`가 유닛 드리프트
+(`NeedDaemonReload=yes`, 디스크 내용은 로드된 설정과 동일)를 경고해 `daemon-reload`로 정리했다.
 
 ### 12.2 검증 명령의 함정 — `gcloud compute ssh`가 따옴표를 지운다
 

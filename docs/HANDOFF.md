@@ -4,7 +4,7 @@
 
 ## 현재 상태 (2026-11-23)
 
-**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) · P3 Flow 3 Alternative Discovery(2026-11-12)까지 완료.** **P4 프로덕션 런타임은 2026-11-16 GCP e2-micro에 배포됐다 — <https://136-118-220-98.sslip.io>.** **앱 내 설치 진입(Android 버튼 + iOS 안내)과 새 앱 아이콘은 2026-11-17 구현·게이트 완료.** **12개 언어 확장·쇼핑리스트 일괄 재고 매칭·3단 안내는 2026-11-19 구현·게이트 완료.** **툴체인은 2026-11-22 Vite 8·Vitest 5로 올렸다(§B54).** **2026-11-23 `main`을 push하고 운영 VM을 `fcfc428`로 재배포했다 — Vite 8 빌드와 프록시 per-client 레이트리밋이 프로덕션에 있다.** 남은 것은 실제 매장에서의 필드 검증이다.
+**Increment 0(PWA 셸 + 데이터 레이어) + Flow 1(Availability Check) + §B47 쇼핑리스트(최근 본·장바구니·공유)까지 `main`에 머지 완료.** **P1 구조 정리(2026-11-09) · P2 Flow 2 In-Store Navigation(2026-11-10) · P3 Flow 3 Alternative Discovery(2026-11-12)까지 완료.** **P4 프로덕션 런타임은 2026-11-16 GCP e2-micro에 배포됐다 — <https://136-118-220-98.sslip.io>.** **앱 내 설치 진입(Android 버튼 + iOS 안내)과 새 앱 아이콘은 2026-11-17 구현·게이트 완료.** **12개 언어 확장·쇼핑리스트 일괄 재고 매칭·3단 안내는 2026-11-19 구현·게이트 완료.** **툴체인은 2026-11-22 Vite 8·Vitest 5로 올렸다(§B54).** **2026-11-23 `main`을 push하고 운영 VM을 `e3fbaf6`로 재배포했다 — Vite 8 빌드와 프록시 per-client 레이트리밋이 프로덕션에 있다.** 남은 것은 실제 매장에서의 필드 검증이다.
 
 ### 툴체인 업그레이드 — Vite 8 · Vitest 5 (2026-11-22)
 
@@ -12,7 +12,7 @@
 - **번들**: Vite 8(Rolldown/Oxc)에서 엔트리 **190.91 kB / gzip 59.96 kB** — 직전 220.50/71.34에서 **−29.59/−11.38**. precache는 **45 entries / 1134.40 KiB**(청크 구성 변화).
 - **Vitest 5 적응**: `test-setup.ts`를 `@testing-library/jest-dom/vitest`로 교체. Vitest 5는 `jest` 매처 네임스페이스를 타입에 노출하지 않아 패키지 루트 entry가 `Assertion`을 확장하지 못했다(433건 TS2339). statements 집계 변화로 `src/ui/**`가 94.91%까지 내려왔으나 **임계값은 그대로** 두고 누락 분기를 테스트로 닫아 95.12%로 복귀했다.
 - **게이트(2026-11-22 실측)**: `tsc -b` clean, biome clean(227), vitest **1053/1053**(90 files), coverage 임계값 green(전역 94.72/87.87/94.50/96.70), Playwright **93/93**, build 성공.
-- **정본**: [`notes/open-questions.md`](notes/open-questions.md) §B54. 범프는 `chore/toolchain-vite-8`에서 게이트 후 `main`에 머지했고, **2026-11-23 push(CI run 45086061487 green) → 운영 VM 재배포(`deployed-sha` `fcfc428`)까지 완료**했다.
+- **정본**: [`notes/open-questions.md`](notes/open-questions.md) §B54. 범프는 `chore/toolchain-vite-8`에서 게이트 후 `main`에 머지했고, **2026-11-23 push(CI run 45086061487 green) → 운영 VM 재배포까지 완료**했다. **`deployed-sha`는 `e3fbaf6`** — `fcfc428` 뒤의 두 커밋은 docs-only라 재빌드 산출물이 바이트 동일했고(엔트리 `index-BMQxnTqA.js` 190,910 B), 재배포는 `deployed-sha`를 최신으로 맞추기 위한 것이었다. 이후 docs-only 커밋은 재배포하지 않는다.
 
 
 ### 12개 언어 + 쇼핑리스트 일괄 매칭 + 3단 안내 (2026-11-19)
