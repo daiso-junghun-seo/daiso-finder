@@ -271,7 +271,7 @@ sudo journalctl -u caddy -n 50 --no-pager
 | URL | <https://136-118-220-98.sslip.io> |
 | VM | `daiso-finder-proxy` · `us-west1-b` · `e2-micro` · 30 GB `pd-standard` |
 | 고정 IP | `136.118.220.98` (`daiso-proxy-ip`) |
-| 배포 커밋 | `d5a5c31` (부트스트랩) → **최근 갱신 `97231e5` (2026-11-24)** |
+| 배포 커밋 | `d5a5c31` (부트스트랩) → **최근 갱신 `06fd4af` (2026-11-24)** |
 | 부트스트랩 소요 | 약 10분 (`npm ci` 2분 + `tsc -b`/`vite build` 5~6분) |
 | 공개 `/health` | 200, TLS 포함 0.21 s |
 | `POST /api/stores` `{"query":"강남"}` | 200, 10개 매장, **0.149 s** |
@@ -296,6 +296,7 @@ sudo journalctl -u caddy -n 50 --no-pager
 **2026-11-24 `97231e5`**: 다크 모드에서도 브라우저 상단 바가 앱 표면과 맞도록 `index.html`에
 `theme-color`를 두 벌(`#ffffff` / `#1c1c1e` + `prefers-color-scheme: dark`)로 나눴다. 서빙 HTML에서 두
 메타를 확인했고 엔트리는 불변(`index-BMQxnTqA.js`), precache는 **45 entries / 1,134.49 KiB**.
+이어서 docs-only 커밋 `06fd4af`까지 재배포해 `deployed-sha`를 최신으로 맞췄다(산출물 동일).
 
 ### 12.2 검증 명령의 함정 — `gcloud compute ssh`가 따옴표를 지운다
 

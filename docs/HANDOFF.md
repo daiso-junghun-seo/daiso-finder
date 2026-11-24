@@ -12,7 +12,7 @@
 - **번들**: Vite 8(Rolldown/Oxc)에서 엔트리 **190.91 kB / gzip 59.96 kB** — 직전 220.50/71.34에서 **−29.59/−11.38**. precache는 **45 entries / 1134.40 KiB**(청크 구성 변화).
 - **Vitest 5 적응**: `test-setup.ts`를 `@testing-library/jest-dom/vitest`로 교체. Vitest 5는 `jest` 매처 네임스페이스를 타입에 노출하지 않아 패키지 루트 entry가 `Assertion`을 확장하지 못했다(433건 TS2339). statements 집계 변화로 `src/ui/**`가 94.91%까지 내려왔으나 **임계값은 그대로** 두고 누락 분기를 테스트로 닫아 95.12%로 복귀했다.
 - **게이트(2026-11-22 실측)**: `tsc -b` clean, biome clean(227), vitest **1053/1053**(90 files), coverage 임계값 green(전역 94.72/87.87/94.50/96.70), Playwright **93/93**, build 성공.
-- **정본**: [`notes/open-questions.md`](notes/open-questions.md) §B54. 범프는 `chore/toolchain-vite-8`에서 게이트 후 `main`에 머지했고, **2026-11-23 push(CI run 45086061487 green) → 운영 VM 재배포까지 완료**했다. **`deployed-sha`는 `e3fbaf6`** — `fcfc428` 뒤의 두 커밋은 docs-only라 재빌드 산출물이 바이트 동일했고(엔트리 `index-BMQxnTqA.js` 190,910 B), 재배포는 `deployed-sha`를 최신으로 맞추기 위한 것이었다. 이후 docs-only 커밋은 재배포하지 않는다.
+- **정본**: [`notes/open-questions.md`](notes/open-questions.md) §B54. 범프는 `chore/toolchain-vite-8`에서 게이트 후 `main`에 머지했고, **2026-11-23 push(CI run 45086061487 green) → 운영 VM 재배포까지 완료**했다. 이후 docs-only 커밋은 기본적으로 재배포하지 않으며, 배포 커밋과 검증 기록의 정본은 [`deploy/gcp-e2-micro.md`](deploy/gcp-e2-micro.md) §12.1이다.
 
 
 ### 12개 언어 + 쇼핑리스트 일괄 매칭 + 3단 안내 (2026-11-19)
