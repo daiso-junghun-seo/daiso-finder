@@ -271,7 +271,7 @@ sudo journalctl -u caddy -n 50 --no-pager
 | URL | <https://136-118-220-98.sslip.io> |
 | VM | `daiso-finder-proxy` · `us-west1-b` · `e2-micro` · 30 GB `pd-standard` |
 | 고정 IP | `136.118.220.98` (`daiso-proxy-ip`) |
-| 배포 커밋 | `d5a5c31` (부트스트랩) → **최근 갱신 `e3fbaf6` (2026-11-23)** |
+| 배포 커밋 | `d5a5c31` (부트스트랩) → **최근 갱신 `97231e5` (2026-11-24)** |
 | 부트스트랩 소요 | 약 10분 (`npm ci` 2분 + `tsc -b`/`vite build` 5~6분) |
 | 공개 `/health` | 200, TLS 포함 0.21 s |
 | `POST /api/stores` `{"query":"강남"}` | 200, 10개 매장, **0.149 s** |
@@ -292,6 +292,10 @@ sudo journalctl -u caddy -n 50 --no-pager
 바이트 동일했다 — 엔트리 `assets/index-BMQxnTqA.js` **190,910 B**, precache **45 entries / 1,134.40 KiB**,
 `/health` 200, `POST /api/availability` 200 **1.54 s**. 재시작 때 `systemd`가 유닛 드리프트
 (`NeedDaemonReload=yes`, 디스크 내용은 로드된 설정과 동일)를 경고해 `daemon-reload`로 정리했다.
+
+**2026-11-24 `97231e5`**: 다크 모드에서도 브라우저 상단 바가 앱 표면과 맞도록 `index.html`에
+`theme-color`를 두 벌(`#ffffff` / `#1c1c1e` + `prefers-color-scheme: dark`)로 나눴다. 서빙 HTML에서 두
+메타를 확인했고 엔트리는 불변(`index-BMQxnTqA.js`), precache는 **45 entries / 1,134.49 KiB**.
 
 ### 12.2 검증 명령의 함정 — `gcloud compute ssh`가 따옴표를 지운다
 
