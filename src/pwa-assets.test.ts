@@ -29,3 +29,12 @@ test('index.html links the browser-tab icon', () => {
   expect(html).toContain('rel="icon"');
   expect(html).toContain('/icons/favicon-48.png?v=2');
 });
+
+test('theme-color matches the app surface in each system theme', () => {
+  const light = html.indexOf('<meta name="theme-color" content="#ffffff" />');
+  const dark = html.indexOf(
+    '<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)" />',
+  );
+  expect(light).toBeGreaterThan(-1);
+  expect(dark).toBeGreaterThan(light);
+});
