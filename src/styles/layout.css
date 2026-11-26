@@ -1374,16 +1374,17 @@ main h1 {
 
 /* Short phones (320×568, or a landscape 844×390): the answer still has to fit above
    the dock. The photo and the hero price give way — the status, price, and CTA never do.
-   Measured budgets: 375×667 is covered by the mid-height rule above; 320×568 needs this floor. Flow 2's
-   CTA and a wrapped L4 action row cost ~77px together, so the floor drops from 112 to 80 —
-   the photo is the only element that can keep yielding. */
+   Measured budgets: 375×667 is covered by the mid-height rule above; 320×568 needs this floor.
+   Flow 2's CTA and a wrapped L4 action row cost ~77px together, and the two-tier bar wraps its
+   label on the CI font stack (the wrapped-name E2E measured add-bottom 516 vs dock 504 on
+   2026-11-26), so the photo floor drops from 112 to 56 while the text rhythm stays 8px. */
 @media (max-height: 640px) {
   .answer-card {
     padding: var(--space-md);
   }
 
   .answer-card .product-photo {
-    max-height: 80px;
+    max-height: 56px;
   }
 
   .price-line {
