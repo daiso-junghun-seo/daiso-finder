@@ -361,22 +361,22 @@ for (const viewport of phoneCases) {
   });
 }
 
-test('the store name and its actions never overlap on a 320px phone', async ({ page }) => {
+test('the store context and its utilities never share a line on a 320px phone', async ({
+  page,
+}) => {
   await seedPhone(page, 320, 568);
   await page.goto('/');
-  const nameBox = await boxOf(page.locator('.store-context-line > span').first(), 'store name');
-  const actionsBox = await boxOf(page.locator('.store-context-actions'), 'store actions');
-  const geometry = `name [${nameBox.x}, ${nameBox.x + nameBox.width}] · actions x=${actionsBox.x} y=${actionsBox.y}`;
-  // Either the actions sit to the right of a shorter name, or flex-wrap moved them to
-  // their own row. What must never happen is the pre-fix overlap (actions started 30px
-  // inside the name at this width).
-  const onOneRow = nameBox.x + nameBox.width <= actionsBox.x + 0.5;
-  const wrapped = actionsBox.y >= nameBox.y + nameBox.height - 0.5;
-  expect(onOneRow || wrapped, geometry).toBe(true);
+  const contextBox = await boxOf(page.locator('.store-context-context'), 'store context');
+  const utilitiesBox = await boxOf(page.locator('.store-context-utilities'), 'store utilities');
+  const geometry = `context y=${contextBox.y} h=${contextBox.height} · utilities y=${utilitiesBox.y}`;
+  // The 2026-11-24 tiering contract: utilities own the row below the context row, so no
+  // locale can push them into the name (the pre-fix overlap started 30px inside it at 320px).
+  expect(utilitiesBox.y, geometry).toBeGreaterThanOrEqual(contextBox.y + contextBox.height - 0.5);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
 });
 
-// §B51: the install entry is the third control in the same cluster. It must obey the same
-// no-overlap rule at 320px, and one tap must spend the one-shot prompt event.
+// §B51: the install entry is a utility, not a third control in the store-context cluster. It
+// lives in the row below the name and one tap must spend the one-shot prompt event.
 test('the install entry joins the store bar without overlap and disappears once prompted', async ({
   page,
 }) => {
@@ -395,12 +395,12 @@ test('the install entry joins the store bar without overlap and disappears once 
 
   const install = page.getByRole('button', { name: '앱 설치' });
   await expect(install).toBeVisible();
-  const nameBox = await boxOf(page.locator('.store-context-line > span').first(), 'store name');
+  const nameBox = await boxOf(page.locator('.store-context-name'), 'store name');
   const installBox = await boxOf(install, 'install entry');
   const geometry = `name [${nameBox.x}, ${nameBox.x + nameBox.width}] y=${nameBox.y} · install x=${installBox.x} y=${installBox.y}`;
-  const onOneRow = nameBox.x + nameBox.width <= installBox.x + 0.5;
-  const wrapped = installBox.y >= nameBox.y + nameBox.height - 0.5;
-  expect(onOneRow || wrapped, geometry).toBe(true);
+  // Below the name's line and inside the 16px gutter — never on top of the context row.
+  expect(installBox.y, geometry).toBeGreaterThanOrEqual(nameBox.y + nameBox.height - 0.5);
+  expect(installBox.x + installBox.width, geometry).toBeLessThanOrEqual(320 - 16 + 0.5);
 
   await install.click();
   await expect(install).toHaveCount(0);

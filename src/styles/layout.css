@@ -519,10 +519,11 @@ input[type="checkbox"] {
   height: auto;
   max-width: 100%;
   /* Above-the-fold contract: the photo yields to the viewport. 260px kept the price
-     line and CTA behind the dock at 375×667; 30vh fits, 260 stays the ceiling on tall
-     phones (390×844 → 253). The short-phone override below shrinks it once more.
-     width:100% makes the box independent of the vendor bitmap's intrinsic size, so the
-     card does not reflow when the photo arrives. */
+     line and CTA behind the dock at 375×667; 260 stays the ceiling on tall phones
+     (390×844 → 253). The mid-height and short-phone overrides below shrink it further
+     when the two-tier store bar and the dock leave less room. width:100% makes the box
+     independent of the vendor bitmap's intrinsic size, so the card does not reflow when
+     the photo arrives. */
   max-height: clamp(120px, 30vh, 260px);
   border-radius: var(--radius-md);
   object-fit: contain;
@@ -577,21 +578,42 @@ main h1 {
   text-wrap: balance;
 }
 
+/* Two tiers (2026-11-24). The Bible's context row holds the store name and its correction;
+   the utility row holds §B51 install + the language picker. Measured on production before the
+   split: three controls in one cluster sat at 356 of 358px at 390px (mn) and wrapped to three
+   lines at 320px (ru/fr/es, header 193px). Tiering by role measures 111px in the common case
+   (ko/en/mn/th/vi/ja/zh/id, 320–390px) and 163px in the 320px worst case (ru/ja/es/fr, where
+   install + the fixed-width select wrap inside the utility row); no locale overlaps. */
 .store-context-line {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
+  flex-direction: column;
+  gap: var(--space-xs);
   padding: var(--space-sm) 0;
 }
 
-/* The name owns the first row and may shrink; the action cluster wraps to its own row
-   when 390px-worth of controls cannot share the line (measured overlapping at 320px). */
-.store-context-line > span:first-of-type {
+.store-context-context {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+/* The name owns the context row and may shrink; the change link keeps its target. */
+.store-context-name {
   flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* Utilities own a second row, right-aligned under the change link. The wrap is the emergency
+   brake for 320px with a long install label (ru 206px / fr 176px / es 154px + the 136px select). */
+.store-context-utilities {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  min-width: 0;
 }
 
 /* Flow 2 back control (Interface/in-store-navigation.md §2 L4). The arrow is decorative;
@@ -605,7 +627,7 @@ main h1 {
   text-decoration: none;
 }
 
-/* Utility cluster: locale toggle + store change share the right end. */
+/* Utility cluster of the store-selection sheet header (locale + close), not the store line. */
 .store-context-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1339,9 +1361,20 @@ main h1 {
   border-top: 0;
 }
 
+/* Mid-height phones (641–720px, e.g. 375×667). The two-tier store bar added ~48px
+   (2026-11-24: 62.5 → 110.5px at 375), so 30vh no longer leaves the CTA above the dock:
+   measured add-bottom 624 against dock top 603. The photo takes whatever is left after the
+   ~500px the rest of the column needs (context row, card copy, dock); the 120px floor and
+   the ≤640px rule below still bound it. Above 720px the base clamp applies unchanged. */
+@media (max-height: 720px) {
+  .answer-card .product-photo {
+    max-height: calc(100vh - 500px);
+  }
+}
+
 /* Short phones (320×568, or a landscape 844×390): the answer still has to fit above
    the dock. The photo and the hero price give way — the status, price, and CTA never do.
-   Measured budgets: 375×667 fits with the 30vh clamp; 320×568 needs this floor. Flow 2's
+   Measured budgets: 375×667 is covered by the mid-height rule above; 320×568 needs this floor. Flow 2's
    CTA and a wrapped L4 action row cost ~77px together, so the floor drops from 112 to 80 —
    the photo is the only element that can keep yielding. */
 @media (max-height: 640px) {

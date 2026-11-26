@@ -234,8 +234,8 @@ test('.surface-content has a vertical beat and a large-title entry', () => {
   expect(ruleFor('main h1')).toMatch(/font-size:\s*1\.75rem/);
 });
 
-test('.store-context-line is a spaced row with a quiet change affordance', () => {
-  expect(ruleFor('.store-context-line')).toMatch(/justify-content:\s*space-between/);
+test('the store line is two tiers with a quiet change affordance', () => {
+  expect(ruleFor('.store-context-line')).toMatch(/flex-direction:\s*column/);
   expect(ruleFor('.store-context-line button')).toMatch(/text-decoration:\s*underline/);
 });
 
@@ -389,15 +389,18 @@ test('the search row aligns both controls and ellipsises the fixed placeholder',
   expect(ruleFor('.search-bar input')).toMatch(/text-overflow:\s*ellipsis/);
 });
 
-test('the store line wraps its action cluster instead of overlapping the store name', () => {
+test('the store line tiers context and utilities instead of overlapping them', () => {
   const line = ruleFor('.store-context-line');
-  expect(line).toMatch(/flex-wrap:\s*wrap/);
-  // first-of-type, not first-child: Flow 2 prefixes a back button, and the store name must still be
-  // the flexible, ellipsis-safe element in that row.
-  expect(ruleFor('.store-context-line > span:first-of-type')).toMatch(/min-width:\s*0/);
-  const actions = ruleFor('.store-context-actions');
-  expect(actions).toMatch(/flex-wrap:\s*wrap/);
-  expect(actions).toMatch(/min-width:\s*0/);
+  expect(line).toMatch(/flex-direction:\s*column/);
+  // The name is the flexible, ellipsis-safe element of the context row; Flow 2 prefixes a
+  // back button and the name still owns the remaining width.
+  expect(ruleFor('.store-context-name')).toMatch(/min-width:\s*0/);
+  expect(ruleFor('.store-context-context')).toMatch(/min-width:\s*0/);
+  // Utilities own their row; wrap survives 320px with a long install label.
+  const utilities = ruleFor('.store-context-utilities');
+  expect(utilities).toMatch(/flex-wrap:\s*wrap/);
+  expect(utilities).toMatch(/justify-content:\s*flex-end/);
+  expect(utilities).toMatch(/min-width:\s*0/);
 });
 
 test('the Flow 2 back control keeps a 44px target and the location line stays dominant', () => {
@@ -489,6 +492,11 @@ test('short phones shrink the photo and the hero price, never the answer content
   const short = blockFor('@media (max-height: 640px)');
   expect(short).toMatch(/\.answer-card \.product-photo\s*\{[^}]*max-height:\s*80px/);
   expect(short).toMatch(/\.price-line\s*\{[^}]*font-size:\s*1\.5rem/);
+});
+
+test('mid-height phones budget the photo against the taller two-tier store bar', () => {
+  const mid = blockFor('@media (max-height: 720px)');
+  expect(mid).toMatch(/\.answer-card \.product-photo\s*\{[^}]*max-height:\s*calc\(100vh - 500px\)/);
 });
 
 test('200% scale stacks the search row instead of overflowing sideways', () => {
