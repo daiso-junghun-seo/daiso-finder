@@ -271,7 +271,7 @@ sudo journalctl -u caddy -n 50 --no-pager
 | URL | <https://136-118-220-98.sslip.io> |
 | VM | `daiso-finder-proxy` · `us-west1-b` · `e2-micro` · 30 GB `pd-standard` |
 | 고정 IP | `136.118.220.98` (`daiso-proxy-ip`) |
-| 배포 커밋 | `d5a5c31` (부트스트랩) → **최근 갱신 `06fd4af` (2026-11-24)** |
+| 배포 커밋 | `d5a5c31` (부트스트랩) → **최근 갱신 `1f6bb03` (2026-11-26)** |
 | 부트스트랩 소요 | 약 10분 (`npm ci` 2분 + `tsc -b`/`vite build` 5~6분) |
 | 공개 `/health` | 200, TLS 포함 0.21 s |
 | `POST /api/stores` `{"query":"강남"}` | 200, 10개 매장, **0.149 s** |
@@ -297,6 +297,14 @@ sudo journalctl -u caddy -n 50 --no-pager
 `theme-color`를 두 벌(`#ffffff` / `#1c1c1e` + `prefers-color-scheme: dark`)로 나눴다. 서빙 HTML에서 두
 메타를 확인했고 엔트리는 불변(`index-BMQxnTqA.js`), precache는 **45 entries / 1,134.49 KiB**.
 이어서 docs-only 커밋 `06fd4af`까지 재배포해 `deployed-sha`를 최신으로 맞췄다(산출물 동일).
+
+**2026-11-26 `1f6bb03`**: 상단 컨트롤 2단 배치(`52d7244`, §B55)와 320px 답 카드 사진 예산 보정
+(`1f6bb03`). 매장명 + 매장 변경이 1단, 앱 설치 + 언어 선택이 2단이다. 헤더 실측은 공통 **111px**,
+최악 **163px**(320px ru/ja/es/fr + 설치). 엔트리 `assets/index-4XflBwpM.js` **191.00 kB / gzip 59.98 kB**,
+CSS 19.11 kB, precache **45 entries / 1,134.82 KiB**. 배포 후 서빙 CSS에서 `.store-context-context`·
+`.store-context-utilities`·`calc(100vh - 500px)`·`max-height:56px`를 확인했고, `/health` 200 ·
+`systemctl` `active` · `NeedDaemonReload=no`다. 알려진 좁은 예외(§B55 열린 질문): 320×568 + ru/ja/es/fr +
+설치 버튼이면 Success의 `추가` CTA가 dock 아래로 내려가 스크롤이 필요하다(이전 193px 헤더보다는 개선).
 
 ### 12.2 검증 명령의 함정 — `gcloud compute ssh`가 따옴표를 지운다
 
