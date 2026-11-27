@@ -78,10 +78,10 @@ test('the network log keeps only the most recent NETWORK_LIMIT entries, newest l
   expect(network[network.length - 1]?.path).toBe(`/api/${NETWORK_LIMIT + 2}`);
 });
 
-// A lookup issues one request (AVAILABILITY_ATTEMPTS = 1, §B34), so the limit of 12 holds twelve
-// lookups — enough history to compare one lookup against the next on a real device. (Sized as
-// "four 3-attempt lookups" when the race shipped 3; the count retired, the capacity did not.)
-test('the network limit holds at least twelve lookups', () => {
+// The limit holds four fully-retried lookups (3 entries each, §B56) — enough to compare one lookup
+// against the next on a real device, which is the reading the panel exists for. A lookup that succeeds on
+// its first attempt costs one entry, so the common case holds twelve.
+test('the network limit holds at least four fully-retried lookups', () => {
   expect(NETWORK_LIMIT).toBeGreaterThanOrEqual(3 * 4);
 });
 

@@ -53,10 +53,10 @@ export function createDiagnosticFetch(now: () => number = Date.now): DiagnosticF
 
 const diagnosticFetch = createDiagnosticFetch();
 
-// Deliberately NOT wrapped in createDiagnosticFetch: this adapter races AVAILABILITY_ATTEMPTS identical
-// reads and publishes its OWN per-attempt entries (attempt index, timeout vs cancelled-duplicate, error
-// body) — facts the generic wrapper cannot see, since it observes only url/status/duration and cannot tell
-// a timeout from a loser's abort. Wrapping it as well would double-log every attempt.
+// Deliberately NOT wrapped in createDiagnosticFetch: this adapter runs its own sequential attempts and
+// publishes its OWN per-attempt entries (attempt index, timeout vs caller cancellation, error body) —
+// facts the generic wrapper cannot see, since it observes only url/status/duration and cannot tell a
+// timeout from the caller's abort. Wrapping it as well would double-log every attempt.
 //
 // PROD keeps the live adapter (and its raw parser) out of the entry chunk: the code is only needed once
 // the shopper submits a query, so it loads as its own chunk. The load STARTS here, in the same turn the

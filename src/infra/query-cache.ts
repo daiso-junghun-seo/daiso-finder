@@ -18,7 +18,12 @@ export function createQueryRunner(deps: {
   now: () => number;
   timeoutMs?: number;
 }) {
-  const timeoutMs = deps.timeoutMs ?? 2000;
+  // The runner's timer is the BACKSTOP, not the per-read budget. The availability adapter owns the
+  // per-attempt deadlines (2.0s → 1.5s → 1.5s, ~5s worst case) and retries a transient failure itself
+  // (2026-11-27, §B56). This value has to sit above that sum, or the runner would abort the retry that
+  // exists precisely to hide a cold vendor handshake. It still protects against a repository that ignores
+  // AbortSignal entirely — the mock in DEV, or a future adapter that never settles.
+  const timeoutMs = deps.timeoutMs ?? 6000;
   return {
     async run(store: StoreContext, term: { keyword?: string; pdNo?: string }): Promise<StoreEvent> {
       const key = `${store.strCd}:${term.keyword ?? term.pdNo ?? ''}`;

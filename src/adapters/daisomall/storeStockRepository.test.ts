@@ -7,7 +7,7 @@ import { mockAnswers } from '../mock/fixtures';
 import { observationFixtures } from './observationFixtures';
 import {
   AVAILABILITY_ATTEMPTS,
-  AVAILABILITY_ATTEMPT_TIMEOUT_MS,
+  AVAILABILITY_ATTEMPT_TIMEOUTS_MS,
   ERROR_BODY_MAX_CHARS,
   type FetchLike,
   createDaisoStoreStockRepository,
@@ -167,120 +167,123 @@ test('a malformed observation → UnmappableAnswerError (safe fallback, no fabri
 });
 
 // ---------------------------------------------------------------------------------------------------
-// The race itself (§B30-18, machinery kept — production ships 1, §B34)
+// Sequential retry (§B56, 2026-11-27)
 // ---------------------------------------------------------------------------------------------------
-// These run on explicit `attempts: 3` injection: they pin the GENERAL race machinery (first-success
-// wins, loser abort, publish partition), not the shipped count. The shipped number lives in the pin
-// test above; a re-raise needs no new machinery tests, only the constant.
+// A lookup is a SEQUENCE: attempt, and only on a failure a fresh read could fix (timeout, transport,
+// 5xx, 429), attempt again. The parallel race these tests used to cover is retired at 1 (§B34) and is
+// not part of the shipped behaviour — `AVAILABILITY_ATTEMPTS` is now the retry count, not a race width.
 // ---------------------------------------------------------------------------------------------------
 
-test('a lookup issues AVAILABILITY_ATTEMPTS identical requests in parallel', async () => {
-  const { attempts, fetchImpl } = racingFetch();
-  // Explicit 3 (machinery's test): at the shipped 1 the "identical set" below is trivially true.
-  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
-  const pending = repo.query(store, { keyword: '밀폐용기' });
-  await tick();
-
-  expect(attempts).toHaveLength(3);
-  // Identical: the whole point is that any one of them is an acceptable answer.
-  const bodies = new Set(attempts.map((a) => a.body));
-  expect(bodies.size).toBe(1);
-  expect(JSON.parse(attempts[0]?.body ?? '{}')).toEqual({ strCd: '10803', keyword: '밀폐용기' });
-
-  attempts[0]?.resolve(inStockSettled());
-  await expect(pending).resolves.toEqual(mockAnswers.inStock);
-});
-
-// The shipped count is 1 (2026-10-11, §B34 — the 8/8 first-wins + 10/10 single probes
-// retired the race). Pinned so the number cannot drift silently — and it lives in ONE place
-// so tuning it is one line. The race machinery below is exercised on explicit `attempts: 3`
-// injection, so a re-raise stays tested.
-test('the attempt count is 1 (evidence decision, §B34)', () => {
-  expect(AVAILABILITY_ATTEMPTS).toBe(1);
-});
-
-test('a single attempt answers directly — one request, one entry', async () => {
+test('a lookup issues one request when the first attempt answers', async () => {
   const { attempts, fetchImpl } = racingFetch();
   const repo = createDaisoStoreStockRepository({ fetchImpl });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
 
   expect(attempts).toHaveLength(1);
+  // Identical body — a retry re-reads the same request, it does not broaden it.
+  expect(JSON.parse(attempts[0]?.body ?? '{}')).toEqual({ strCd: '10803', keyword: '밀폐용기' });
+
   attempts[0]?.resolve(inStockSettled());
   await expect(pending).resolves.toEqual(mockAnswers.inStock);
-
-  const entries = getSnapshot().network;
-  expect(entries).toHaveLength(1);
-  expect(entries[0]?.attempt).toEqual({ index: 1, total: 1 });
+  await tick();
+  expect(attempts).toHaveLength(1); // success ends the sequence
 });
 
-test('the first SUCCESS wins; every loser is aborted and the winner is not', async () => {
+// The shipped policy is pinned here and lives in ONE place so tuning it is one line. Deadlines shrink
+// because the retry is expected to be fast (the first attempt already warmed the server's auth cache).
+test('the shipped policy is 3 attempts with shrinking deadlines', () => {
+  expect(AVAILABILITY_ATTEMPTS).toBe(3);
+  expect(AVAILABILITY_ATTEMPT_TIMEOUTS_MS).toEqual([2000, 1500, 1500]);
+});
+
+test('a transport failure is retried, and the retry’s answer is returned', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  // Explicit 3: production ships 1 (§B34), and the race below is the machinery's test, not the
-  // shipped count's — the pin above owns the shipped number.
-  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
+  const repo = createDaisoStoreStockRepository({ fetchImpl });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
 
-  attempts[1]?.resolve(inStockSettled()); // the middle attempt wins
-  await expect(pending).resolves.toEqual(mockAnswers.inStock);
+  attempts[0]?.reject(new Error('offline'));
+  await tick();
+  expect(attempts).toHaveLength(2);
 
-  expect(attempts[0]?.signal?.aborted).toBe(true);
-  expect(attempts[2]?.signal?.aborted).toBe(true);
-  // The winner's response already arrived; aborting it would publish a cancellation that never happened.
-  expect(attempts[1]?.signal?.aborted).toBe(false);
+  attempts[1]?.resolve(inStockSettled());
+  await expect(pending).resolves.toEqual(mockAnswers.inStock);
 });
 
-// First SUCCESS, not first settle. A loser that fails must leave the race running.
-test('a losing attempt failing does not end the race — a later success still wins', async () => {
+test('a 5xx is retried — the proxy’s transient upstream failure is exactly this case', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
+  const repo = createDaisoStoreStockRepository({ fetchImpl });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
 
   attempts[0]?.resolve({ ok: false, status: 502, json: async () => ({}) });
-  attempts[1]?.reject(new Error('offline'));
   await tick();
+  expect(attempts).toHaveLength(2);
 
-  attempts[2]?.resolve(inStockSettled());
+  attempts[1]?.resolve(inStockSettled());
   await expect(pending).resolves.toEqual(mockAnswers.inStock);
 });
 
-test('only when ALL attempts fail does the lookup fail (→ FAILURE path)', async () => {
+test('a 429 is retried', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
+  const repo = createDaisoStoreStockRepository({ fetchImpl });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
 
-  for (const attempt of attempts)
-    attempt.resolve({ ok: false, status: 502, json: async () => ({}) });
-  // The original reason survives — never an AggregateError, which createQueryRunner cannot route on.
-  await expect(pending).rejects.toThrow('availability 502');
+  attempts[0]?.resolve({ ok: false, status: 429, json: async () => ({}) });
+  await tick();
+  expect(attempts).toHaveLength(2);
+  attempts[1]?.resolve(inStockSettled());
+  await expect(pending).resolves.toEqual(mockAnswers.inStock);
 });
 
-// A definitive answer, not a transport failure: re-reading cannot make "not carried" untrue. Treating it
-// as a loser would let Promise.any collect three of them and reject with an AggregateError, which
-// createQueryRunner's `err instanceof NoCatalogMatchError` check does not match — turning a correct
-// Empty into a spurious 질의 실패.
-test('a noMatch from ONE attempt wins the race, cancels the rest, and still yields NO_MATCH', async () => {
+test('a 4xx is definitive — no retry (the same request would be just as wrong)', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
+  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  const pending = repo.query(store, { keyword: '밀폐용기' });
+  await tick();
+
+  attempts[0]?.resolve({ ok: false, status: 404, json: async () => ({}) });
+  await expect(pending).rejects.toThrow('availability 404');
+  await tick();
+  expect(attempts).toHaveLength(1);
+});
+
+test('only when every attempt fails does the lookup fail (→ FAILURE path)', async () => {
+  const { attempts, fetchImpl } = racingFetch();
+  const repo = createDaisoStoreStockRepository({ fetchImpl });
+  const pending = repo.query(store, { keyword: '밀폐용기' });
+  await tick();
+
+  attempts[0]?.resolve({ ok: false, status: 502, json: async () => ({}) });
+  await tick();
+  attempts[1]?.resolve({ ok: false, status: 502, json: async () => ({}) });
+  await tick();
+  attempts[2]?.resolve({ ok: false, status: 502, json: async () => ({}) });
+  // The last original reason survives — never an AggregateError, which createQueryRunner cannot route on.
+  await expect(pending).rejects.toThrow('availability 502');
+  await tick();
+  expect(attempts).toHaveLength(AVAILABILITY_ATTEMPTS);
+});
+
+// A definitive answer, not a transport failure: re-reading cannot make "not carried" untrue.
+test('a noMatch ends the lookup immediately — no retry', async () => {
+  const { attempts, fetchImpl } = racingFetch();
+  const repo = createDaisoStoreStockRepository({ fetchImpl });
   const pending = repo.query(store, { keyword: '없는상품' });
   await tick();
 
-  attempts[2]?.resolve(okSettled({ noMatch: true }));
+  attempts[0]?.resolve(okSettled({ noMatch: true }));
   await expect(pending).rejects.toBeInstanceOf(NoCatalogMatchError);
-
-  expect(attempts[0]?.signal?.aborted).toBe(true);
-  expect(attempts[1]?.signal?.aborted).toBe(true);
+  await tick();
+  expect(attempts).toHaveLength(1);
 });
 
-// timeoutMs is pushed far out on purpose. With the production 1800ms deadline this test passed even with
-// the caller's signal UNCHAINED — the per-attempt timers aborted the attempts a second later and the
-// assertions could not tell which mechanism had fired. Only the caller can abort within one tick here.
-test('the caller aborting aborts every attempt promptly, as a cancellation not a timeout', async () => {
+// timeoutMs is pushed far out on purpose, so only the caller can end the attempt within one tick.
+test('the caller aborting cancels the running attempt and is not retried', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3, timeoutMs: 60_000 });
+  const repo = createDaisoStoreStockRepository({ fetchImpl, timeoutMs: 60_000 });
   const ctrl = new AbortController();
   const pending = repo.query(store, { keyword: '밀폐용기' }, ctrl.signal);
   // Same reason as createQueryRunner's side .catch (query-cache.ts): `pending` rejects during the tick
@@ -289,29 +292,31 @@ test('the caller aborting aborts every attempt promptly, as a cancellation not a
   // assertion still sees the original rejection.
   pending.catch(() => {});
   await tick();
-  // Injected 3, not the shipped 1 — this is the machinery's test (see the race header above).
-  expect(attempts).toHaveLength(3);
-  for (const attempt of attempts) expect(attempt.signal?.aborted).toBe(false);
+  expect(attempts).toHaveLength(1);
+  expect(attempts[0]?.signal?.aborted).toBe(false);
 
   ctrl.abort();
   await tick();
-  for (const attempt of attempts) expect(attempt.signal?.aborted).toBe(true);
-  await expect(pending).rejects.toThrow();
+  expect(attempts[0]?.signal?.aborted).toBe(true);
+  await expect(pending).rejects.toThrow('availability cancelled');
 
   const entries = getSnapshot().network;
-  expect(entries).toHaveLength(3);
+  expect(entries).toHaveLength(1); // a cancellation is not a failure to retry
   expect(entries.every((e) => e.outcome === 'aborted')).toBe(true);
   expect(entries.some((e) => e.outcome === 'timeout')).toBe(false);
 });
 
-// A signal that is ALREADY aborted must not produce three live requests that only get cancelled later.
-test('a caller signal aborted before the call aborts every attempt immediately', async () => {
+// A signal that is ALREADY aborted must not produce a live request that only gets cancelled later.
+test('a caller signal aborted before the call makes no request', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3, timeoutMs: 60_000 });
+  const repo = createDaisoStoreStockRepository({ fetchImpl, timeoutMs: 60_000 });
   const ctrl = new AbortController();
   ctrl.abort();
-  await expect(repo.query(store, { keyword: '밀폐용기' }, ctrl.signal)).rejects.toThrow();
-  for (const attempt of attempts) expect(attempt.signal?.aborted).toBe(true);
+  await expect(repo.query(store, { keyword: '밀폐용기' }, ctrl.signal)).rejects.toThrow(
+    'availability cancelled',
+  );
+  expect(attempts).toHaveLength(1);
+  expect(attempts[0]?.signal?.aborted).toBe(true);
 });
 
 // ---------------------------------------------------------------------------------------------------
@@ -320,22 +325,21 @@ test('a caller signal aborted before the call aborts every attempt immediately',
 
 test('each attempt is published with its 1-based index and the total', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
+  const repo = createDaisoStoreStockRepository({ fetchImpl });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
-  attempts[0]?.resolve(inStockSettled());
+  attempts[0]?.reject(new Error('offline'));
+  await tick();
+  attempts[1]?.resolve(inStockSettled());
   await pending;
   await tick();
 
   const entries = getSnapshot().network;
-  expect(entries).toHaveLength(3); // injected 3 — the shipped-1 count is pinned above
-  expect(entries.map((e) => e.attempt)).toEqual(
-    expect.arrayContaining([
-      { index: 1, total: 3 },
-      { index: 2, total: 3 },
-      { index: 3, total: 3 },
-    ]),
-  );
+  expect(entries).toHaveLength(2);
+  expect(entries.map((e) => e.attempt)).toEqual([
+    { index: 1, total: 3 },
+    { index: 2, total: 3 },
+  ]);
   for (const entry of entries) expect(entry.path).toBe('/api/availability');
 });
 
@@ -366,34 +370,34 @@ test('a non-ok response is published as an httpError carrying its real status', 
   expect(entries.every((e) => e.outcome !== 'timeout')).toBe(true);
 });
 
-// The single most important guarantee of this slice: a cancelled duplicate is not an error, and the
-// logging exists precisely to count errors.
-test('a cancelled race loser is never published as an error', async () => {
+// The mirror of the rule above: a RETRY is not a cancellation, and the panel exists to count exactly
+// this difference. A retried attempt states its own failure; the successful retry states its own win.
+test('a failed attempt is published as its failure, and the retry as its own win', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  // Explicit 3: at the shipped 1 there is no loser, and `aborted == 0` would pass with the
-  // loser-publish deleted — the guarantee this test names would be unexercised.
-  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
+  const repo = createDaisoStoreStockRepository({ fetchImpl });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
-  attempts[0]?.resolve(inStockSettled());
+  attempts[0]?.reject(new Error('offline'));
+  await tick();
+  attempts[1]?.resolve(inStockSettled());
   await pending;
   await tick();
 
   const entries = getSnapshot().network;
-  expect(entries.filter((e) => e.outcome === 'aborted')).toHaveLength(2);
+  expect(entries.filter((e) => e.outcome === 'networkError')).toHaveLength(1);
   expect(entries.filter((e) => e.outcome === 'ok')).toHaveLength(1);
-  const errorKinds = entries.filter(
-    (e) => e.outcome === 'httpError' || e.outcome === 'timeout' || e.outcome === 'networkError',
-  );
-  expect(errorKinds).toEqual([]);
+  expect(entries.some((e) => e.outcome === 'aborted')).toBe(false);
 });
 
 test('a transport-level rejection is published as a networkError, not as a cancellation', async () => {
   const { attempts, fetchImpl } = racingFetch();
   const repo = createDaisoStoreStockRepository({ fetchImpl });
   const pending = repo.query(store, { keyword: '밀폐용기' });
-  await tick();
-  for (const attempt of attempts) attempt.reject(new Error('offline'));
+  // Sequential: each attempt must be seen and failed before the next one exists.
+  for (let i = 0; i < AVAILABILITY_ATTEMPTS; i += 1) {
+    await tick();
+    attempts[i]?.reject(new Error('offline'));
+  }
   await expect(pending).rejects.toThrow('offline');
   await tick();
 
@@ -423,24 +427,31 @@ test('a 200 whose body will not parse is still published as a successful transpo
   await tick();
 
   const entries = getSnapshot().network;
-  expect(entries).toHaveLength(AVAILABILITY_ATTEMPTS);
+  // A body that will not parse is not a transport failure to retry: one attempt, one ok entry.
+  expect(entries).toHaveLength(1);
   expect(entries.every((e) => e.outcome === 'ok' && e.status === 200)).toBe(true);
   expect(entries.some((e) => e.outcome === 'networkError')).toBe(false);
 });
 
 // A mapping failure is not a network fact: the request itself succeeded with a 200 and already published
-// one entry. A second, error-shaped entry for it would misreport the transport.
+// one entry. A second, error-shaped entry for it would misreport the transport — and a retry would send the
+// same request to the same payload.
 test('a malformed body publishes the successful transport only, never a second error entry', async () => {
+  let calls = 0;
   const repo = createDaisoStoreStockRepository({
-    fetchImpl: async () => ok({ data: { strCd: 1 } }),
+    fetchImpl: async () => {
+      calls += 1;
+      return ok({ data: { strCd: 1 } });
+    },
   });
   await expect(repo.query(store, { keyword: '밀폐용기' })).rejects.toBeInstanceOf(
     UnmappableAnswerError,
   );
   await tick();
 
+  expect(calls).toBe(1); // mapping failures are definitive
   const entries = getSnapshot().network;
-  expect(entries).toHaveLength(AVAILABILITY_ATTEMPTS);
+  expect(entries).toHaveLength(1);
   expect(entries.every((e) => e.outcome === 'ok' && e.status === 200)).toBe(true);
 });
 
@@ -448,55 +459,25 @@ test('a malformed body publishes the successful transport only, never a second e
 // One entry per attempt, whatever happens after the response arrives
 // ---------------------------------------------------------------------------------------------------
 
-// The whole panel reading rests on `#i/total` being a partition: bus.ts's NETWORK_LIMIT = 12 now holds
-// twelve single-attempt lookups (it was sized as "four consecutive 3-attempt lookups" when the race
-// shipped 3 — §B34 retired it to 1), and a lookup that emitted two lines for one attempt would make one
-// `#1/1` appear twice. An attempt that already reported an OBSERVED response must not go on to report
-// a second outcome.
-test('a loser aborted mid-body keeps its observed 200 — one entry, not a 200 plus a 취소', async () => {
-  const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3 });
-  const pending = repo.query(store, { keyword: '밀폐용기' });
-  await tick();
-
-  // Both losers get their headers first, so each publishes its `ok` entry and then parks on the body…
-  attempts[1]?.resolve(stallingBody(attempts[1]?.signal));
-  attempts[2]?.resolve(stallingBody(attempts[2]?.signal));
-  // …and the winner then settles fully, which aborts the two parked bodies mid-read.
-  attempts[0]?.resolve(inStockSettled());
-  await expect(pending).resolves.toEqual(mockAnswers.inStock);
-  await tick();
-
-  const entries = getSnapshot().network;
-  expect(entries).toHaveLength(3); // injected 3 — one line per attempt, no doubles
-  expect(new Set(entries.map((e) => e.attempt?.index)).size).toBe(3);
-  // The surviving entry is the one that states a fact: a 200 really did arrive on all three.
-  expect(entries.every((e) => e.outcome === 'ok' && e.status === 200)).toBe(true);
-});
-
-// §B30-19③ reads the `시간 초과` count LITERALLY ("`시간 초과` 0건") to judge how urgently the 2000ms runner
-// cap needs revisiting. A phantom timeout for a request that demonstrably answered 200 inverts that reading.
+// The whole panel reading rests on `#i/total` being a partition: a lookup that emitted two lines for one
+// attempt would make one index appear twice. An attempt that already reported an OBSERVED response must
+// not go on to report a second outcome.
 //
-// THE PRICE OF THIS RULE, stated here because the test is what enforces it: first-observed wins, so the
-// count is blind in the mirror direction. An attempt whose headers arrived and whose BODY then outran the
-// 1800ms deadline keeps its `200 · ok` and publishes no `시간 초과` at all. So "`시간 초과` 0건" means "no
-// attempt was cancelled BEFORE its response headers arrived" — not "no attempt hit its deadline". Recorded
-// as a reading rule rather than fixed in code: the alternative (letting a terminal outcome overwrite the
-// observed one) would cost the `200 whose body will not parse is still a 200 on the wire` fact that the
-// test below pins, and no measurement so far needs the distinction. See §B30-21.
+// §B30-21: the count is blind in one direction by design — an attempt whose headers arrived and whose BODY
+// then outran the deadline keeps its `200 · ok` and publishes no `시간 초과`. Pinned here on a single
+// attempt (the shipped sequence would retry the stalled body, which is a different fact).
 test('an attempt whose body stalls past the deadline reports no phantom 시간 초과 over its 200', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3, timeoutMs: 20 });
+  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 1, timeoutMs: 20 });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   pending.catch(() => {}); // rejects before the assertion below attaches — see the caller-abort test
   await tick();
-  // Headers land on every attempt well inside the deadline; only the bodies outrun it.
-  for (const attempt of attempts) attempt.resolve(stallingBody(attempt.signal));
+  attempts[0]?.resolve(stallingBody(attempts[0]?.signal));
   await expect(pending).rejects.toThrow();
   await tick();
 
   const entries = getSnapshot().network;
-  expect(entries).toHaveLength(3); // injected 3 — every header landed, no phantom timeout
+  expect(entries).toHaveLength(1); // the header landed; the stalled body adds no phantom timeout
   expect(entries.every((e) => e.outcome === 'ok' && e.status === 200)).toBe(true);
   expect(entries.some((e) => e.outcome === 'timeout')).toBe(false);
 });
@@ -505,50 +486,46 @@ test('an attempt whose body stalls past the deadline reports no phantom 시간 �
 // Per-attempt elapsed time (the `ms` §B30-19③ reasons over)
 // ---------------------------------------------------------------------------------------------------
 
-test('each attempt publishes its own elapsed window — the winner its latency, a loser its cancellation', async () => {
+test('each attempt publishes its own elapsed window', async () => {
   const { attempts, fetchImpl } = racingFetch();
-  // Starts 0/10/20, then the winner's publish at 1169 and the two cancellations at 1181/1192 — the shape a
-  // real lookup produces: one winner, then two cancellations a couple of ms behind it. Distinct windows on
-  // purpose: equal ones could not tell "each attempt measures itself" from "all three share one number".
-  const now = scriptedClock([0, 10, 20, 1169, 1181, 1192]);
-  const repo = createDaisoStoreStockRepository({ fetchImpl, attempts: 3, now });
+  // Attempt 1 starts at 0 and fails at 900; attempt 2 starts at 1200 and wins at 2000. Distinct windows on
+  // purpose: equal ones could not tell "each attempt measures itself" from "both share one number".
+  const now = scriptedClock([0, 900, 1200, 2000]);
+  const repo = createDaisoStoreStockRepository({ fetchImpl, now });
   const pending = repo.query(store, { keyword: '밀폐용기' });
   await tick();
-  attempts[0]?.resolve(inStockSettled());
+  attempts[0]?.reject(new Error('offline'));
+  await tick();
+  attempts[1]?.resolve(inStockSettled());
   await expect(pending).resolves.toEqual(mockAnswers.inStock);
   await tick();
 
   const entries = getSnapshot().network;
   const byIndex = new Map(entries.map((e) => [e.attempt?.index, e]));
-  expect(byIndex.get(1)?.ms).toBe(1169);
-  // A loser's ms is its time to CANCELLATION — every attempt starts in the same synchronous tick and the
-  // losers are aborted only after the winner has settled — so it says nothing about that attempt's own
-  // vendor latency. Pinned anyway, because §B30-19③ reads these numbers.
-  expect(byIndex.get(2)?.ms).toBe(1171);
-  expect(byIndex.get(3)?.ms).toBe(1172);
+  expect(byIndex.get(1)?.ms).toBe(900);
+  expect(byIndex.get(2)?.ms).toBe(800);
   for (const entry of entries) expect(Number.isFinite(entry.ms)).toBe(true);
 });
 
 // Fake timers, and the DEFAULT `now` (Date.now) rather than the scripted seam: the point is that the
-// published duration is derived from a real clock and lands on the deadline, which a scripted reading
-// could only assert by restating itself.
+// published duration is derived from a real clock and lands on each attempt's own deadline, which a
+// scripted reading could only assert by restating itself.
 test('a timed-out attempt reports the deadline it outran, never 0', async () => {
   vi.useFakeTimers();
   try {
-    const { fetchImpl } = racingFetch(); // never settles on its own — only the deadline can end it
-    const repo = createDaisoStoreStockRepository({
-      fetchImpl,
-      timeoutMs: AVAILABILITY_ATTEMPT_TIMEOUT_MS,
-    });
+    const { fetchImpl } = racingFetch(); // never settles on its own — only the deadlines can end it
+    const repo = createDaisoStoreStockRepository({ fetchImpl });
     const pending = repo.query(store, { keyword: '밀폐용기' });
     pending.catch(() => {});
-    await vi.advanceTimersByTimeAsync(AVAILABILITY_ATTEMPT_TIMEOUT_MS);
-    await expect(pending).rejects.toThrow();
+    for (const deadline of AVAILABILITY_ATTEMPT_TIMEOUTS_MS) {
+      await vi.advanceTimersByTimeAsync(deadline);
+    }
+    await expect(pending).rejects.toThrow('availability timeout');
 
     const entries = getSnapshot().network;
     expect(entries).toHaveLength(AVAILABILITY_ATTEMPTS);
     expect(entries.every((e) => e.outcome === 'timeout')).toBe(true);
-    for (const entry of entries) expect(entry.ms).toBe(AVAILABILITY_ATTEMPT_TIMEOUT_MS);
+    expect(entries.map((e) => e.ms)).toEqual([...AVAILABILITY_ATTEMPT_TIMEOUTS_MS]);
   } finally {
     vi.useRealTimers();
   }
@@ -670,20 +647,29 @@ test('a text() that throws leaves the entry bodyless instead of failing the look
 });
 
 // ---------------------------------------------------------------------------------------------------
-// The per-attempt deadline's value is COUPLED to createQueryRunner's Bible-owned 2000ms cap
+// The retry budget (§B56) and its relationship to createQueryRunner's backstop
 // ---------------------------------------------------------------------------------------------------
 
-// Basis (§B30-18): the maximum SUCCESSFUL /api/availability response measured on a real device is 1445ms,
-// while createQueryRunner aborts the whole lookup at 2000ms — Bible-owned (Engineering §5 dependency
-// table), so not ours to raise. The deadline must sit above the measured maximum (or it would abort reads
-// that would have succeeded) AND below the runner's cap (or it could never fire, and "did a timeout
-// occur" would stay unanswerable). Both bounds are asserted because breaking either is silent.
-const MAX_OBSERVED_SUCCESS_MS = 1445;
-const RUNNER_CAP_MS = 2000;
+// Basis: the cold production read that motivated the retry measured 2.06s (2026-11-27, warm re-read
+// 0.33s). The first deadline is the old Bible Hypothesis figure (2.0s, Engineering §5) — the read that
+// misses it is exactly the read the retry exists to finish. Deadlines shrink because the retry is
+// expected to be fast; the runner's 6000ms cap is a backstop ABOVE their sum, so it never masks a
+// per-attempt timeout (the panel must report the deadline, not the runner's blind abort).
+const COLD_READ_MS = 2060;
+const RUNNER_BACKSTOP_MS = 6000;
 
-test('the per-attempt deadline sits above the measured maximum and below the runner cap', () => {
-  expect(AVAILABILITY_ATTEMPT_TIMEOUT_MS).toBeGreaterThan(MAX_OBSERVED_SUCCESS_MS);
-  expect(AVAILABILITY_ATTEMPT_TIMEOUT_MS).toBeLessThan(RUNNER_CAP_MS);
+test('the retry budget covers the cold read and sits inside the runner backstop', () => {
+  expect(AVAILABILITY_ATTEMPT_TIMEOUTS_MS[0]).toBeGreaterThanOrEqual(2000);
+  expect(AVAILABILITY_ATTEMPT_TIMEOUTS_MS[0]).toBeGreaterThanOrEqual(COLD_READ_MS - 100);
+  const sum = AVAILABILITY_ATTEMPT_TIMEOUTS_MS.reduce((total, ms) => total + ms, 0);
+  expect(sum).toBe(5000);
+  expect(sum).toBeLessThan(RUNNER_BACKSTOP_MS);
+  // Shrinking, so a retry cannot hold the shopper for as long as the first read did.
+  for (let i = 1; i < AVAILABILITY_ATTEMPT_TIMEOUTS_MS.length; i += 1) {
+    expect(AVAILABILITY_ATTEMPT_TIMEOUTS_MS[i]).toBeLessThanOrEqual(
+      AVAILABILITY_ATTEMPT_TIMEOUTS_MS[i - 1] as number,
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------------------------------

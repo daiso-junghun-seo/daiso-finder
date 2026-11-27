@@ -52,6 +52,55 @@ test('real adapter → /api/availability (fixture) → mapStoreObservation → i
   await expect(page.getByText('11층 56번').first()).toBeVisible();
 });
 
+test('a first-attempt timeout is retried, and the shopper stays in Loading until the retry answers', async ({
+  page,
+}) => {
+  // The production failure this covers (2026-11-27, §B56): the first /api/availability after the proxy's
+  // 5-minute auth cache expires outran the 2s deadline, and the shopper saw an error that a second tap
+  // fixed. The adapter now retries the timeout itself, so the surface must never flash the failure.
+  let availabilityCalls = 0;
+  await page.route('**/api/search', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        candidates: [{ pdNo: '19987', name: '리빙 밀폐용기 1.2L', price: 2000, imageUrl: null }],
+      }),
+    }),
+  );
+  await page.route('**/api/availability', async (route) => {
+    availabilityCalls += 1;
+    if (availabilityCalls === 1) {
+      // Outlive the 2000ms first-attempt deadline, as the cold auth handshake did.
+      await new Promise((resolve) => setTimeout(resolve, 2300));
+      await route
+        .fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ data: RAW_INSTOCK }),
+        })
+        .catch(() => {}); // the client already gave up on this attempt — expected
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: RAW_INSTOCK }),
+    });
+  });
+
+  await page.goto('/');
+  await page.getByLabel('상품 검색').fill('밀폐용기');
+  await page.getByLabel('상품 검색').press('Enter');
+
+  // The existing slow hint (already in all 12 locales) is what tells the shopper the wait is intentional.
+  await expect(page.getByText('연결이 느려서 확인이 조금 걸리고 있어요.').first()).toBeVisible({
+    timeout: 5000,
+  });
+  await expect(page.getByText('이 매장에 있어요').first()).toBeVisible({ timeout: 10_000 });
+  expect(availabilityCalls).toBeGreaterThanOrEqual(2);
+});
+
 test('proxy noMatch → Bible empty state', async ({ page }) => {
   // Zero candidates → search-first falls through to the raw keyword against /api/availability, unchanged.
   await page.route('**/api/search', (route) =>

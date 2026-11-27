@@ -92,22 +92,19 @@ test('a timeout beyond timeoutMs is treated as a failure', async () => {
   });
   expect(await run.run(store, { keyword: '밀폐용기' })).toMatchObject({ type: 'FAILURE' });
 });
-// The 2000ms DEFAULT, which every other test here bypasses by injecting `timeoutMs` — so nothing pinned the
-// only value production actually runs under (AvailabilitySurface's liveQueryRunner passes none). The figure
-// comes from the Bible (Engineering/availability-check.md §5's dependency table states a flat 2s store/stock
-// timeout) but is labelled a Hypothesis there — ":58 — requires field validation", likewise :53 and :156 —
-// so under CLAUDE.md §3 it is refinable HERE on recorded field evidence rather than by owner escalation.
-// What holds it at 2000 today is that every latency measured so far traverses localtunnel and the proxy does
-// not report its own upstream duration, so vendor latency is not yet separable (§B30-18 ②). This test pins
-// the value against accident, not against a decision. It is COUPLED to storeStockRepository's
-// AVAILABILITY_ATTEMPT_TIMEOUT_MS = 1800, deliberately chosen to sit UNDER it: raise this to 3000 and the
-// 1800ms per-attempt deadline becomes
-// the binding cap, aborting reads that would have succeeded; lower it to 1500 and that deadline can never
-// fire, so "did a network timeout occur" becomes unanswerable again. Both directions are asserted, because
-// breaking either is silent. Behavioural rather than a source-text guard: the default is directly
-// observable — the runner's own timer is what produces the FAILURE — so there is nothing the text could say
-// that the clock does not.
-test('the default timeout is 2000ms (coupled to the 1800ms per-attempt deadline)', async () => {
+// The 6000ms DEFAULT, which every other test here bypasses by injecting `timeoutMs` — so nothing pinned the
+// only value production actually runs under (AvailabilitySurface's liveQueryRunner passes none).
+//
+// This used to be 2000ms: Bible Engineering §5's dependency table states a flat 2s for the store/stock read.
+// That figure is labelled a Hypothesis there (":58 — requires field validation", likewise :53 and :156), and
+// the 2026-11-27 production measurement is the field evidence it asked for: a cold /api/availability took
+// 2.06s because the proxy's vendor-handshake cache expires after 5 minutes, while the immediate re-read took
+// 0.33s. The availability adapter now retries a transient failure itself, 3 attempts at 2.0s → 1.5s → 1.5s
+// (~5s worst case, §B56). This runner timer is the BACKSTOP above that sum, not the per-read budget: it must
+// not abort the retry that exists to hide the cold handshake, while still bounding a repository that ignores
+// AbortSignal entirely. Raise it further and a hung repo stalls the shopper longer; lower it below the sum
+// and the retry can never finish.
+test('the default backstop is 6000ms — above the adapter retry budget, below a hang', async () => {
   vi.useFakeTimers();
   try {
     const run = createQueryRunner({
@@ -124,11 +121,11 @@ test('the default timeout is 2000ms (coupled to the 1800ms per-attempt deadline)
       event = ev;
     });
 
-    await vi.advanceTimersByTimeAsync(1999);
+    await vi.advanceTimersByTimeAsync(5999);
     expect(event).toBeUndefined(); // a smaller default would have fired by now…
     await vi.advanceTimersByTimeAsync(1);
     await vi.advanceTimersByTimeAsync(0); // drain the runner's own cache-classify microtasks
-    expect(event).toEqual({ type: 'FAILURE', cache: { kind: 'noCache' } }); // …and 2000 is when it must
+    expect(event).toEqual({ type: 'FAILURE', cache: { kind: 'noCache' } }); // …and 6000 is when it must
   } finally {
     vi.useRealTimers();
   }
