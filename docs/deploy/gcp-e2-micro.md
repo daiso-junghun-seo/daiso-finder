@@ -271,7 +271,7 @@ sudo journalctl -u caddy -n 50 --no-pager
 | URL | <https://136-118-220-98.sslip.io> |
 | VM | `daiso-finder-proxy` · `us-west1-b` · `e2-micro` · 30 GB `pd-standard` |
 | 고정 IP | `136.118.220.98` (`daiso-proxy-ip`) |
-| 배포 커밋 | `d5a5c31` (부트스트랩) → **최근 갱신 `1f6bb03` (2026-11-26)** |
+| 배포 커밋 | `d5a5c31` (부트스트랩) → **최근 갱신 `84c93b2` (2026-11-27)** |
 | 부트스트랩 소요 | 약 10분 (`npm ci` 2분 + `tsc -b`/`vite build` 5~6분) |
 | 공개 `/health` | 200, TLS 포함 0.21 s |
 | `POST /api/stores` `{"query":"강남"}` | 200, 10개 매장, **0.149 s** |
@@ -305,6 +305,15 @@ CSS 19.11 kB, precache **45 entries / 1,134.82 KiB**. 배포 후 서빙 CSS에�
 `.store-context-utilities`·`calc(100vh - 500px)`·`max-height:56px`를 확인했고, `/health` 200 ·
 `systemctl` `active` · `NeedDaemonReload=no`다. 알려진 좁은 예외(§B55 열린 질문): 320×568 + ru/ja/es/fr +
 설치 버튼이면 Success의 `추가` CTA가 dock 아래로 내려가 스크롤이 필요하다(이전 193px 헤더보다는 개선).
+
+**2026-11-27 `84c93b2`**: 재고 조회 순차 재시도(§B56). 원인은 프록시의 다이소몰 인증 캐시(5분) 만료 후
+첫 `/api/availability`였다 — VM에서 직접 측정해 **2.064 s → 0.326 s → 0.321 s**(즉시 재호출 2회),
+`/api/search` 0.214 s. 클라이언트 2.0 s 컷에 정확히 걸리는 값이라 첫 검색만 실패로 보였다. 이제
+어댑터가 타임아웃·전송·5xx·429에 한해 3회(2.0 s → 1.5 s → 1.5 s) 순차 재시도하고, `noMatch`·4xx·매핑
+실패는 즉시 종료한다. `createQueryRunner` 백스톱은 6,000 ms. 엔트리 `assets/index-xeKx1TVK.js`
+**191.00 kB / gzip 59.98 kB**, 지연 청크 `assets/storeStockRepository-C1vaKvUN.js` 4.11 kB(서빙본에서
+`[2e3,1500,1500]`과 `availability timeout`/`cancelled` 확인), precache **45 entries / 1,135.14 KiB**.
+`/health` 200 · `systemctl` `active` · `NeedDaemonReload=no`. CI `45922516706` green 후 배포.
 
 ### 12.2 검증 명령의 함정 — `gcloud compute ssh`가 따옴표를 지운다
 
